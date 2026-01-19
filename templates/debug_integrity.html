@@ -1,0 +1,62 @@
+<h1>🧪 Inventory Debug Integrity Dashboard</h1>
+
+<hr>
+
+<h2>📊 Global Totals</h2>
+<ul>
+    <li>Total IN: <b>{{ totals.total_in }}</b></li>
+    <li>Total OUT: <b>{{ totals.total_out }}</b></li>
+    <li>Net Stock: <b>{{ totals.total_in - totals.total_out }}</b></li>
+</ul>
+
+<hr>
+
+<h2>⚠️ Items With Negative Stock</h2>
+{% if negative_items %}
+<table border="1">
+    <tr>
+        <th>Item</th>
+        <th>Current Stock</th>
+    </tr>
+    {% for item in negative_items %}
+    <tr>
+        <td>{{ item.name }}</td>
+        <td style="color:red">{{ item.current_stock }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>✅ No negative stock items</p>
+{% endif %}
+
+<hr>
+
+<h2>📦 Snapshot vs Recent Sales</h2>
+<table border="1">
+    <tr>
+        <th>Item</th>
+        <th>Snapshot Qty</th>
+        <th>Recent Sales</th>
+        <th>Expected Current</th>
+    </tr>
+    {% for row in snapshot_check %}
+    <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.snapshot_qty }}</td>
+        <td>{{ row.recent_sales }}</td>
+        <td>{{ row.snapshot_qty - row.recent_sales }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<hr>
+
+<h2>🕒 Transaction Date Range</h2>
+<ul>
+    <li>Earliest transaction: {{ date_ranges.earliest }}</li>
+    <li>Latest transaction: {{ date_ranges.latest }}</li>
+</ul>
+
+<hr>
+
+<a href="/">⬅ Back to Inventory</a>

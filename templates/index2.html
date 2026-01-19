@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory System</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Optional: Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+        }
+
+        h1 {
+            color: #e63946;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .form-control, .form-select {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: 1px solid #333;
+        }
+
+        .form-control::placeholder {
+            color: #ccc;
+        }
+
+        .btn-danger {
+            background-color: #e63946;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background-color: #d62839;
+        }
+
+        a {
+            color: #e63946;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .links a {
+            margin-right: 1rem;
+        }
+
+        hr {
+            border-color: #333;
+        }
+
+        /* Card styles */
+        .item-card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .item-card h5 {
+            color: #e63946;
+            margin-bottom: 0.5rem;
+        }
+
+        .stock {
+            font-weight: bold;
+        }
+
+        .stock-inout-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .stock-inout-form input {
+            width: 70px;
+        }
+    </style>
+</head>
+<body class="container py-4">
+
+<h1>Inventory System</h1>
+
+<!-- Add Item Form -->
+<form method="POST" action="/add-item" class="row g-3 justify-content-center mb-4">
+    <div class="col-auto">
+        <input type="text" name="name" placeholder="Item name" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <input type="number" name="reorder_level" placeholder="Reorder level" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-danger">Add Item</button>
+    </div>
+</form>
+
+<hr class="mb-4">
+
+<!-- Inventory Cards -->
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for item in items %}
+    <div class="col">
+        <div class="item-card">
+            <h5>{{ item.name }}</h5>
+            <p class="stock">Current Stock: {{ item.current_stock }}</p>
+
+            <!-- Stock In Form -->
+            <form method="POST" class="stock-inout-form">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="IN">
+                <input type="number" name="quantity" placeholder="+Qty" class="form-control form-control-sm" required>
+                <button type="submit" class="btn btn-danger btn-sm">Stock In</button>
+            </form>
+
+            <!-- Stock Out Form -->
+            <form method="POST" class="stock-inout-form">
+                <input type="hidden" name="item_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="OUT">
+                <input type="number" name="quantity" placeholder="-Qty" class="form-control form-control-sm" required>
+                <button type="submit" class="btn btn-danger btn-sm">Stock Out</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Links -->
+<div class="links my-4 text-center">
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/analytics">🔥 Hot Items</a>
+    <a href="/dead-stock">🧟 Dead Stock</a>
+    <a href="/low-stock">⚠️ Low Stock</a>
+</div>
+
+<!-- CSV Import -->
+<form action="/import/items" method="post" enctype="multipart/form-data" class="row g-3 justify-content-center mb-4">
+    <div class="col-auto">
+        <input type="file" name="file" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-danger">Import Items CSV</button>
+    </div>
+</form>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

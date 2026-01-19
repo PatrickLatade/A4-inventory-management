@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dead Stock Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212; /* Black background */
+            color: #ffffff;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            border-bottom: 2px solid #e63946; /* Red accent line */
+            padding-bottom: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        header img {
+            height: 80px;
+            margin-right: 1rem;
+        }
+
+        header h1 {
+            color: #e63946;
+            font-size: 2rem;
+            margin: 0;
+        }
+
+        h2 {
+            color: #6c757d; /* Muted gray for 'Dead' stock feel */
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .table-dark {
+            background-color: #1e1e1e;
+        }
+
+        .table-dark th, .table-dark td {
+            border-color: #333;
+        }
+
+        .btn-outline-danger {
+            color: #e63946;
+            border-color: #e63946;
+        }
+
+        .btn-outline-danger:hover {
+            background-color: #e63946;
+            color: white;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body class="container py-4">
+
+<header>
+    <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
+    <h1>Inventory System</h1>
+</header>
+
+<div class="text-center mb-4">
+    <h2><i class="bi bi-ghost"></i> Dead Stock (No movement in 60 days)</h2>
+</div>
+
+<!-- Search -->
+<div class="row justify-content-center mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-search"></i></span>
+            <input type="text" id="inventorySearch" class="form-control" placeholder="Search for items...">
+        </div>
+    </div>
+</div>
+
+<div class="text-center mt-4">
+    <a href="/" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to Inventory
+    </a>
+</div>
+
+<div class="table-responsive col-md-10 mx-auto">
+    <table class="table table-dark table-striped align-middle text-center">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Last Sold Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if dead_items %}
+                {% for item in dead_items %}
+                <tr>
+                    <td>{{ item.name }}</td>
+                    <td class="text-secondary">{{ item.last_sold or "Never Sold" }}</td>
+                    <td>
+                        {% if not item.last_sold %}
+                            <span class="badge bg-secondary status-badge">Never Actively Sold</span>
+                        {% else %}
+                            <span class="badge border border-secondary text-secondary status-badge">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="py-4 text-success">
+                        <i class="bi bi-check-circle"></i> No dead stock found! Everything is moving.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('inventorySearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll('table tbody tr');
+
+    rows.forEach(row => {
+        let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
+        if (itemName.includes(filter)) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
+        }
+    });
+});
+</script>
+</body>
+</html>

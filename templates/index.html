@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory System</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Optional: Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212; /* black background */
+            color: #ffffff;
+        }
+
+        h1 {
+            color: #e63946; /* red accent */
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .form-control, .form-select {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: 1px solid #333;
+        }
+
+        .form-control::placeholder {
+            color: #ccc;
+        }
+
+        .btn-danger {
+            background-color: #e63946;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background-color: #d62839;
+        }
+
+        .table-dark {
+            background-color: #1e1e1e;
+        }
+
+        .table-dark th, .table-dark td {
+            border-color: #333;
+        }
+
+        a {
+            color: #e63946;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .links a {
+            margin-right: 1rem;
+        }
+
+        hr {
+            border-color: #333;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start; /* align to left */
+            border-bottom: 2px solid #e63946; /* red line below header */
+            padding-bottom: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        header img {
+            height: 80px;
+            margin-right: 1rem;
+        }
+
+        header h1 {
+            color: #e63946;
+            font-size: 2rem;
+            margin: 0;
+        }
+
+    </style>
+</head>
+<body class="container py-4">
+
+<header>
+    <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
+    <h1>Inventory System</h1>
+</header>
+
+<!-- <form method="POST" action="/import/sales" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Import Sales CSV</button>
+</form> -->
+
+<!-- <form method="POST" action="/import/inventory" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">Import Inventory CSV</button>
+</form> -->
+
+<!-- Add Item Form -->
+<form method="POST" action="/add-item" class="row g-3 justify-content-center mb-4">
+    <div class="col-auto">
+        <input type="text" name="name" placeholder="Item name" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <input type="number" name="reorder_level" placeholder="Reorder level" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-danger">Add Item</button>
+    </div>
+</form>
+
+<!-- Search -->
+<div class="row justify-content-center mb-3">
+    <div class="col-md-6">
+        <div class="input-group">
+            <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-search"></i></span>
+            <input type="text" id="inventorySearch" class="form-control" placeholder="Search for items...">
+        </div>
+    </div>
+</div>
+
+<!-- Links -->
+<div class="links my-4 text-center">
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/analytics">🔥 Hot Items</a>
+    <a href="/dead-stock">🧟 Dead Stock</a>
+    <a href="/low-stock">⚠️ Low Stock</a>
+</div>
+
+<hr class="mb-4">
+
+<!-- Inventory Table -->
+<div class="table-responsive">
+    <table class="table table-dark table-striped align-middle text-center">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Current Stock</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.current_stock }}</td>
+                <td>
+                    <form method="POST" class="d-inline-flex me-2">
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <input type="hidden" name="action" value="IN">
+                        <input type="number" name="quantity" placeholder="+Qty" class="form-control form-control-sm me-1" required>
+                        <button type="submit" class="btn btn-danger btn-sm">Stock In</button>
+                    </form>
+
+                    <form method="POST" class="d-inline-flex">
+                        <input type="hidden" name="item_id" value="{{ item.id }}">
+                        <input type="hidden" name="action" value="OUT">
+                        <input type="number" name="quantity" placeholder="-Qty" class="form-control form-control-sm me-1" required>
+                        <button type="submit" class="btn btn-danger btn-sm">Stock Out</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- CSV Import -->
+<form action="/import/items" method="post" enctype="multipart/form-data" class="row g-3 justify-content-center">
+    <div class="col-auto">
+        <input type="file" name="file" class="form-control" required>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-danger">Import Items CSV</button>
+    </div>
+</form>
+
+<!-- Bootstrap JS (optional) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('inventorySearch').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll('table tbody tr');
+
+    rows.forEach(row => {
+        let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
+        if (itemName.includes(filter)) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
+        }
+    });
+});
+</script>
+</body>
+</html>

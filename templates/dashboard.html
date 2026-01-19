@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { background-color: #121212; color: #ffffff; }
+        header { 
+            display: flex; align-items: center; border-bottom: 2px solid #e63946; 
+            padding-bottom: 0.5rem; margin-bottom: 2rem; 
+        }
+        header img { height: 80px; margin-right: 1rem; }
+        header h1 { color: #e63946; font-size: 2rem; margin: 0; }
+        
+        .stat-card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-left: 4px solid #e63946;
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-5px); }
+        
+        .chart-container {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            height: 350px;
+            margin-bottom: 2rem;
+        }
+        
+        h3 { color: #e63946; margin-bottom: 1rem; font-size: 1.25rem; }
+        label { color: #adb5bd; font-size: 0.9rem; }
+        
+        .form-select {
+            background-color: #1e1e1e;
+            color: white;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+<body class="container py-4">
+
+<header>
+    <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
+    <h1>Inventory System</h1>
+</header>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card p-3 shadow-sm">
+            <label>Total Items</label>
+            <h2 class="mb-0 text-white">{{ total_items }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card p-3 shadow-sm">
+            <label>Total Stock</label>
+            <h2 class="mb-0 text-white">{{ total_stock }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card p-3 shadow-sm" style="border-left-color: #ffca3a;">
+            <label>Low Stock Alerts</label>
+            <h2 class="mb-0 text-warning">{{ low_stock_count }}</h2>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card p-3 shadow-sm" style="border-left-color: #4cc9f0;">
+            <label>Top Moving Item (30d)</label>
+            <h2 class="mb-0 text-info" style="font-size: 1.2rem;">{{ top_item.name if top_item else "N/A" }}</h2>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4 align-items-end">
+    <div class="col-md-4">
+        <label for="range" class="form-label"><i class="bi bi-calendar3"></i> Global Time Range:</label>
+        <select id="range" class="form-select">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+        </select>
+    </div>
+    <div class="col-md-8 text-end">
+        <a href="/export/transactions" class="btn btn-danger btn-sm">
+            <i class="bi bi-download"></i> Export CSV
+        </a>
+        <a href="/" class="btn btn-outline-secondary btn-sm ms-2">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <h3><i class="bi bi-graph-up-arrow"></i> Stock Movement</h3>
+        <div class="chart-container">
+            <canvas id="stockChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <h3><i class="bi bi-fire"></i> Best Sellers</h3>
+        <div class="chart-container">
+            <canvas id="topItemsChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h3><i class="bi bi-search"></i> Specific Item Drill-down</h3>
+            <div style="width: 300px;">
+                <input list="itemOptions" id="itemSearch" class="form-control form-control-sm" placeholder="Type to search items...">
+                
+                <datalist id="itemOptions">
+                    {% for item in items %}
+                        <option data-id="{{ item.id }}" value="{{ item.name }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="itemChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+// Shared Chart Options for Dark Mode
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { labels: { color: "#adb5bd" } }
+    },
+    scales: {
+        y: { 
+            beginAtZero: true, 
+            grid: { color: "#333" }, 
+            ticks: { color: "#adb5bd" } 
+        },
+        x: { 
+            grid: { color: "#333" }, 
+            ticks: { color: "#adb5bd" } 
+        }
+    }
+};
+
+let stockChart, itemChart, topItemsChart;
+let selectedDays = 30;
+
+function loadChart(days) {
+    fetch(`/dashboard/stock-movement?days=${days}`)
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById("stockChart").getContext("2d");
+            if (stockChart) stockChart.destroy();
+            stockChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: "Net Stock Change",
+                        data: data.values,
+                        borderColor: "#e63946",
+                        backgroundColor: "rgba(230, 57, 70, 0.1)",
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: chartOptions
+            });
+        });
+}
+
+function loadItemChart(itemId, days = 30) {
+    fetch(`/dashboard/item-movement?item_id=${itemId}&days=${days}`)
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById("itemChart").getContext("2d");
+            if (itemChart) itemChart.destroy();
+            itemChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: "Inventory Flow",
+                        data: data.values,
+                        borderColor: "#4cc9f0",
+                        tension: 0.3
+                    }]
+                },
+                options: chartOptions
+            });
+        });
+}
+
+function loadTopItemsChart(days = 30) {
+    fetch(`/dashboard/top-items?days=${days}`)
+        .then(res => res.json())
+        .then(data => {
+            const ctx = document.getElementById("topItemsChart").getContext("2d");
+            if (topItemsChart) topItemsChart.destroy();
+            topItemsChart = new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: "Units Sold",
+                        data: data.values,
+                        backgroundColor: "#e63946"
+                    }]
+                },
+                options: chartOptions
+            });
+        });
+}
+
+// Event Listeners
+document.getElementById("range").addEventListener("change", function() {
+    selectedDays = this.value;
+    loadChart(selectedDays);
+    loadTopItemsChart(selectedDays);
+    loadItemChart(document.getElementById("itemSelect").value, selectedDays);
+});
+
+// Listener for the new Searchable Input
+document.getElementById("itemSearch").addEventListener("input", function () {
+    const val = this.value;
+    const opts = document.getElementById('itemOptions').childNodes;
+    
+    // Find the ID associated with the typed name
+    for (let i = 0; i < opts.length; i++) {
+        if (opts[i].value === val) {
+            const itemId = opts[i].getAttribute('data-id');
+            loadItemChart(itemId, selectedDays);
+            break;
+        }
+    }
+});
+
+// Initial Load
+loadChart(30);
+loadTopItemsChart(30);
+// Update the initial load at the bottom of the script
+// (Since the input starts empty, we can target the first item in the list or a default)
+const firstItemId = "{{ items[0].id if items else '' }}";
+const firstItemName = "{{ items[0].name if items else '' }}";
+if (firstItemId) {
+    document.getElementById("itemSearch").value = firstItemName;
+    loadItemChart(firstItemId, 30);
+}
+</script>
+
+</body>
+</html>
