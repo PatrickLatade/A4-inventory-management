@@ -83,6 +83,39 @@
             margin: 0;
         }
 
+        .table thead th {
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            color: #e63946;
+        }
+
+        .description-cell {
+            max-width: 200px;
+            font-size: 0.9rem;
+            color: #bbb;
+            text-align: left !important;
+        }
+
+        .price-text {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
+
+        .stock-badge {
+            background-color: #333;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+
+        /* Make the action column look like a single unit */
+        .action-group {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
     </style>
 </head>
 <body class="container py-4">
@@ -141,6 +174,11 @@
         <thead>
             <tr>
                 <th>Item</th>
+                <th>Description</th>
+                <th>Vendor Price</th>
+                <th>Cost Per Piece</th>
+                <th>A4S Selling Price</th>
+                <th>Markup</th>
                 <th>Current Stock</th>
                 <th>Action</th>
             </tr>
@@ -148,22 +186,35 @@
         <tbody>
             {% for item in items %}
             <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.current_stock }}</td>
+                <td class="fw-bold">{{ item.name }}</td>
+                <td class="description-cell">{{ item.description }}</td>
+                <td class="price-text">₱{{ item.vendor_price }}</td>
+                <td class="price-text">₱{{ item.cost_per_piece }}</td>
+                <td class="price-text text-warning">₱{{ item.a4s_selling_price }}</td>
                 <td>
-                    <form method="POST" class="d-inline-flex me-2">
-                        <input type="hidden" name="item_id" value="{{ item.id }}">
-                        <input type="hidden" name="action" value="IN">
-                        <input type="number" name="quantity" placeholder="+Qty" class="form-control form-control-sm me-1" required>
-                        <button type="submit" class="btn btn-danger btn-sm">Stock In</button>
-                    </form>
+                    <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
+                        {{ "%.2f"|format(item.markup * 100) }}%
+                    </span>
+                </td>
+                <td>
+                    <div class="stock-badge">{{ item.current_stock }}</div>
+                </td>
+                <td>
+                    <div class="action-group">
+                        <form method="POST" class="input-group input-group-sm" style="width: 130px;">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <input type="hidden" name="action" value="IN">
+                            <input type="number" name="quantity" placeholder="+Qty" class="form-control" required>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i></button>
+                        </form>
 
-                    <form method="POST" class="d-inline-flex">
-                        <input type="hidden" name="item_id" value="{{ item.id }}">
-                        <input type="hidden" name="action" value="OUT">
-                        <input type="number" name="quantity" placeholder="-Qty" class="form-control form-control-sm me-1" required>
-                        <button type="submit" class="btn btn-danger btn-sm">Stock Out</button>
-                    </form>
+                        <form method="POST" class="input-group input-group-sm" style="width: 130px;">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <input type="hidden" name="action" value="OUT">
+                            <input type="number" name="quantity" placeholder="-Qty" class="form-control" required>
+                            <button type="submit" class="btn btn-danger"><i class="bi bi-dash-lg"></i></button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% endfor %}

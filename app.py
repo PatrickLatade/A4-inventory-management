@@ -54,22 +54,35 @@ app.register_blueprint(dashboard_api)
 # ============================================================
 @app.route("/", methods=["GET", "POST"])
 def index():
-    """
-    Main inventory screen.
-    - POST: add inventory transaction (IN / OUT)
-    - GET: show current stock snapshot
-    """
     if request.method == "POST":
         action = request.form["action"]
         item_id = request.form["item_id"]
         quantity = int(request.form["quantity"])
-
         add_transaction(item_id, quantity, action)
         return redirect("/")
 
-    # Snapshot date is intentional due to historical data mismatch
-    items = get_items_with_stock(snapshot_date="2026-01-18")
-    return render_template("index.html", items=items)
+    conn = get_db()
+
+    # 1️⃣ Get current stock using your original function
+    items_stock = get_items_with_stock(snapshot_date="2026-01-18")
+
+    # 2️⃣ Fetch all other fields from items table
+    extras = conn.execute("""
+        SELECT *
+        FROM items
+    """).fetchall()
+
+    conn.close()
+
+    # 3️⃣ Merge safely: convert Row objects to dicts
+    extras_dict = {e["id"]: dict(e) for e in extras}
+    items_merged = []
+    for item in items_stock:
+        merged = dict(item)  # item.id, item.name, current_stock
+        merged.update(extras_dict.get(item["id"], {}))  # merge all other columns
+        items_merged.append(merged)
+
+    return render_template("index.html", items=items_merged)
 
 
 # ============================================================

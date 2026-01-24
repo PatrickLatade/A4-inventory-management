@@ -1,56 +1,97 @@
 import csv
 from db.database import get_db
 
+def normalize_header(text):
+    if not text:
+        return ""
+    return (
+        text.strip()
+            .lower()
+            .replace("%", "")
+            .replace("/", " ")
+            .replace("-", " ")
+            .replace("_", " ")
+    )
+
 def import_items_csv(file):
     if not file or not file.filename.endswith(".csv"):
         return False
 
     conn = get_db()
 
-    lines = file.stream.read().decode("utf-8").splitlines()
+    lines = file.stream.read().decode("utf-8", errors="ignore").splitlines()
     reader = csv.DictReader(lines)
 
+    # Normalize headers
+    reader.fieldnames = [normalize_header(h) for h in reader.fieldnames]
+
+    imported = 0
+    skipped = 0
+
     for row in reader:
-        normalized_row = {k.strip().lower(): v for k, v in row.items()}
+        # Clean row keys and values
+        row = {
+            normalize_header(k): (v.strip() if isinstance(v, str) else v)
+            for k, v in row.items()
+        }
 
         def get_value(key, default=None, cast=str):
-            raw_value = normalized_row.get(key.lower(), default) or default
-
-            if cast == float and isinstance(raw_value, str):
-                raw_value = "".join(c for c in raw_value if c.isdigit() or c in ".-")
-                if raw_value == "":
-                    return 0.0
-
+            raw = row.get(key)
+            if raw in (None, ""):
+                return default
             try:
-                return cast(raw_value)
-            except (ValueError, TypeError):
+                if cast == float:
+                    raw = str(raw).replace("%", "")
+                    raw = "".join(c for c in raw if c.isdigit() or c in ".-")
+                return cast(raw)
+            except:
                 return default
 
+        name = get_value("name", "", str)
+
+        if not name:
+            skipped += 1
+            continue
+
+        # Using ON CONFLICT (Upsert) logic
         conn.execute("""
-            INSERT OR IGNORE INTO items (
+            INSERT INTO items (
                 name,
                 description,
                 pack_size,
+                vendor_price,
                 cost_per_piece,
-                selling_price,
+                a4s_selling_price,
+                markup,
                 category,
-                reorder_level,
-                vendor,
-                mechanic
+                reorder_level
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(name) DO UPDATE SET
+                description = excluded.description,
+                pack_size = excluded.pack_size,
+                vendor_price = excluded.vendor_price,
+                cost_per_piece = excluded.cost_per_piece,
+                a4s_selling_price = excluded.a4s_selling_price,
+                markup = excluded.markup,
+                category = excluded.category,
+                reorder_level = excluded.reorder_level
         """, (
-            get_value("item name", "", str).strip(),
+            name,
             get_value("description", "", str),
             get_value("pack size", "", str),
-            get_value("cost per piece", 0, float),
-            get_value("a4s selling price", 0, float),
-            get_value("pms/acc/svc", "", str),
+            get_value("vendor price pc", 0.0, float),
+            get_value("cost per piece", 0.0, float),
+            get_value("a4s selling price", 0.0, float),
+            get_value("mark up", 0.0, float) / 100,  # store as decimal
+            get_value("pms acc svc", "", str),
             get_value("minimum inv level", 0, int),
-            get_value("vendor list", "", str),
-            get_value("mechanic", "", str)
         ))
+
+        imported += 1
 
     conn.commit()
     conn.close()
+
+    print(f"Items import complete. Processed: {imported}, Skipped: {skipped}")
     return True
