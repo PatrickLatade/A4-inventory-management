@@ -8,7 +8,6 @@
 
 from flask import Flask, render_template, request, redirect, Response
 from flask import session, abort, url_for
-from flask import session, abort, url_for
 
 # ------------------------
 # Database & initialization
@@ -92,12 +91,6 @@ def index():
         action = request.form["action"]
         item_id = request.form["item_id"]
         quantity = int(request.form["quantity"])
-        
-        # --- NEW AUDIT TRAIL LOGIC ---
-        user_id = session.get("user_id")
-        user_name = session.get("username")
-
-        add_transaction(item_id, quantity, action, user_id=user_id, user_name=user_name)
         
         # --- NEW AUDIT TRAIL LOGIC ---
         user_id = session.get("user_id")
@@ -405,17 +398,6 @@ def debug_integrity():
         date_ranges=date_ranges
     )
 
-@app.errorhandler(403)
-def forbidden(e):
-    return render_template('errors/403.html'), 403
-
-@app.errorhandler(404)
-def page_not_found(e):
-    return render_template('errors/404.html'), 404
-
-@app.errorhandler(500)
-def server_error(e):
-    return render_template('errors/500.html'), 500
 @app.errorhandler(403)
 def forbidden(e):
     return render_template('errors/403.html'), 403
