@@ -7,6 +7,7 @@
 # ============================================================
 
 from flask import Flask, render_template, request, redirect, Response
+from flask import session, abort, url_for
 
 # ------------------------
 # Database & initialization
@@ -17,6 +18,7 @@ from db.schema import init_db
 # ------------------------
 # Services (business logic)
 # ------------------------
+from routes.login_route import auth_bp
 from services.inventory_service import get_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
@@ -43,10 +45,39 @@ from routes.routes_api import dashboard_api
 # App setup
 # ============================================================
 app = Flask(__name__)
+@app.before_request
+def restrict_access():
+    # 1. Define which routes are totally public (Login page, static files)
+    # Everything else will require a login.
+    PUBLIC_ROUTES = ['auth.login', 'static',]
+
+    # 2. Define which routes are for Admins only
+    ADMIN_ONLY_ROUTES = [
+        'dashboard', 
+        'debug_integrity', 
+        'auth.manage_users'
+    ]
+
+    # --- THE LOGIC ---
+
+    # A. If it's a public route, let them through immediately
+    if request.endpoint in PUBLIC_ROUTES or not request.endpoint:
+        return
+
+    # B. If they aren't logged in, kick them to the login page
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    # C. If the route is Admin-only, check their role
+    if request.endpoint in ADMIN_ONLY_ROUTES:
+        if session.get("role") != "admin":
+            abort(403)
+app.secret_key = "dev-secret-change-later"
 init_db()  # Safe to call on startup (creates tables if missing)
 
 # Register API routes (kept separate from UI routes)
 app.register_blueprint(dashboard_api)
+app.register_blueprint(auth_bp)
 
 
 # ============================================================
@@ -58,7 +89,12 @@ def index():
         action = request.form["action"]
         item_id = request.form["item_id"]
         quantity = int(request.form["quantity"])
-        add_transaction(item_id, quantity, action)
+        
+        # --- NEW AUDIT TRAIL LOGIC ---
+        user_id = session.get("user_id")
+        user_name = session.get("username")
+
+        add_transaction(item_id, quantity, action, user_id=user_id, user_name=user_name)
         return redirect("/")
 
     conn = get_db()
@@ -172,7 +208,8 @@ def export_transactions():
             items.name AS item,
             inventory_transactions.transaction_type,
             inventory_transactions.quantity,
-            inventory_transactions.transaction_date
+            inventory_transactions.transaction_date,
+            inventory_transactions.user_name -- ADDED THIS
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         ORDER BY inventory_transactions.transaction_date DESC
@@ -180,17 +217,12 @@ def export_transactions():
     conn.close()
 
     def generate():
-        yield "Item,Type,Quantity,Date\n"
+        yield "Item,Type,Quantity,Date,User\n" # ADDED USER COLUMN
         for row in rows:
-            yield f"{row['item']},{row['transaction_type']},{row['quantity']},{row['transaction_date']}\n"
+            # Added row['user_name'] to the string
+            yield f"{row['item']},{row['transaction_type']},{row['quantity']},{row['transaction_date']},{row['user_name'] or 'System'}\n"
 
-    return Response(
-        generate(),
-        mimetype="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=inventory_transactions.csv"
-        }
-    )
+    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=inventory_transactions.csv"})
 
 
 # ============================================================
@@ -358,6 +390,17 @@ def debug_integrity():
         date_ranges=date_ranges
     )
 
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('errors/403.html'), 403
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('errors/404.html'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('errors/500.html'), 500
 
 # ============================================================
 # App runner

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inventory System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #121212; color: #ffffff; }
+        
+        /* The "Index" Standard Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #e63946;
+            padding-bottom: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        header img { height: 80px; margin-right: 1rem; }
+        header h1 { color: #e63946; font-size: 2rem; margin: 0; text-align: left; }
+
+        /* Global Component Styles */
+        .btn-danger { background-color: #e63946; border: none; }
+        .btn-danger:hover { background-color: #d62839; }
+        .form-control, .form-select { background-color: #1e1e1e; color: #ffffff; border: 1px solid #333; }
+        .form-control::placeholder { color: #ccc; }
+        a { color: #e63946; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        hr { border-color: #333; }
+
+        /* Add this to your existing CSS */
+        .nav-links a {
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #ffffff; /* Turns white when you hover over them */
+            text-decoration: none;
+        }
+
+        .hover-admin:hover {
+        border-color: #e63946 !important;
+        background-color: #252525 !important;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.5s ease-out forwards;
+        }
+    </style>
+    {% block styles %}{% endblock %}
+</head>
+<body class="container py-4">
+
+<header>
+    <div class="d-flex align-items-center">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
+        <h1>Inventory System</h1>
+    </div>
+    
+    {% if session.get('user_id') %}
+    <nav class="ms-auto nav-links d-flex align-items-center">
+        <a href="/" class="mx-2">🏠 Items</a>
+        <a href="/analytics" class="mx-2">🔥 Hot Items</a>
+        <a href="/dead-stock" class="mx-2">🧟 Dead Stock</a>
+        <a href="/low-stock" class="mx-2">⚠️ Low Stock</a>
+
+        {% if session.get('role') == 'admin' %}
+            <a href="/dashboard" class="mx-2">📊 Dashboard</a>
+        {% endif %}
+        
+        <div class="border-start border-secondary h-100 mx-3" style="width: 1px; min-height: 25px;"></div>
+
+        <div class="d-flex align-items-center">
+            {% if session.get('role') == 'admin' %}
+                <a href="{{ url_for('auth.manage_users') }}" class="text-decoration-none border border-secondary rounded-pill px-3 py-1 bg-dark hover-admin" style="transition: 0.3s;">
+                    <span class="text-white-50 small">
+                        <i class="bi bi-shield-lock-fill text-danger"></i> {{ session.get('username') }} 
+                        <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">ADMIN</span>
+                    </span>
+                </a>
+            {% else %}
+                <div class="px-3 py-1">
+                    <span class="text-white-50 small">
+                        <i class="bi bi-person-circle"></i> {{ session.get('username') }} 
+                        <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">STAFF</span>
+                    </span>
+                </div>
+            {% endif %}
+            
+            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-3" style="font-size: 0.7rem;">Logout</a>
+        </div>
+    </nav>
+    {% endif %}
+</header>
+
+<div id="flash-container" style="position: fixed; top: 20px; right: 20px; z-index: 1050; width: auto; max-width: 350px;">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-danger alert-dismissible fade show shadow-lg animate-slide-in" role="alert" style="background-color: #e63946; color: white; border: none; margin-bottom: 10px;">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ message }}
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+</div>
+
+<main class="container">
+    {% block content %}{% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Find all alert elements
+        const alerts = document.querySelectorAll('.alert');
+        
+        alerts.forEach(function(alert) {
+            // Set a timer for 5000ms (5 seconds)
+            setTimeout(function() {
+                // Use Bootstrap's alert instance to close it smoothly
+                let bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 5000);
+        });
+    });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
