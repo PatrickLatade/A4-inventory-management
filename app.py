@@ -81,7 +81,6 @@ init_db()  # Safe to call on startup (creates tables if missing)
 # Register API routes (kept separate from UI routes)
 app.register_blueprint(dashboard_api)
 app.register_blueprint(auth_bp)
-app.register_blueprint(auth_bp)
 
 
 # ============================================================
