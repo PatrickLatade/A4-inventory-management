@@ -8,6 +8,8 @@
 
 from flask import Flask, render_template, request, redirect, Response
 from flask import session, abort, url_for
+import webbrowser
+import threading
 
 # ------------------------
 # Database & initialization
@@ -413,5 +415,9 @@ def server_error(e):
 # ============================================================
 # App runner
 # ============================================================
+def open_browser():
+    webbrowser.open("http://127.0.0.1:5000")
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    threading.Timer(1.5, open_browser).start()
+    app.run(port=5000)
