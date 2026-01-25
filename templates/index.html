@@ -1,141 +1,120 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Inventory System</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Optional: Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #121212; /* black background */
-            color: #ffffff;
-        }
+{% extends "base.html" %}
 
-        h1 {
-            color: #e63946; /* red accent */
-            text-align: center;
-            margin: 2rem 0;
-        }
+{% block styles %}
+<style>
+    /* 1. Base Table Layout - No Jumping */
+    .table {
+        table-layout: fixed;
+        width: 100%;
+        background-color: #1e1e1e;
+    }
 
-        .form-control, .form-select {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border: 1px solid #333;
-        }
+    /* 2. Column Widths */
+    .table th:nth-child(1) { width: 15%; } /* Item Name */
+    .table th:nth-child(2) { width: 25%; } /* Description */
+    .table th:nth-child(3), 
+    .table th:nth-child(4), 
+    .table th:nth-child(5) { width: 12%; } /* Prices */
+    .table th:nth-child(6) { width: 8%; }  /* Markup */
+    .table th:nth-child(7) { width: 10%; } /* Stock */
+    .table th:nth-child(8) { width: 18%; } /* Actions */
 
-        .form-control::placeholder {
-            color: #ccc;
-        }
+    /* 3. Global Cell Styling */
+    .table td, .table th {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle !important;
+        text-align: center !important; /* Forces everything to center */
+        border-color: #333;
+    }
 
-        .btn-danger {
-            background-color: #e63946;
-            border: none;
-        }
+    /* 4. Header Specifics */
+    .table thead th {
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 1px;
+        color: #e63946;
+    }
 
-        .btn-danger:hover {
-            background-color: #d62839;
-        }
+    /* 5. Description Cell Customizations */
+    .description-cell { 
+        color: #bbb;
+        font-size: 0.9rem;
+        cursor: help;
+    }
 
-        .table-dark {
-            background-color: #1e1e1e;
-        }
+    .description-cell:hover {
+        white-space: normal;
+        word-break: break-word;
+        background: #252525 !important;
+        z-index: 10;
+        position: relative;
+    }
 
-        .table-dark th, .table-dark td {
-            border-color: #333;
-        }
+    /* Update the Item Cell to handle overflow just like Description */
+    .item-cell {
+        font-weight: bold;
+        cursor: help;
+    }
 
-        a {
-            color: #e63946;
-            text-decoration: none;
-        }
+    /* Apply the hover expansion to BOTH Item and Description cells */
+    .item-cell:hover,
+    .description-cell:hover {
+        white-space: normal !important;
+        word-break: break-word;
+        background: #252525 !important;
+        z-index: 10;
+        position: relative;
+        overflow: visible; /* Ensure it pops out of the container if needed */
+    }
 
-        a:hover {
-            text-decoration: underline;
-        }
+    /* 6. Utility Styles */
+    .price-text { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+    .stock-badge { background-color: #333; padding: 0.5rem; border-radius: 4px; border: 1px solid #444; }
+    .action-group { display: flex; gap: 5px; justify-content: center; }
+</style>
+{% endblock %}
 
-        .links a {
-            margin-right: 1rem;
-        }
+{% block content %}
+{% if session.get('role') == 'admin' %}
+<div class="admin-card mb-4 p-3 shadow-sm" style="background-color: #1a1a1a; border: 1px solid #e63946; border-radius: 8px;">
+    <h6 class="text-white-50 mb-3 small text-center"><i class="bi bi-shield-lock-fill text-danger"></i> ADMIN DATA IMPORT CONTROLS</h6>
+    
+    <div class="row g-3">
+        <div class="col-md-4">
+            <form action="/import/items" method="POST" enctype="multipart/form-data">
+                <label class="form-label small text-white-50">Import items</label>
+                <div class="input-group input-group-sm">
+                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <button type="submit" class="btn btn-danger">Import</button>
+                </div>
+            </form>
+        </div>
 
-        hr {
-            border-color: #333;
-        }
+        <div class="col-md-4">
+            <form action="/import/sales" method="POST" enctype="multipart/form-data">
+                <label class="form-label small text-white-50">Import Sales</label>
+                <div class="input-group input-group-sm">
+                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <button type="submit" class="btn btn-warning">Import</button>
+                </div>
+            </form>
+        </div>
 
-        header {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start; /* align to left */
-            border-bottom: 2px solid #e63946; /* red line below header */
-            padding-bottom: 0.5rem;
-            margin-bottom: 2rem;
-        }
+        <div class="col-md-4">
+            <form action="/import/inventory" method="POST" enctype="multipart/form-data">
+                <label class="form-label small text-white-50">Import Inventory</label>
+                <div class="input-group input-group-sm">
+                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <button type="submit" class="btn btn-success">Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
-        header img {
-            height: 80px;
-            margin-right: 1rem;
-        }
-
-        header h1 {
-            color: #e63946;
-            font-size: 2rem;
-            margin: 0;
-        }
-
-        .table thead th {
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 1px;
-            color: #e63946;
-        }
-
-        .description-cell {
-            max-width: 200px;
-            font-size: 0.9rem;
-            color: #bbb;
-            text-align: left !important;
-        }
-
-        .price-text {
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: bold;
-        }
-
-        .stock-badge {
-            background-color: #333;
-            padding: 0.5rem;
-            border-radius: 4px;
-            border: 1px solid #444;
-        }
-
-        /* Make the action column look like a single unit */
-        .action-group {
-            display: flex;
-            gap: 5px;
-            justify-content: center;
-        }
-
-    </style>
-</head>
-<body class="container py-4">
-
-<header>
-    <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
-    <h1>Inventory System</h1>
-</header>
-
-<!-- <form method="POST" action="/import/sales" enctype="multipart/form-data">
-    <input type="file" name="file" required>
-    <button type="submit">Import Sales CSV</button>
-</form> -->
-
-<form method="POST" action="/import/inventory" enctype="multipart/form-data">
-    <input type="file" name="file" required>
-    <button type="submit">Import Inventory CSV</button>
-</form>
-
-<!-- Add Item Form -->
 <form method="POST" action="/add-item" class="row g-3 justify-content-center mb-4">
     <div class="col-auto">
         <input type="text" name="name" placeholder="Item name" class="form-control" required>
@@ -148,7 +127,6 @@
     </div>
 </form>
 
-<!-- Search -->
 <div class="row justify-content-center mb-3">
     <div class="col-md-6">
         <div class="input-group">
@@ -158,17 +136,8 @@
     </div>
 </div>
 
-<!-- Links -->
-<div class="links my-4 text-center">
-    <a href="/dashboard">📊 Dashboard</a>
-    <a href="/analytics">🔥 Hot Items</a>
-    <a href="/dead-stock">🧟 Dead Stock</a>
-    <a href="/low-stock">⚠️ Low Stock</a>
-</div>
-
 <hr class="mb-4">
 
-<!-- Inventory Table -->
 <div class="table-responsive">
     <table class="table table-dark table-striped align-middle text-center">
         <thead>
@@ -186,8 +155,8 @@
         <tbody>
             {% for item in items %}
             <tr>
-                <td class="fw-bold">{{ item.name }}</td>
-                <td class="description-cell">{{ item.description }}</td>
+                <td class="fw-bold item-cell">{{ item.name }}</td>
+                <td class="description-cell text-center">{{ item.description }}</td>
                 <td class="price-text">₱{{ item.vendor_price }}</td>
                 <td class="price-text">₱{{ item.cost_per_piece }}</td>
                 <td class="price-text text-warning">₱{{ item.a4s_selling_price }}</td>
@@ -196,9 +165,7 @@
                         {{ "%.2f"|format(item.markup * 100) }}%
                     </span>
                 </td>
-                <td>
-                    <div class="stock-badge">{{ item.current_stock }}</div>
-                </td>
+                <td><div class="stock-badge">{{ item.current_stock }}</div></td>
                 <td>
                     <div class="action-group">
                         <form method="POST" class="input-group input-group-sm" style="width: 130px;">
@@ -207,7 +174,6 @@
                             <input type="number" name="quantity" placeholder="+Qty" class="form-control" required>
                             <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i></button>
                         </form>
-
                         <form method="POST" class="input-group input-group-sm" style="width: 130px;">
                             <input type="hidden" name="item_id" value="{{ item.id }}">
                             <input type="hidden" name="action" value="OUT">
@@ -221,33 +187,43 @@
         </tbody>
     </table>
 </div>
+{% endblock %}
 
-<!-- CSV Import -->
-<form action="/import/items" method="post" enctype="multipart/form-data" class="row g-3 justify-content-center">
-    <div class="col-auto">
-        <input type="file" name="file" class="form-control" required>
-    </div>
-    <div class="col-auto">
-        <button type="submit" class="btn btn-danger">Import Items CSV</button>
-    </div>
-</form>
-
-<!-- Bootstrap JS (optional) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}
 <script>
-document.getElementById('inventorySearch').addEventListener('keyup', function() {
-    let filter = this.value.toLowerCase();
-    let rows = document.querySelectorAll('table tbody tr');
+/**
+ * Debounce function to prevent the search from firing 
+ * on every single keystroke (saves CPU/Memory).
+ */
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+const performSearch = () => {
+    const filter = document.getElementById('inventorySearch').value.toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
 
     rows.forEach(row => {
-        let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
-        if (itemName.includes(filter)) {
+        // Get Name (1st column) and Description (2nd column)
+        const itemName = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+        const itemDesc = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+
+        // Show row if filter matches name OR description
+        if (itemName.includes(filter) || itemDesc.includes(filter)) {
             row.style.display = "";
         } else {
             row.style.display = "none";
         }
     });
-});
+};
+
+// Apply debounce with a 300ms delay
+document.getElementById('inventorySearch').addEventListener('input', debounce(performSearch, 300));
 </script>
-</body>
-</html>
+{% endblock %}

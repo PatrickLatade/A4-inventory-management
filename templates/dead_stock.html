@@ -1,79 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Dead Stock Report</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #121212; /* Black background */
-            color: #ffffff;
-        }
+{% extends "base.html" %}
 
-        header {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            border-bottom: 2px solid #e63946; /* Red accent line */
-            padding-bottom: 0.5rem;
-            margin-bottom: 2rem;
-        }
+{% block styles %}
+<style>
+    /* Unique styles for Dead Stock */
+    h2 {
+        color: #6c757d; /* Muted gray for 'Dead' stock feel */
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
 
-        header img {
-            height: 80px;
-            margin-right: 1rem;
-        }
+    .table-dark {
+        background-color: #1e1e1e;
+    }
 
-        header h1 {
-            color: #e63946;
-            font-size: 2rem;
-            margin: 0;
-        }
+    .table-dark th, .table-dark td {
+        border-color: #333;
+    }
 
-        h2 {
-            color: #6c757d; /* Muted gray for 'Dead' stock feel */
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
+    .btn-outline-danger {
+        color: #e63946;
+        border-color: #e63946;
+    }
 
-        .table-dark {
-            background-color: #1e1e1e;
-        }
+    .btn-outline-danger:hover {
+        background-color: #e63946;
+        color: white;
+    }
 
-        .table-dark th, .table-dark td {
-            border-color: #333;
-        }
+    .status-badge {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+</style>
+{% endblock %}
 
-        .btn-outline-danger {
-            color: #e63946;
-            border-color: #e63946;
-        }
-
-        .btn-outline-danger:hover {
-            background-color: #e63946;
-            color: white;
-        }
-
-        .status-badge {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-    </style>
-</head>
-<body class="container py-4">
-
-<header>
-    <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
-    <h1>Inventory System</h1>
-</header>
-
+{% block content %}
 <div class="text-center mb-4">
     <h2><i class="bi bi-ghost"></i> Dead Stock (No movement in 60 days)</h2>
 </div>
 
-<!-- Search -->
 <div class="row justify-content-center mb-3">
     <div class="col-md-6">
         <div class="input-group">
@@ -83,7 +49,7 @@
     </div>
 </div>
 
-<div class="text-center mt-4">
+<div class="text-center mt-4 mb-4">
     <a href="/" class="btn btn-outline-danger btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
     </a>
@@ -123,8 +89,9 @@
         </tbody>
     </table>
 </div>
+{% endblock %}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}
 <script>
 document.getElementById('inventorySearch').addEventListener('keyup', function() {
     let filter = this.value.toLowerCase();
@@ -140,5 +107,4 @@ document.getElementById('inventorySearch').addEventListener('keyup', function() 
     });
 });
 </script>
-</body>
-</html>
+{% endblock %}
