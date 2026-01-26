@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="text-white mb-4"><i class="bi bi-cart-dash text-danger"></i> New OUT Transaction</h1>
+
+    <div class="card bg-dark text-white border-secondary shadow">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Date / Time</label>
+                    <input type="datetime-local" class="form-control bg-dark text-white border-secondary" id="trans-date">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Handled By</label>
+                    <input type="text" class="form-control bg-dark text-white border-secondary" value="{{ session.get('username') }}" disabled>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Customer</label>
+                    <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
+                </div>
+
+                <hr class="my-4 border-secondary opacity-25">
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle" id="items-table">
+                        <thead>
+                            <tr class="small text-danger">
+                                <th style="width: 35%;">Item</th>
+                                <th style="width: 15%;">Stock</th>
+                                <th style="width: 15%;">Qty OUT</th>
+                                <th style="width: 15%;">Price</th>
+                                <th style="width: 20%;">Subtotal</th>
+                                <th style="width: 5%;"></th> </tr>
+                            </tr>
+                        </thead>
+                        <tbody id="transaction-body">
+                            <tr class="item-row">
+                                <td>
+                                    <input list="items-datalist" class="form-control form-control-sm bg-dark text-white border-secondary item-input" placeholder="Search item...">
+                                </td>
+                                <td><input type="text" class="form-control form-control-sm bg-dark text-white-50 border-secondary stock-input" value="--" disabled></td>
+                                <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" value="1"></td>
+                                <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary price-input"></td>
+                                <td class="text-warning fw-bold subtotal-display">₱0.00</td>
+                                <td>
+                                    <button type="button" class="btn btn-sm text-secondary remove-row-btn" tabindex="-1">×</button>
+                                </td>
+                            </tr>
+                        </tbody>
+
+                        <datalist id="items-datalist">
+                            {% for item in items %}
+                            <option value="{{ item.name }}" 
+                                    data-price="{{ item.a4s_selling_price }}" 
+                                    data-stock="{{ item.current_stock }}" 
+                                    data-id="{{ item.id }}">
+                                Stock: {{ item.current_stock }} | ₱{{ item.a4s_selling_price }}
+                            </option>
+                            {% endfor %}
+                        </datalist>
+                    </table>
+                    <button class="btn btn-outline-danger btn-sm mt-2" id="add-row-btn">
+                        <i class="bi bi-plus-circle"></i> Add Another Item
+                    </button>
+                </div>
+
+                <hr class="my-4 border-secondary opacity-25">
+
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Payment Type</label>
+                    <select class="form-select bg-dark text-white border-secondary">
+                        <option>Cash</option>
+                        <option>GCash</option>
+                        <option>Utang (Pay Later)</option>
+                    </select>
+                    <label class="form-label small text-white-50 mt-3">Notes</label>
+                    <textarea class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+                </div>
+
+                <div class="col-md-6 d-flex flex-column justify-content-end align-items-end">
+                    <h3 class="text-white-50 mb-0">TOTAL DUE</h3>
+                    <h1 class="text-danger mb-4" id="grand-total">₱0.00</h1>
+                    <button class="btn btn-danger btn-lg px-5 shadow">SUBMIT TRANSACTION</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('input', function(e) {
+    // 1. Handle Item Selection & Clearing
+    if (e.target.classList.contains('item-input')) {
+        const row = e.target.closest('tr');
+        const val = e.target.value;
+        const datalist = document.getElementById('items-datalist');
+        const option = Array.from(datalist.options).find(opt => opt.value === val);
+
+        if (option) {
+            const price = option.getAttribute('data-price');
+            const stock = option.getAttribute('data-stock');
+            row.querySelector('.price-input').value = price;
+            row.querySelector('.stock-input').value = stock;
+        } else {
+            // IF ERASED: Clear the fields so old data doesn't persist
+            row.querySelector('.price-input').value = '';
+            row.querySelector('.stock-input').value = '--';
+        }
+        calculateRow(row);
+    }
+
+    // 2. Handle Price or Qty manual overrides
+    if (e.target.classList.contains('qty-input') || e.target.classList.contains('price-input')) {
+        calculateRow(e.target.closest('tr'));
+    }
+});
+
+// 3. Handle Row Removal
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-row-btn')) {
+        const row = e.target.closest('tr');
+        const allRows = document.querySelectorAll('.item-row');
+        
+        // Don't delete the last remaining row, just clear it
+        if (allRows.length > 1) {
+            row.remove();
+            calculateGrandTotal();
+        } else {
+            row.querySelector('.item-input').value = '';
+            row.querySelector('.price-input').value = '';
+            row.querySelector('.stock-input').value = '--';
+            calculateRow(row);
+        }
+    }
+});
+
+function calculateRow(row) {
+    const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+    const price = parseFloat(row.querySelector('.price-input').value) || 0;
+    const subtotal = qty * price;
+    row.querySelector('.subtotal-display').innerText = `₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    calculateGrandTotal();
+}
+
+function calculateGrandTotal() {
+    let total = 0;
+    document.querySelectorAll('.subtotal-display').forEach(display => {
+        const val = parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
+        total += val;
+    });
+    document.getElementById('grand-total').innerText = `₱${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+}
+
+document.getElementById('add-row-btn').addEventListener('click', function(e) {
+    e.preventDefault();
+    const tbody = document.getElementById('transaction-body');
+    const firstRow = tbody.querySelector('.item-row');
+    const newRow = firstRow.cloneNode(true);
+    
+    // Clear everything for the new row
+    newRow.querySelector('.item-input').value = '';
+    newRow.querySelector('.price-input').value = '';
+    newRow.querySelector('.qty-input').value = 1;
+    newRow.querySelector('.stock-input').value = '--';
+    newRow.querySelector('.subtotal-display').innerText = '₱0.00';
+    
+    tbody.appendChild(newRow);
+});
+</script>
+
+{% endblock %}

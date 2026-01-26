@@ -8,6 +8,7 @@ def get_items_with_stock(snapshot_date=None):
         SELECT 
             items.id,
             items.name,
+            items.a4s_selling_price,
             COALESCE(SUM(
                 CASE 
                     WHEN inventory_transactions.transaction_type = 'IN'
@@ -29,6 +30,7 @@ def get_items_with_stock(snapshot_date=None):
         SELECT 
             items.id,
             items.name,
+            items.a4s_selling_price,
             COALESCE(SUM(
                 CASE 
                     WHEN inventory_transactions.transaction_type = 'IN'

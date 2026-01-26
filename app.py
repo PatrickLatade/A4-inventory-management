@@ -42,6 +42,7 @@ from importers.inventory_importer import import_inventory_csv
 # API / blueprints
 # ------------------------
 from routes.routes_api import dashboard_api
+from routes.transaction_route import transaction_bp
 
 
 # ============================================================
@@ -82,6 +83,7 @@ init_db()  # Safe to call on startup (creates tables if missing)
 # Register API routes (kept separate from UI routes)
 app.register_blueprint(dashboard_api)
 app.register_blueprint(auth_bp)
+app.register_blueprint(transaction_bp)
 
 
 # ============================================================
@@ -202,10 +204,6 @@ def add_item():
 
 @app.route("/export/transactions")
 def export_transactions():
-    """
-    Export all inventory transactions as CSV.
-    Useful for audits and client handoff.
-    """
     conn = get_db()
     rows = conn.execute("""
         SELECT 
@@ -213,9 +211,7 @@ def export_transactions():
             inventory_transactions.transaction_type,
             inventory_transactions.quantity,
             inventory_transactions.transaction_date,
-            inventory_transactions.user_name -- ADDED THIS
-            inventory_transactions.transaction_date,
-            inventory_transactions.user_name -- ADDED THIS
+            inventory_transactions.user_name
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         ORDER BY inventory_transactions.transaction_date DESC
@@ -223,15 +219,10 @@ def export_transactions():
     conn.close()
 
     def generate():
-        yield "Item,Type,Quantity,Date,User\n" # ADDED USER COLUMN
-        yield "Item,Type,Quantity,Date,User\n" # ADDED USER COLUMN
+        yield "Item,Type,Quantity,Date,User\n" # Only one header!
         for row in rows:
-            # Added row['user_name'] to the string
-            yield f"{row['item']},{row['transaction_type']},{row['quantity']},{row['transaction_date']},{row['user_name'] or 'System'}\n"
-            # Added row['user_name'] to the string
             yield f"{row['item']},{row['transaction_type']},{row['quantity']},{row['transaction_date']},{row['user_name'] or 'System'}\n"
 
-    return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=inventory_transactions.csv"})
     return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=inventory_transactions.csv"})
 
 
