@@ -73,6 +73,46 @@
     .price-text { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
     .stock-badge { background-color: #333; padding: 0.5rem; border-radius: 4px; border: 1px solid #444; }
     .action-group { display: flex; gap: 5px; justify-content: center; }
+
+    /* Recent Search Chips */
+    .search-chip {
+        display: inline-flex;
+        align-items: center;
+        background-color: #252525;
+        border: 1px solid #444;
+        border-radius: 16px;
+        padding: 4px 10px;
+        margin: 4px 6px 0 0;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #e63946;
+    }
+
+    .search-chip:hover {
+        background-color: #2e2e2e;
+    }
+
+    .search-chip .close-btn {
+        margin-left: 8px;
+        color: #888;
+        cursor: pointer;
+    }
+
+    .search-chip .close-btn:hover {
+        color: #fff;
+    }
+
+    .search-chip.frequent {
+    border-color: #e63946;
+    background-color: #2b1f1f;
+    font-weight: bold;
+    }
+
+    .highlight {
+    background-color: rgba(230, 57, 70, 0.25);
+    padding: 0 2px;
+    border-radius: 3px;
+    }
 </style>
 {% endblock %}
 
@@ -136,6 +176,12 @@
     </div>
 </div>
 
+<div class="row justify-content-center mb-3">
+    <div class="col-md-6">
+        <div id="recentSearches" class="small text-muted mt-2"></div>
+    </div>
+</div>
+
 <hr class="mb-4">
 
 <div class="table-responsive">
@@ -191,39 +237,214 @@
 
 {% block scripts %}
 <script>
+let lastSavedSearch = "";
 /**
- * Debounce function to prevent the search from firing 
- * on every single keystroke (saves CPU/Memory).
+ * Normalize text so search is forgiving.
+ * - lowercase
+ * - remove spaces
+ * - remove special characters
+ */
+function normalize(text) {
+    if (!text) return "";
+    return text
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, " "); // Just collapse multiple spaces into one, don't delete them!
+}
+
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightText(element, tokens) {
+    if (!element.dataset.original) return;
+
+    // ALWAYS reset first
+    const originalText = element.dataset.original;
+    let highlighted = originalText;
+
+    tokens.forEach(token => {
+        if (!token) return;
+
+        const escaped = escapeRegExp(token);
+        const regex = new RegExp(`(${escaped})`, "gi");
+
+        highlighted = highlighted.replace(
+            regex,
+            `<span class="highlight">$1</span>`
+        );
+    });
+
+    element.innerHTML = highlighted;
+}
+
+function resetHighlight(element) {
+    if (!element.dataset.original) return;
+    element.innerHTML = element.dataset.original;
+}
+
+/**
+ * Debounce function to prevent excessive firing
  */
 function debounce(func, delay) {
     let timeoutId;
-    return function(...args) {
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-            func.apply(this, args);
-        }, delay);
+    return function (...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(this, args), delay);
     };
 }
 
 const performSearch = () => {
-    const filter = document.getElementById('inventorySearch').value.toLowerCase();
+    const rawInput = document.getElementById('inventorySearch').value;
+    const normalizedInput = normalize(rawInput);
+
+    // Only create tokens if they are actual words (length >= 2)
+    const tokens = rawInput
+        .toLowerCase()
+        .split(" ")
+        .filter(t => t.trim().length >= 2);
+
     const rows = document.querySelectorAll('table tbody tr');
 
     rows.forEach(row => {
-        // Get Name (1st column) and Description (2nd column)
-        const itemName = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
-        const itemDesc = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+        const nameCell = row.querySelector('.item-cell'); // Using classes is safer
+        const descCell = row.querySelector('.description-cell');
 
-        // Show row if filter matches name OR description
-        if (itemName.includes(filter) || itemDesc.includes(filter)) {
+        if (!nameCell.dataset.original) nameCell.dataset.original = nameCell.textContent;
+        if (!descCell.dataset.original) descCell.dataset.original = descCell.textContent;
+
+        const nameText = normalize(nameCell.dataset.original);
+        const descText = normalize(descCell.dataset.original);
+
+        // Does the WHOLE input match anywhere OR do ANY of the words match?
+        const matches = 
+            nameText.includes(normalizedInput) || 
+            descText.includes(normalizedInput) ||
+            tokens.some(token => nameText.includes(normalize(token)) || descText.includes(normalize(token)));
+
+        resetHighlight(nameCell);
+        resetHighlight(descCell);
+
+        if (matches && normalizedInput !== "") {
             row.style.display = "";
+            highlightText(nameCell, tokens);
+            highlightText(descCell, tokens);
+        } else if (normalizedInput === "") {
+            row.style.display = ""; // Show all if empty
         } else {
             row.style.display = "none";
         }
     });
 };
 
-// Apply debounce with a 300ms delay
-document.getElementById('inventorySearch').addEventListener('input', debounce(performSearch, 300));
+const RECENT_SEARCH_LIMIT = 8;
+const STORAGE_KEY = "inventory_recent_searches";
+const EXPIRY_DAYS = 7;
+const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+function getRecentSearches() {
+    let searches = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    const now = Date.now();
+
+    // Auto-expire old searches
+    searches = searches.filter(s => now - s.lastUsed <= EXPIRY_MS);
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+    return searches;
+}
+
+function normalizeForCompare(text) {
+    return text.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function saveRecentSearch(term) {
+    term = term.trim();
+    // Don't save tiny searches (like "o" or "oi")
+    if (term.length < 3) return;
+
+    const now = Date.now();
+    const normalizedTerm = term.toLowerCase();
+    let searches = getRecentSearches();
+
+    // 1. Check if this term already exists in our history
+    const existing = searches.find(
+        s => s.term.toLowerCase() === normalizedTerm
+    );
+
+    if (existing) {
+        // If it exists, just bump the count and update the timestamp
+        existing.count += 1;
+        existing.lastUsed = now;
+    } else {
+        // If it's new, add it to the front of the list
+        searches.unshift({
+            term: term, // Save the pretty version with casing
+            count: 1,
+            lastUsed: now
+        });
+    }
+
+    // 2. Sort: Most frequent searches first, then the most recent
+    searches.sort((a, b) =>
+        b.count !== a.count
+            ? b.count - a.count
+            : b.lastUsed - a.lastUsed
+    );
+
+    // 3. Keep only the top 8 and save to LocalStorage
+    searches = searches.slice(0, RECENT_SEARCH_LIMIT);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+    
+    // 4. Update the UI
+    renderRecentSearches();
+}
+
+function renderRecentSearches() {
+    const container = document.getElementById("recentSearches");
+    const searches = getRecentSearches();
+
+    if (!searches.length) {
+        container.innerHTML = "";
+        return;
+    }
+
+    container.innerHTML = `
+        <strong>Quick picks:</strong>
+        ${searches.map(s => `
+            <span class="search-chip ${s.count >= 3 ? "frequent" : ""}">
+                <span onclick="applyRecentSearch('${s.term.replace(/'/g, "\\'")}')">
+                    ${s.term}
+                </span>
+                <span class="close-btn" onclick="removeRecentSearch('${s.term.replace(/'/g, "\\'")}')">
+                    ×
+                </span>
+            </span>
+        `).join("")}
+    `;
+}
+
+function removeRecentSearch(term) {
+    let searches = getRecentSearches();
+    searches = searches.filter(s => s.term !== term);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+    renderRecentSearches();
+}
+
+function applyRecentSearch(term) {
+    const input = document.getElementById("inventorySearch");
+    input.value = term;
+    performSearch();
+}
+
+// Attach debounced search
+document
+    .getElementById('inventorySearch')
+    .addEventListener('input', debounce(() => {
+        const value = document.getElementById('inventorySearch').value;
+        performSearch();
+        saveRecentSearch(value);
+    }, 300));
+
+renderRecentSearches();
 </script>
 {% endblock %}
