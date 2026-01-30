@@ -298,16 +298,18 @@ const performSearch = () => {
     const rawInput = document.getElementById('inventorySearch').value;
     const normalizedInput = normalize(rawInput);
 
-    // Only create tokens if they are actual words (length >= 2)
     const tokens = rawInput
         .toLowerCase()
         .split(" ")
         .filter(t => t.trim().length >= 2);
 
-    const rows = document.querySelectorAll('table tbody tr');
+    const tbody = document.querySelector('table tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    let rankedRows = [];
 
     rows.forEach(row => {
-        const nameCell = row.querySelector('.item-cell'); // Using classes is safer
+        const nameCell = row.querySelector('.item-cell');
         const descCell = row.querySelector('.description-cell');
 
         if (!nameCell.dataset.original) nameCell.dataset.original = nameCell.textContent;
@@ -316,25 +318,45 @@ const performSearch = () => {
         const nameText = normalize(nameCell.dataset.original);
         const descText = normalize(descCell.dataset.original);
 
-        // Does the WHOLE input match anywhere OR do ANY of the words match?
-        const matches = 
-            nameText.includes(normalizedInput) || 
-            descText.includes(normalizedInput) ||
-            tokens.some(token => nameText.includes(normalize(token)) || descText.includes(normalize(token)));
-
         resetHighlight(nameCell);
         resetHighlight(descCell);
 
-        if (matches && normalizedInput !== "") {
+        let score = -1;
+
+        if (normalizedInput !== "") {
+            if (nameText === normalizedInput) {
+                score = 3; // 🎯 PERFECT MATCH (TOP PRIORITY)
+            } else if (nameText.includes(normalizedInput)) {
+                score = 2; // strong name match
+            } else if (
+                tokens.some(token =>
+                    nameText.includes(normalize(token)) ||
+                    descText.includes(normalize(token))
+                )
+            ) {
+                score = 1; // partial match
+            }
+        }
+
+        if (score >= 0 || normalizedInput === "") {
             row.style.display = "";
-            highlightText(nameCell, tokens);
-            highlightText(descCell, tokens);
-        } else if (normalizedInput === "") {
-            row.style.display = ""; // Show all if empty
+
+            if (normalizedInput !== "") {
+                highlightText(nameCell, tokens);
+                highlightText(descCell, tokens);
+            }
+
+            rankedRows.push({ row, score });
         } else {
             row.style.display = "none";
         }
     });
+
+    // 🔽 Sort so best matches float to the top
+    rankedRows.sort((a, b) => b.score - a.score);
+
+    // 🔁 Re-append rows in sorted order
+    rankedRows.forEach(({ row }) => tbody.appendChild(row));
 };
 
 const RECENT_SEARCH_LIMIT = 8;
@@ -385,11 +407,14 @@ function saveRecentSearch(term) {
     }
 
     // 2. Sort: Most frequent searches first, then the most recent
-    searches.sort((a, b) =>
-        b.count !== a.count
-            ? b.count - a.count
-            : b.lastUsed - a.lastUsed
-    );
+    searches.sort((a, b) => {
+        // Strongly prefer recency
+        if (b.lastUsed !== a.lastUsed) {
+            return b.lastUsed - a.lastUsed;
+        }
+        // Use frequency only as a tiebreaker
+        return b.count - a.count;
+    });
 
     // 3. Keep only the top 8 and save to LocalStorage
     searches = searches.slice(0, RECENT_SEARCH_LIMIT);
