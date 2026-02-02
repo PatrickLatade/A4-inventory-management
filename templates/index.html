@@ -307,7 +307,10 @@ const performSearch = () => {
         .map(t => t.trim())
         .filter(t => t.length >= 2);
 
-    const rows = document.querySelectorAll('table tbody tr');
+    const tbody = document.querySelector('table tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    let rankedRows = [];
 
     rows.forEach(row => {
         const nameCell = row.querySelector('.item-cell');
@@ -319,38 +322,45 @@ const performSearch = () => {
         const nameText = normalize(nameCell.dataset.original);
         const descText = normalize(descCell.dataset.original);
 
-        const fullMatch =
-            normalizedInput &&
-            (nameText.includes(normalizedInput) || descText.includes(normalizedInput));
-
-        const tokenMatch = tokens.some(token =>
-            nameText.includes(normalize(token)) ||
-            descText.includes(normalize(token))
-        );
-
-        const matches = fullMatch || tokenMatch;
-
         resetHighlight(nameCell);
         resetHighlight(descCell);
 
-        if (matches && normalizedInput !== "") {
-            row.style.display = "";
+        let score = -1;
 
-            // 1️⃣ Highlight tokens
-            highlightText(nameCell, tokens);
-            highlightText(descCell, tokens);
-
-            // 2️⃣ If no token matched, highlight FULL input
-            if (!tokens.length || !tokenMatch) {
-                highlightText(nameCell, [rawInput]);
-                highlightText(descCell, [rawInput]);
+        if (normalizedInput !== "") {
+            if (nameText === normalizedInput) {
+                score = 3; // 🎯 PERFECT MATCH (TOP PRIORITY)
+            } else if (nameText.includes(normalizedInput)) {
+                score = 2; // strong name match
+            } else if (
+                tokens.some(token =>
+                    nameText.includes(normalize(token)) ||
+                    descText.includes(normalize(token))
+                )
+            ) {
+                score = 1; // partial match
             }
-        } else if (normalizedInput === "") {
+        }
+
+        if (score >= 0 || normalizedInput === "") {
             row.style.display = "";
+
+            if (normalizedInput !== "") {
+                highlightText(nameCell, tokens);
+                highlightText(descCell, tokens);
+            }
+
+            rankedRows.push({ row, score });
         } else {
             row.style.display = "none";
         }
     });
+
+    // 🔽 Sort so best matches float to the top
+    rankedRows.sort((a, b) => b.score - a.score);
+
+    // 🔁 Re-append rows in sorted order
+    rankedRows.forEach(({ row }) => tbody.appendChild(row));
 };
 
 const RECENT_SEARCH_LIMIT = 8;
@@ -401,8 +411,17 @@ function saveRecentSearch(term) {
         searches.unshift({ term: term, count: 1, lastUsed: now });
     }
 
-    // Sort and Save
-    searches.sort((a, b) => b.count !== a.count ? b.count - a.count : b.lastUsed - a.lastUsed);
+    // 2. Sort: Most frequent searches first, then the most recent
+    searches.sort((a, b) => {
+        // Strongly prefer recency
+        if (b.lastUsed !== a.lastUsed) {
+            return b.lastUsed - a.lastUsed;
+        }
+        // Use frequency only as a tiebreaker
+        return b.count - a.count;
+    });
+
+    // 3. Keep only the top 8 and save to LocalStorage
     searches = searches.slice(0, RECENT_SEARCH_LIMIT);
     
     localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
