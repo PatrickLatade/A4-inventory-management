@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .item-card {
+        background-color: #1a1a1a;
+        border: 1px solid #e63946;
+        border-radius: 8px;
+        padding: 24px;
+    }
+
+    .section-title {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #e63946;
+        margin-bottom: 12px;
+        margin-top: 24px;
+    }
+
+    .hint {
+        font-size: 0.75rem;
+        color: #888;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="item-card shadow-sm">
+
+        <h5 class="mb-3 text-danger">
+            <i class="bi bi-plus-circle"></i> Add New Item
+        </h5>
+
+        <form method="POST" action="/items/add">
+
+            <!-- ================= CORE INFO ================= -->
+            <div class="section-title">Item Information</div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Item name *</label>
+                    <input type="text" name="name" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Category</label>
+                    <input type="text" name="category" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small text-white-50">Description</label>
+                    <input type="text" name="description" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Pack size</label>
+                    <input type="text" name="pack_size" class="form-control bg-dark text-white border-secondary" placeholder="e.g. 1L, Box of 12">
+                </div>
+            </div>
+
+            <!-- ================= PRICING ================= -->
+            <div class="section-title">Pricing & Cost</div>
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Vendor price</label>
+                    <input type="number" step="0.01" name="vendor_price" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Cost per piece</label>
+                    <input type="number" step="0.01" name="cost_per_piece" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Selling price</label>
+                    <input type="number" step="0.01" name="a4s_selling_price" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Markup (%)</label>
+                    <input type="number" step="0.01" name="markup" class="form-control bg-dark text-white border-secondary">
+                </div>
+            </div>
+
+            <!-- ================= OPERATIONS ================= -->
+            <div class="section-title">Operations</div>
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Reorder level</label>
+                    <input type="number" name="reorder_level" class="form-control bg-dark text-white border-secondary" value="0">
+                    <div class="hint">Alert when stock drops below this</div>
+                </div>
+            </div>
+
+            <!-- ================= META ================= -->
+            <div class="section-title">Additional Info (Optional)</div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Vendor</label>
+                    <input type="text" name="vendor" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Mechanic</label>
+                    <input type="text" name="mechanic" class="form-control bg-dark text-white border-secondary">
+                    <div class="hint">Who usually installs / uses this</div>
+                </div>
+            </div>
+
+            <!-- ================= ACTIONS ================= -->
+            <div class="d-flex justify-content-end mt-4 gap-2">
+                <a href="/transactions/in" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-check-circle"></i> Save Item
+                </button>
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}

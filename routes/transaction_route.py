@@ -13,8 +13,15 @@ def transaction_out():
 
 @transaction_bp.route("/transaction/in")
 def transaction_in():
-    # Placeholder for your future "IN" page
-    return "Future IN Page - Go back to your comics!"
+    # We'll pass items anyway so you have the data ready when you want to make the search dynamic later
+    items = get_items_with_stock()
+    return render_template("transactions/in.html", items=items)
+
+@transaction_bp.route("/transaction/items")
+def manage_items():
+    # Renders the page where you'll eventually handle adding new items
+    items = get_items_with_stock()
+    return render_template("transactions/items.html", items=items)
 
 @transaction_bp.route("/transaction/submit", methods=["POST"])
 def submit_transaction():

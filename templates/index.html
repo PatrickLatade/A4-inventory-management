@@ -241,6 +241,42 @@
 let lastSavedSearch = "";
 let lastSuccessfulSearch = "";
 
+// --- Helper: Render a single row (Keeps your exact UI/HTML) ---
+function createRowHtml(item) {
+    // Note: We use the same classes and structure as your Jinja template
+    return `
+        <tr>
+            <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
+            <td class="description-cell text-center" data-original="${item.description || ''}">${item.description || ''}</td>
+            <td class="price-text">₱${item.vendor_price || 0}</td>
+            <td class="price-text">₱${item.cost_per_piece || 0}</td>
+            <td class="price-text text-warning">₱${item.a4s_selling_price || 0}</td>
+            <td>
+                <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
+                    ${(item.markup * 100).toFixed(2)}%
+                </span>
+            </td>
+            <td><div class="stock-badge">${item.current_stock}</div></td>
+            <td>
+                <div class="action-group">
+                    <form method="POST" class="input-group input-group-sm" style="width: 130px;">
+                        <input type="hidden" name="item_id" value="${item.id}">
+                        <input type="hidden" name="action" value="IN">
+                        <input type="number" name="quantity" placeholder="+Qty" class="form-control" required>
+                        <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i></button>
+                    </form>
+                    <form method="POST" class="input-group input-group-sm" style="width: 130px;">
+                        <input type="hidden" name="item_id" value="${item.id}">
+                        <input type="hidden" name="action" value="OUT">
+                        <input type="number" name="quantity" placeholder="-Qty" class="form-control" required>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-dash-lg"></i></button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
 /**
  * Normalize text so search is forgiving.
  * - lowercase
@@ -297,70 +333,54 @@ function debounce(func, delay) {
     };
 }
 
-const performSearch = () => {
-    const rawInput = document.getElementById('inventorySearch').value;
-    const normalizedInput = normalize(rawInput);
-
-    const tokens = rawInput
-        .toLowerCase()
-        .split(" ")
-        .map(t => t.trim())
-        .filter(t => t.length >= 2);
-
+// --- The New Search (Talks to the API) ---
+const performSearch = async () => {
+    const rawInput = document.getElementById('inventorySearch').value.trim();
     const tbody = document.querySelector('table tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
 
-    let rankedRows = [];
+    // If empty, we could reload the page or just leave the 50 items there. 
+    // For now, let's only trigger if 2+ characters
+    if (rawInput.length === 0) {
+    location.reload(); // Simplest way to get your original 50 back
+    return;
+    }
+    if (rawInput.length < 2) return;
 
-    rows.forEach(row => {
-        const nameCell = row.querySelector('.item-cell');
-        const descCell = row.querySelector('.description-cell');
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(rawInput)}`);
+        const data = await response.json();
+        
+        // Clear the table
+        tbody.innerHTML = "";
 
-        if (!nameCell.dataset.original) nameCell.dataset.original = nameCell.textContent;
-        if (!descCell.dataset.original) descCell.dataset.original = descCell.textContent;
-
-        const nameText = normalize(nameCell.dataset.original);
-        const descText = normalize(descCell.dataset.original);
-
-        resetHighlight(nameCell);
-        resetHighlight(descCell);
-
-        let score = -1;
-
-        if (normalizedInput !== "") {
-            if (nameText === normalizedInput) {
-                score = 3; // 🎯 PERFECT MATCH (TOP PRIORITY)
-            } else if (nameText.includes(normalizedInput)) {
-                score = 2; // strong name match
-            } else if (
-                tokens.some(token =>
-                    nameText.includes(normalize(token)) ||
-                    descText.includes(normalize(token))
-                )
-            ) {
-                score = 1; // partial match
-            }
+        if (data.items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-muted p-4">No items found in the full database.</td></tr>';
+            return;
         }
 
-        if (score >= 0 || normalizedInput === "") {
-            row.style.display = "";
+        // Add the new rows
+        data.items.forEach(item => {
+            tbody.insertAdjacentHTML('beforeend', createRowHtml(item));
+        });
 
-            if (normalizedInput !== "") {
-                highlightText(nameCell, tokens);
-                highlightText(descCell, tokens);
-            }
+        // Re-apply your highlighting logic
+        const tokens = rawInput.toLowerCase().split(" ").filter(t => t.length >= 2);
+        const newRows = tbody.querySelectorAll('tr');
+        newRows.forEach(row => {
+            const nameCell = row.querySelector('.item-cell');
+            const descCell = row.querySelector('.description-cell');
+            highlightText(nameCell, tokens);
+            highlightText(descCell, tokens);
+        });
 
-            rankedRows.push({ row, score });
-        } else {
-            row.style.display = "none";
+        // Save to chips!
+        if (rawInput.length >= 3) {
+            saveRecentSearch(rawInput);
         }
-    });
 
-    // 🔽 Sort so best matches float to the top
-    rankedRows.sort((a, b) => b.score - a.score);
-
-    // 🔁 Re-append rows in sorted order
-    rankedRows.forEach(({ row }) => tbody.appendChild(row));
+    } catch (err) {
+        console.error("Search failed:", err);
+    }
 };
 
 const RECENT_SEARCH_LIMIT = 8;

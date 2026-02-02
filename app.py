@@ -22,7 +22,7 @@ from db.schema import init_db
 # ------------------------
 from routes.login_route import auth_bp
 from routes.login_route import auth_bp
-from services.inventory_service import get_items_with_stock
+from services.inventory_service import get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
     get_dashboard_stats,
@@ -105,27 +105,45 @@ def index():
 
     conn = get_db()
 
-    # 1️⃣ Get current stock using your original function
-    items_stock = get_items_with_stock(snapshot_date="2026-01-18")
-
-    # 2️⃣ Fetch all other fields from items table
+    # 1️⃣ We only get the first 50 items for the initial page load
+    # This keeps the "Home" page fast even with 5,000 items in the DB
     extras = conn.execute("""
         SELECT *
         FROM items
+        ORDER BY name DESC
+        LIMIT 75
     """).fetchall()
+
+    # 2️⃣ Get the stock for JUST these 50 items
+    # (We'll adjust your service later, but for now let's just get the list of IDs)
+    item_ids = [e["id"] for e in extras]
+    
+    # We still use your stock service, but we'll need to pass the IDs 
+    # to avoid calculating stock for 5,000 items we aren't showing.
+    items_stock = get_items_with_stock(snapshot_date="2026-01-18")
+    stock_dict = {s["id"]: s["current_stock"] for s in items_stock}
 
     conn.close()
 
-    # 3️⃣ Merge safely: convert Row objects to dicts
-    extras_dict = {e["id"]: dict(e) for e in extras}
+    # 3️⃣ Merge safely
     items_merged = []
-    for item in items_stock:
-        merged = dict(item)  # item.id, item.name, current_stock
-        merged.update(extras_dict.get(item["id"], {}))  # merge all other columns
-        items_merged.append(merged)
+    for row in extras:
+        item_data = dict(row)
+        item_data["current_stock"] = stock_dict.get(row["id"], 0)
+        items_merged.append(item_data)
 
     return render_template("index.html", items=items_merged)
 
+@app.route("/api/search")
+def search_items_api():
+    query = request.args.get("q", "").strip()
+    if len(query) < 2:
+        return {"items": []}
+    
+    # Call the worker service
+    results = search_items_with_stock(query)
+    
+    return {"items": results}
 
 # ============================================================
 # Analytics / reporting views

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .in-card {
+        background-color: #1a1a1a;
+        border: 1px solid #2e7d32;
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .item-preview {
+        background-color: #202020;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 15px;
+        margin-top: 15px;
+        position: relative;
+    }
+
+    .remove-item-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        color: #888;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+    }
+
+    .remove-item-btn:hover { color: #e63946; }
+
+    .item-preview h6 {
+        margin: 0;
+        font-weight: bold;
+        color: #fff;
+        padding-right: 25px;
+    }
+
+    .item-meta { font-size: 0.85rem; color: #aaa; }
+
+    .stock-pill {
+        display: inline-block;
+        background: #333;
+        border: 1px solid #444;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        margin-top: 6px;
+    }
+
+    /* --- Empty State Styling --- */
+    .empty-state {
+        text-align: center;
+        color: #aaa;
+        margin-top: 20px;
+        padding: 20px;
+        border: 1px dashed #444;
+        border-radius: 6px;
+    }
+    .empty-state strong { color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="in-card shadow-sm">
+        <h5 class="text-success mb-3">
+            <i class="bi bi-box-arrow-in-down"></i> Receive Products (IN)
+        </h5>
+
+        <div class="mb-3 position-relative">
+            <label class="form-label small text-white-50">Search item</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark border-secondary text-white">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input 
+                    type="text" 
+                    id="itemSearchInput"
+                    class="form-control bg-dark text-white border-secondary"
+                    placeholder="Type name or description..."
+                    autocomplete="off"
+                >
+            </div>
+            <div id="searchSuggestions" class="list-group position-absolute w-100 shadow-lg" style="z-index: 1000; display: none; max-height: 200px; overflow-y: auto;">
+            </div>
+        </div>
+
+        <form action="/inventory/in" method="POST">
+            <input type="hidden" name="item_id" id="selectedItemId">
+
+            <div id="itemPreviewCard" class="item-preview" style="display: none;">
+                <button type="button" class="remove-item-btn" onclick="clearSelection()" title="Remove selection">
+                    <i class="bi bi-x-circle"></i>
+                </button>
+                <h6 id="previewName"></h6>
+                <div id="previewDesc" class="item-meta"></div>
+                <div class="stock-pill">
+                    Current stock: <strong id="previewStock">0</strong>
+                </div>
+            </div>
+
+            <div id="emptyState" class="empty-state" style="display: none;">
+                No items found for <strong id="notFoundTerm"></strong>
+                <div class="mt-3">
+                    <a href="/add-item" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-plus-circle"></i> Add New Item
+                    </a>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Quantity received</label>
+                    <input type="number" name="quantity" class="form-control bg-dark text-white border-secondary" placeholder="0" required>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label small text-white-50">Notes (optional)</label>
+                    <input type="text" name="notes" class="form-control bg-dark text-white border-secondary" placeholder="Supplier, delivery note, remarks...">
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4 gap-2">
+                <a href="/" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" id="confirmBtn" class="btn btn-success" disabled>
+                    <i class="bi bi-check-circle"></i> Confirm IN
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const searchInput = document.getElementById('itemSearchInput');
+const suggestions = document.getElementById('searchSuggestions');
+const previewCard = document.getElementById('itemPreviewCard');
+const emptyState = document.getElementById('emptyState');
+const notFoundTerm = document.getElementById('notFoundTerm');
+const confirmBtn = document.getElementById('confirmBtn');
+const selectedIdInput = document.getElementById('selectedItemId');
+
+function debounce(func, delay) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+}
+
+const handleSearch = async () => {
+    const query = searchInput.value.trim();
+    
+    // Hide everything if query is too short
+    if (query.length < 2) {
+        suggestions.style.display = 'none';
+        emptyState.style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        suggestions.innerHTML = '';
+        
+        if (data.items && data.items.length > 0) {
+            // Show suggestions, hide empty state
+            emptyState.style.display = 'none';
+            data.items.forEach(item => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
+                btn.innerHTML = `<strong>${item.name}</strong> <br> <span class="text-muted small">${item.description || ''}</span>`;
+                btn.onclick = () => selectItem(item);
+                suggestions.appendChild(btn);
+            });
+            suggestions.style.display = 'block';
+        } else {
+            // Hide suggestions, show empty state
+            suggestions.style.display = 'none';
+            notFoundTerm.innerText = `"${query}"`;
+            emptyState.style.display = 'block';
+        }
+    } catch (err) {
+        console.error("Search error:", err);
+    }
+};
+
+function selectItem(item) {
+    selectedIdInput.value = item.id;
+    document.getElementById('previewName').innerText = item.name;
+    document.getElementById('previewDesc').innerText = item.description || 'No description provided';
+    document.getElementById('previewStock').innerText = item.current_stock;
+    
+    previewCard.style.display = 'block';
+    emptyState.style.display = 'none'; // Ensure empty state hides when an item is selected
+    suggestions.style.display = 'none';
+    searchInput.value = item.name;
+    confirmBtn.disabled = false;
+}
+
+function clearSelection() {
+    selectedIdInput.value = "";
+    previewCard.style.display = 'none';
+    emptyState.style.display = 'none';
+    searchInput.value = "";
+    confirmBtn.disabled = true;
+    searchInput.focus();
+}
+
+document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+    }
+});
+
+searchInput.addEventListener('input', debounce(handleSearch, 400));
+</script>
+{% endblock %}
