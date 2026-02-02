@@ -103,9 +103,10 @@
     }
 
     .search-chip.frequent {
-    border-color: #e63946;
-    background-color: #2b1f1f;
-    font-weight: bold;
+        border-color: #e63946;
+        background-color: #2b1f1f;
+        font-weight: bold;
+        box-shadow: 0 0 6px rgba(230, 57, 70, 0.4);
     }
 
     .highlight {
@@ -238,6 +239,8 @@
 {% block scripts %}
 <script>
 let lastSavedSearch = "";
+let lastSuccessfulSearch = "";
+
 /**
  * Normalize text so search is forgiving.
  * - lowercase
@@ -298,16 +301,16 @@ const performSearch = () => {
     const rawInput = document.getElementById('inventorySearch').value;
     const normalizedInput = normalize(rawInput);
 
-    // Only create tokens if they are actual words (length >= 2)
     const tokens = rawInput
         .toLowerCase()
         .split(" ")
-        .filter(t => t.trim().length >= 2);
+        .map(t => t.trim())
+        .filter(t => t.length >= 2);
 
     const rows = document.querySelectorAll('table tbody tr');
 
     rows.forEach(row => {
-        const nameCell = row.querySelector('.item-cell'); // Using classes is safer
+        const nameCell = row.querySelector('.item-cell');
         const descCell = row.querySelector('.description-cell');
 
         if (!nameCell.dataset.original) nameCell.dataset.original = nameCell.textContent;
@@ -316,21 +319,34 @@ const performSearch = () => {
         const nameText = normalize(nameCell.dataset.original);
         const descText = normalize(descCell.dataset.original);
 
-        // Does the WHOLE input match anywhere OR do ANY of the words match?
-        const matches = 
-            nameText.includes(normalizedInput) || 
-            descText.includes(normalizedInput) ||
-            tokens.some(token => nameText.includes(normalize(token)) || descText.includes(normalize(token)));
+        const fullMatch =
+            normalizedInput &&
+            (nameText.includes(normalizedInput) || descText.includes(normalizedInput));
+
+        const tokenMatch = tokens.some(token =>
+            nameText.includes(normalize(token)) ||
+            descText.includes(normalize(token))
+        );
+
+        const matches = fullMatch || tokenMatch;
 
         resetHighlight(nameCell);
         resetHighlight(descCell);
 
         if (matches && normalizedInput !== "") {
             row.style.display = "";
+
+            // 1️⃣ Highlight tokens
             highlightText(nameCell, tokens);
             highlightText(descCell, tokens);
+
+            // 2️⃣ If no token matched, highlight FULL input
+            if (!tokens.length || !tokenMatch) {
+                highlightText(nameCell, [rawInput]);
+                highlightText(descCell, [rawInput]);
+            }
         } else if (normalizedInput === "") {
-            row.style.display = ""; // Show all if empty
+            row.style.display = "";
         } else {
             row.style.display = "none";
         }
@@ -359,43 +375,38 @@ function normalizeForCompare(text) {
 
 function saveRecentSearch(term) {
     term = term.trim();
-    // Don't save tiny searches (like "o" or "oi")
     if (term.length < 3) return;
 
-    const now = Date.now();
     const normalizedTerm = term.toLowerCase();
+    
+    // 🛑 CORRECTED PROTECTOR: 
+    // Only block if the last search starts with this one AND they aren't identical.
+    // This allows "Yamaha" -> "Yamaha" to count, but blocks "Yamaha" -> "Yamah".
+    if (lastSuccessfulSearch && 
+        lastSuccessfulSearch.startsWith(normalizedTerm) && 
+        lastSuccessfulSearch !== normalizedTerm) {
+        return;
+    }
+
+    const now = Date.now();
     let searches = getRecentSearches();
 
-    // 1. Check if this term already exists in our history
-    const existing = searches.find(
-        s => s.term.toLowerCase() === normalizedTerm
-    );
+    const existing = searches.find(s => s.term.toLowerCase() === normalizedTerm);
 
     if (existing) {
-        // If it exists, just bump the count and update the timestamp
+        // This is what turns the chip red!
         existing.count += 1;
         existing.lastUsed = now;
     } else {
-        // If it's new, add it to the front of the list
-        searches.unshift({
-            term: term, // Save the pretty version with casing
-            count: 1,
-            lastUsed: now
-        });
+        searches.unshift({ term: term, count: 1, lastUsed: now });
     }
 
-    // 2. Sort: Most frequent searches first, then the most recent
-    searches.sort((a, b) =>
-        b.count !== a.count
-            ? b.count - a.count
-            : b.lastUsed - a.lastUsed
-    );
-
-    // 3. Keep only the top 8 and save to LocalStorage
+    // Sort and Save
+    searches.sort((a, b) => b.count !== a.count ? b.count - a.count : b.lastUsed - a.lastUsed);
     searches = searches.slice(0, RECENT_SEARCH_LIMIT);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
     
-    // 4. Update the UI
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
+    lastSuccessfulSearch = normalizedTerm; 
     renderRecentSearches();
 }
 
@@ -437,13 +448,20 @@ function applyRecentSearch(term) {
 }
 
 // Attach debounced search
-document
-    .getElementById('inventorySearch')
-    .addEventListener('input', debounce(() => {
-        const value = document.getElementById('inventorySearch').value;
-        performSearch();
+document.getElementById('inventorySearch').addEventListener('input', debounce(() => {
+    const value = document.getElementById('inventorySearch').value.trim();
+
+    performSearch();
+
+    // Only save if:
+    // 1. Term is long enough
+    // 2. We actually found results (don't save typos that result in 0 items)
+    const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])').length;
+    
+    if (value.length >= 3 && visibleRows > 0) {
         saveRecentSearch(value);
-    }, 300));
+    }
+}, 500));
 
 renderRecentSearches();
 </script>
