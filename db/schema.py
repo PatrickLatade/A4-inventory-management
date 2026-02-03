@@ -42,6 +42,7 @@ def init_db():
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         role TEXT CHECK(role IN ('admin', 'staff')) NOT NULL,
+        is_active INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         created_by INTEGER, -- The ID of the admin who created this user
         FOREIGN KEY (created_by) REFERENCES users(id)

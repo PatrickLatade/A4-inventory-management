@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, session, url_for
+from flask import Blueprint, render_template, request, redirect, session, url_for, flash
 from services.transactions_service import add_transaction
 from services.inventory_service import get_items_with_stock
 from services.inventory_service import get_items_with_stock, get_unique_categories
@@ -52,3 +52,34 @@ def add_item():
 
     # 3. Redirect to the items list to confirm it was added
     return redirect(url_for('transaction.transaction_in', selected_id=new_item_id))
+
+@transaction_bp.route("/inventory/in", methods=["POST"])
+def process_transaction_in():
+    item_id = request.form.get("item_id")
+    quantity = request.form.get("quantity")
+    
+    current_user_id = session.get("user_id")
+    current_username = session.get("username") 
+
+    if item_id and quantity:
+        try:
+            qty_int = int(quantity)
+            # Call service to log transaction and update current_stock
+            add_transaction(
+                item_id=item_id,
+                quantity=qty_int,
+                transaction_type='IN',
+                user_id=current_user_id,
+                user_name=current_username
+            )
+            # SUCCESS: Category is 'success' (matches your Green CSS)
+            flash(f"Stock updated! Received {qty_int} unit(s).", "success")
+            
+        except ValueError:
+            flash("Invalid quantity. Please enter a number.", "danger")
+        except Exception as e:
+            flash(f"System Error: {str(e)}", "danger")
+    else:
+        flash("Missing item selection or quantity.", "danger")
+
+    return redirect(url_for('transaction.transaction_in'))
