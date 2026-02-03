@@ -48,7 +48,13 @@
 
                 <div class="col-md-6">
                     <label class="form-label small text-white-50">Category</label>
-                    <input type="text" name="category" class="form-control bg-dark text-white border-secondary">
+                    <input type="text" name="category" list="category_list" class="form-control bg-dark text-white border-secondary">
+                    
+                    <datalist id="category_list">
+                        {% for cat in categories %}
+                            <option value="{{ cat }}">
+                        {% endfor %}
+                    </datalist>
                 </div>
 
                 <div class="col-12">
@@ -73,17 +79,19 @@
 
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">Cost per piece</label>
-                    <input type="number" step="0.01" name="cost_per_piece" class="form-control bg-dark text-white border-secondary">
+                    <input type="number" step="0.01" name="cost_per_piece" id="cost_input" class="form-control bg-dark text-white border-secondary">
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">Selling price</label>
-                    <input type="number" step="0.01" name="a4s_selling_price" class="form-control bg-dark text-white border-secondary">
+                    <input type="number" step="0.01" name="a4s_selling_price" id="selling_input" class="form-control bg-dark text-white border-secondary">
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">Markup (%)</label>
-                    <input type="number" step="0.01" name="markup" class="form-control bg-dark text-white border-secondary">
+                    <input type="text" id="markup_display" class="form-control bg-dark text-white border-secondary" readonly>
+                    
+                    <input type="hidden" name="markup" id="markup_input">
                 </div>
             </div>
 
@@ -130,4 +138,39 @@
 
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const costInput = document.getElementById('cost_input');
+    const sellingInput = document.getElementById('selling_input');
+    const markupDisplay = document.getElementById('markup_display');
+    const markupHidden = document.getElementById('markup_input');
+
+    function calculateMarkup() {
+        const cost = parseFloat(costInput.value);
+        const selling = parseFloat(sellingInput.value);
+
+        if (cost > 0 && selling > 0) {
+            // The raw decimal for the database (e.g., 0.3072)
+            const decimalMarkup = (selling - cost) / cost;
+            
+            // The percentage for your eyes (e.g., 30.72)
+            const percentMarkup = decimalMarkup * 100;
+
+            // Show the user the %
+            markupDisplay.value = percentMarkup.toFixed(2) + "%";
+            
+            // Hide the decimal for the DB
+            markupHidden.value = decimalMarkup.toFixed(4);
+        } else {
+            markupDisplay.value = '';
+            markupHidden.value = '';
+        }
+    }
+
+    // Listen for typing in either field
+    costInput.addEventListener('input', calculateMarkup);
+    sellingInput.addEventListener('input', calculateMarkup);
+</script>
 {% endblock %}

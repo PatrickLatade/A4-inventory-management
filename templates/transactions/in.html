@@ -105,7 +105,7 @@
             <div id="emptyState" class="empty-state" style="display: none;">
                 No items found for <strong id="notFoundTerm"></strong>
                 <div class="mt-3">
-                    <a href="/add-item" class="btn btn-sm btn-outline-success">
+                    <a href="{{ url_for('transaction.manage_items') }}" class="btn btn-sm btn-outline-success">
                         <i class="bi bi-plus-circle"></i> Add New Item
                     </a>
                 </div>
@@ -135,6 +135,26 @@
 
 {% block scripts %}
 <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Check if the server sent a prefilled_id
+    const prefilledId = "{{ prefilled_id }}";
+    
+    if (prefilledId && prefilledId !== 'None') {
+        try {
+            // 2. We ask our search API for this specific ID's details
+            const response = await fetch(`/api/search?id=${prefilledId}`);
+            const data = await response.json();
+            
+            if (data.items && data.items.length > 0) {
+                // 3. Use your existing selectItem function to fill the card!
+                selectItem(data.items[0]);
+            }
+        } catch (err) {
+            console.error("Error fetching prefilled item:", err);
+        }
+    }
+});
+
 const searchInput = document.getElementById('itemSearchInput');
 const suggestions = document.getElementById('searchSuggestions');
 const previewCard = document.getElementById('itemPreviewCard');

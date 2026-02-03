@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for
 from services.transactions_service import add_transaction
 from services.inventory_service import get_items_with_stock
+from services.inventory_service import get_items_with_stock, get_unique_categories
+from services.transactions_service import add_item_to_db
 
 # Define the blueprint
 transaction_bp = Blueprint('transaction', __name__)
@@ -13,23 +15,40 @@ def transaction_out():
 
 @transaction_bp.route("/transaction/in")
 def transaction_in():
-    # We'll pass items anyway so you have the data ready when you want to make the search dynamic later
-    items = get_items_with_stock()
-    return render_template("transactions/in.html", items=items)
+    # Check if a 'selected_id' was passed in the URL
+    prefilled_id = request.args.get('selected_id')
+    
+    # We pass it to the template
+    return render_template("transactions/in.html", prefilled_id=prefilled_id)
 
 @transaction_bp.route("/transaction/items")
 def manage_items():
-    # Renders the page where you'll eventually handle adding new items
-    items = get_items_with_stock()
-    return render_template("transactions/items.html", items=items)
+    # 1. Ask the chef for the categories
+    categories = get_unique_categories()
+    
+    # 2. Serve the page, handing the categories to the HTML
+    return render_template("transactions/items.html", categories=categories)
 
-@transaction_bp.route("/transaction/submit", methods=["POST"])
-def submit_transaction():
-    # This is where the form sends the data
-    user_id = session.get("user_id")
-    user_name = session.get("username")
-    
-    # Process the data (you'll eventually loop through multiple items here)
-    # add_transaction(...)
-    
-    return redirect(url_for('index'))
+@transaction_bp.route("/items/add", methods=["POST"])
+def add_item():
+    # 1. Collect the form data into a dictionary
+    form_data = {
+        'name': request.form.get("name"),
+        'category': request.form.get("category"),
+        'description': request.form.get("description"),
+        'pack_size': request.form.get("pack_size"),
+        'vendor_price': request.form.get("vendor_price") or 0,
+        'cost_per_piece': request.form.get("cost_per_piece") or 0,
+        'selling_price': request.form.get("a4s_selling_price") or 0,
+        'markup': request.form.get("markup") or 0,
+        'reorder_level': request.form.get("reorder_level") or 0,
+        'vendor': request.form.get("vendor"),
+        'mechanic': request.form.get("mechanic")
+    }
+
+    # 2. Hand it to the Service to save it
+    # This now returns the new item's ID (though we aren't using it yet)
+    new_item_id = add_item_to_db(form_data)
+
+    # 3. Redirect to the items list to confirm it was added
+    return redirect(url_for('transaction.transaction_in', selected_id=new_item_id))

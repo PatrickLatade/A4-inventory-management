@@ -48,46 +48,51 @@ def get_items_with_stock(snapshot_date=None):
     conn.close()
     return items
 
-from db.database import get_db
-
-def search_items_with_stock(search_query, snapshot_date="2026-01-18"):
+def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_id=None):
+    from db.database import get_db
     conn = get_db()
     
-    # 1. Split query into words for "forgiving" search
-    # Example: "shoe brake" -> ["shoe", "brake"]
-    words = search_query.split()
-    
-    if not words:
-        # If somehow an empty query reaches here, return the latest items
-        rows = conn.execute("SELECT * FROM items ORDER BY id DESC LIMIT 75").fetchall()
+    # 1. FETCH THE ROWS
+    # Case A: We are looking for ONE specific item by ID (Redirect from Add Item)
+    if item_id:
+        sql = "SELECT * FROM items WHERE id = ?"
+        rows = conn.execute(sql, (item_id,)).fetchall()
+        
+    # Case B: We are doing a general text search (Normal Search)
+    elif search_query:
+        words = search_query.split()
+        if not words:
+            rows = conn.execute("SELECT * FROM items ORDER BY id DESC LIMIT 75").fetchall()
+        else:
+            query_parts = []
+            params = []
+            for word in words:
+                query_parts.append("(name LIKE ? OR description LIKE ?)")
+                pattern = f"%{word}%"
+                params.extend([pattern, pattern])
+            
+            where_clause = " AND ".join(query_parts)
+            
+            # Note: Changed ORDER BY to id DESC so new items show at the top
+            sql = f"""
+                SELECT * FROM items 
+                WHERE {where_clause}
+                ORDER BY id DESC
+                LIMIT 100
+            """
+            rows = conn.execute(sql, params).fetchall()
     else:
-        # Build dynamic WHERE clause: (name LIKE ? OR description LIKE ?) AND ...
-        query_parts = []
-        params = []
-        for word in words:
-            query_parts.append("(name LIKE ? OR description LIKE ?)")
-            pattern = f"%{word}%"
-            params.extend([pattern, pattern])
-        
-        where_clause = " AND ".join(query_parts)
-        
-        sql = f"""
-            SELECT * FROM items 
-            WHERE {where_clause}
-            ORDER BY name ASC
-            LIMIT 100
-        """
-        rows = conn.execute(sql, params).fetchall()
-    
-    # 2. Get stock levels
-    # Note: We reuse your existing stock calculation function
+        rows = []
+
+    # 2. GET STOCK LEVELS
+    # We keep your original logic here to map stock to the items found
     from services.inventory_service import get_items_with_stock
     all_stock = get_items_with_stock(snapshot_date)
     stock_map = {s["id"]: s["current_stock"] for s in all_stock}
     
     conn.close()
 
-    # 3. Merge data into a list of dictionaries
+    # 3. MERGE DATA
     results = []
     for row in rows:
         d = dict(row)
@@ -95,3 +100,12 @@ def search_items_with_stock(search_query, snapshot_date="2026-01-18"):
         results.append(d)
         
     return results
+
+def get_unique_categories():
+    conn = get_db()
+    # DISTINCT ensures we don't get "Oil" five times if there are 5 oil items
+    rows = conn.execute("SELECT DISTINCT category FROM items WHERE category IS NOT NULL AND category != ''").fetchall()
+    conn.close()
+    
+    # Convert the list of row objects into a simple list of strings
+    return [row['category'] for row in rows]

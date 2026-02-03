@@ -110,7 +110,7 @@ def index():
     extras = conn.execute("""
         SELECT *
         FROM items
-        ORDER BY name DESC
+        ORDER BY id DESC
         LIMIT 75
     """).fetchall()
 
@@ -137,11 +137,16 @@ def index():
 @app.route("/api/search")
 def search_items_api():
     query = request.args.get("q", "").strip()
-    if len(query) < 2:
-        return {"items": []}
-    
-    # Call the worker service
-    results = search_items_with_stock(query)
+    item_id = request.args.get("id") # Get the ID if it exists
+
+    # If the browser sent an ID, use it!
+    if item_id:
+        results = search_items_with_stock(item_id=item_id)
+    # Otherwise, do the normal text search
+    elif len(query) >= 2:
+        results = search_items_with_stock(search_query=query)
+    else:
+        results = []
     
     return {"items": results}
 
@@ -201,25 +206,6 @@ def low_stock():
 # ============================================================
 # Item & transaction utilities
 # ============================================================
-@app.route("/add-item", methods=["POST"])
-def add_item():
-    """
-    Add a new inventory item (basic fields only).
-    """
-    name = request.form["name"]
-    reorder_level = int(request.form["reorder_level"])
-
-    conn = get_db()
-    conn.execute(
-        "INSERT INTO items (name, reorder_level) VALUES (?, ?)",
-        (name, reorder_level)
-    )
-    conn.commit()
-    conn.close()
-
-    return redirect("/")
-
-
 @app.route("/export/transactions")
 def export_transactions():
     conn = get_db()
