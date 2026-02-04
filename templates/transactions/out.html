@@ -1,5 +1,32 @@
 {% extends "base.html" %}
 
+{% block styles %}
+<style>
+    /* Make the suggestions float above the table rows */
+    .search-suggestions {
+        border: 1px solid #444 !important;
+        border-top: none !important;
+        z-index: 9999 !important; /* Higher than everything else */
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    }
+
+    /* Style the buttons so they aren't bulky */
+    .search-suggestions .list-group-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #333;
+    }
+
+    .search-suggestions .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    /* Remove the parent table's scroll-hiding if it exists */
+    .table-responsive {
+        overflow: visible !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <h1 class="text-white mb-4"><i class="bi bi-cart-dash text-danger"></i> New OUT Transaction</h1>
@@ -26,7 +53,7 @@
                     <table class="table table-dark table-hover align-middle" id="items-table">
                         <thead>
                             <tr class="small text-danger">
-                                <th style="width: 35%;">Item</th>
+                                <th style="width: 40%;">Item</th>
                                 <th style="width: 15%;">Stock</th>
                                 <th style="width: 15%;">Qty OUT</th>
                                 <th style="width: 15%;">Price</th>
@@ -37,7 +64,16 @@
                         <tbody id="transaction-body">
                             <tr class="item-row">
                                 <td>
-                                    <input list="items-datalist" class="form-control form-control-sm bg-dark text-white border-secondary item-input" placeholder="Search item...">
+                                    <div class="position-relative">
+                                        <input type="text" 
+                                            class="form-control form-control-sm bg-dark text-white border-secondary item-input" 
+                                            placeholder="Search item..." 
+                                            autocomplete="off">
+                                        <div class="search-suggestions list-group position-absolute w-100 shadow-lg" 
+                                            style="z-index: 1000; display: none; max-height: 200px; overflow-y: auto;">
+                                        </div>
+                                        <input type="hidden" class="item-id-input">
+                                    </div>
                                 </td>
                                 <td><input type="text" class="form-control form-control-sm bg-dark text-white-50 border-secondary stock-input" value="--" disabled></td>
                                 <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" value="1"></td>
@@ -89,30 +125,86 @@
 </div>
 
 <script>
-document.addEventListener('input', function(e) {
-    // 1. Handle Item Selection & Clearing
-    if (e.target.classList.contains('item-input')) {
-        const row = e.target.closest('tr');
-        const val = e.target.value;
-        const datalist = document.getElementById('items-datalist');
-        const option = Array.from(datalist.options).find(opt => opt.value === val);
+// Add the debounce function at the top if it's not already there
+function debounce(func, delay) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+}
 
-        if (option) {
-            const price = option.getAttribute('data-price');
-            const stock = option.getAttribute('data-stock');
-            row.querySelector('.price-input').value = price;
-            row.querySelector('.stock-input').value = stock;
-        } else {
-            // IF ERASED: Clear the fields so old data doesn't persist
-            row.querySelector('.price-input').value = '';
-            row.querySelector('.stock-input').value = '--';
-        }
-        calculateRow(row);
+const handleTableSearch = async (inputElement) => {
+    const query = inputElement.value.trim();
+    const row = inputElement.closest('tr');
+    const suggestionsBox = row.querySelector('.search-suggestions');
+
+    if (query.length < 2) {
+        suggestionsBox.style.display = 'none';
+        return;
     }
 
-    // 2. Handle Price or Qty manual overrides
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        suggestionsBox.innerHTML = '';
+        
+        if (data.items && data.items.length > 0) {
+            // LIMIT TO 5 RESULTS so it doesn't create a massive scroll
+            const topResults = data.items.slice(0, 5); 
+
+            topResults.forEach(item => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
+                
+                // Clean layout: Name on top, stock/price on a tiny row below
+                btn.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>${item.name}</strong>
+                        <span class="badge bg-danger">₱${item.a4s_selling_price}</span>
+                    </div>
+                    <small class="text-white-50" style="font-size: 0.7rem;">Stock: ${item.current_stock}</small>
+                `;
+                
+                btn.onclick = () => {
+                    inputElement.value = item.name;
+                    row.querySelector('.item-id-input').value = item.id;
+                    row.querySelector('.price-input').value = item.a4s_selling_price;
+                    row.querySelector('.stock-input').value = item.current_stock;
+                    suggestionsBox.style.display = 'none';
+                    calculateRow(row);
+                };
+                suggestionsBox.appendChild(btn);
+            });
+            suggestionsBox.style.display = 'block';
+        } else {
+            suggestionsBox.style.display = 'none';
+        }
+    } catch (err) {
+        console.error("Search error:", err);
+    }
+};
+
+// Wire up the input listener
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('item-input')) {
+        debounce(() => handleTableSearch(e.target), 300)();
+    }
+    
+    // Keep your existing Qty/Price manual override listeners
     if (e.target.classList.contains('qty-input') || e.target.classList.contains('price-input')) {
         calculateRow(e.target.closest('tr'));
+    }
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('item-input')) {
+        document.querySelectorAll('.search-suggestions').forEach(box => {
+            box.style.display = 'none';
+        });
     }
 });
 
