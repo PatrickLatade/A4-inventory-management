@@ -47,46 +47,48 @@ def logout():
 def manage_users():
     conn = get_db()
 
-    # --- 1. HANDLE FORM SUBMISSION (Creating a New User) ---
+    # --- 1. HANDLE FORM SUBMISSION ---
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
         current_admin_id = session.get("user_id") 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         try:
             conn.execute("""
                 INSERT INTO users (username, password_hash, role, created_at, created_by)
                 VALUES (?, ?, 'staff', ?, ?)
-            """, (
-                username,
-                generate_password_hash(password),
-                now,
-                current_admin_id
-            ))
+            """, (username, generate_password_hash(password), now, current_admin_id))
             conn.commit()
-            conn.close()
             flash(f"Account for {username} created successfully!", "success")
             return redirect(url_for('auth.manage_users'))
         except Exception as e:
             flash(f"Error creating user: {str(e)}", "danger")
 
-    # --- 2. FETCH ALL USERS (For the top table) ---
+    # --- 2. FETCH ALL USERS ---
     users = conn.execute("""
-        SELECT
-            u.id,
-            u.username, 
-            u.role, 
-            u.created_at,
-            u.is_active,
-            creator.username AS creator_name
+        SELECT u.id, u.username, u.role, u.created_at, u.is_active,
+        creator.username AS creator_name
         FROM users u
         LEFT JOIN users creator ON u.created_by = creator.id
         ORDER BY u.created_at DESC
     """).fetchall()
 
-    # --- 3. FETCH TRANSACTION HISTORY (For the bottom table) ---
-    # We JOIN with 'items' so we can show the name of the product, not just the ID number
+    # --- 2.5 NEW: FETCH SALES HISTORY ---
+    # Using your actual table name 'sales' and matching the schema columns
+    sales_history = conn.execute("""
+        SELECT 
+            s.transaction_date, 
+            s.sales_number, 
+            s.customer_name, 
+            s.total_amount,
+            p.name as payment_method_name
+        FROM sales s
+        JOIN payment_methods p ON s.payment_method_id = p.id
+        ORDER BY s.transaction_date DESC
+        LIMIT 20
+    """).fetchall()
+
+    # --- 3. FETCH TRANSACTION HISTORY (The Audit Trail / Item Movements) ---
     history = conn.execute("""
         SELECT 
             t.transaction_date, 
@@ -103,8 +105,8 @@ def manage_users():
     conn.close()
 
     # --- 4. SERVE THE PAGE ---
-    # We pass BOTH 'users' and 'history' to the HTML template
-    return render_template("users/users.html", users=users, history=history)
+    # Add sales_history=sales_history to the list of variables sent to the template
+    return render_template("users/users.html", users=users, history=history, sales_history=sales_history)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
 def toggle_user(user_id):

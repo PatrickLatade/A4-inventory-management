@@ -43,12 +43,12 @@
                     <input type="text" class="form-control bg-dark text-white border-secondary" value="{{ session.get('username') }}" disabled>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small text-warning">Paper Receipt # (Sales Number)</label>
+                    <label class="form-label small text-warning">Paper Receipt # <span class="text-danger">*</span></label>
                     <input type="text" class="form-control bg-dark text-white border-warning" id="sales-number" placeholder="e.g. 4052">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small text-white-50">Customer</label>
-                    <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
+                    <label class="form-label small text-white-50">Customer <span class="text-danger">*</span></label>
+                    <input type="text" id="customer-name" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
                 </div>
 
                 <hr class="my-4 border-secondary opacity-25">
@@ -80,7 +80,10 @@
                                     </div>
                                 </td>
                                 <td><input type="text" class="form-control form-control-sm bg-dark text-white-50 border-secondary stock-input" value="--" disabled></td>
-                                <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" value="1"></td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" step="1" value="1">
+                                    <div class="stock-warning-text text-danger" style="font-size: 0.65rem; display: none;">Insufficient stock</div>
+                                </td>
                                 <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary price-input"></td>
                                 <td class="text-warning fw-bold subtotal-display">₱0.00</td>
                                 <td>
@@ -113,7 +116,8 @@
                                 {% endif %}
                             {% endfor %}
                         </select>
-                        <input type="text" class="form-control bg-dark text-white border-info mt-2" placeholder="Reference Number (Optional)" id="ref-no">
+                        <label class="form-label small text-info">Reference Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control bg-dark text-white border-info mt-2" placeholder="e.g. GCash Ref No." id="ref-no">
                     </div>
 
                     <label class="form-label small text-white-50 mt-3">Notes</label>
@@ -131,80 +135,9 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const dateInput = document.getElementById('trans-date');
-    
-    // Create a date object for "Now" in the local timezone
-    const now = new Date();
-    
-    // Offset calculation to force Local Time instead of UTC
-    const offset = now.getTimezoneOffset() * 60000; 
-    const localISOTime = (new Date(now - offset)).toISOString().slice(0, 16);
-    
-    dateInput.value = localISOTime;
-});
-
-document.getElementById('submit-btn').addEventListener('click', async function(e) {
-    const submitBtn = document.getElementById('submit-btn');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...';
-    e.preventDefault(); // Stop the page from refreshing
-
-    // 1. THE FINAL GUARD: Double-check everything
-    const rows = document.querySelectorAll('.item-row');
-    let validItems = [];
-    let isDataClean = true;
-
-    rows.forEach(row => {
-        const itemId = row.querySelector('.item-id-input').value;
-        const qty = parseFloat(row.querySelector('.qty-input').value);
-        const itemName = row.querySelector('.item-input').value;
-
-        // If there's text in the box but NO ID, it's a "Ghost Item"
-        if (itemName.trim() !== "" && !itemId) {
-            isDataClean = false;
-        }
-
-        if (itemId && qty > 0) {
-            validItems.push({
-                item_id: itemId,
-                quantity: qty,
-                price: row.querySelector('.price-input').value
-            });
-        }
-    });
-
-    if (!isDataClean || validItems.length === 0) {
-        alert("Wait! Some items are invalid or the cart is empty. Please fix them before submitting.");
-        return; // KILL THE PROCESS HERE
-    }
-
-    // 2. If we got here, the data is officially "Locked and Loaded"
-    console.log("Data is clean! Proceeding to save...");
-    
-    // This is where we will call the save function next
-    await saveTransaction(validItems); 
-});
-
-document.getElementById('payment-category').addEventListener('change', function() {
-    const category = this.value;
-    const onlineDiv = document.getElementById('online-options');
-    const submitBtn = document.querySelector('.btn-lg'); // The Submit button
-
-    if (category === 'Online') {
-        onlineDiv.style.display = 'block';
-        submitBtn.classList.replace('btn-danger', 'btn-info'); // Change color for visual cue
-    } else if (category === '5') {
-        onlineDiv.style.display = 'none';
-        submitBtn.classList.replace('btn-info', 'btn-warning'); // Warning yellow for Utang
-        submitBtn.classList.replace('btn-danger', 'btn-warning');
-    } else {
-        onlineDiv.style.display = 'none';
-        submitBtn.className = 'btn btn-danger btn-lg px-5 shadow'; // Reset to red
-    }
-});
-
-// Add the debounce function at the top if it's not already there
+/* =========================================================
+   UTILITIES
+========================================================= */
 function debounce(func, delay) {
     let timeoutId;
     return (...args) => {
@@ -213,13 +146,125 @@ function debounce(func, delay) {
     };
 }
 
-const handleTableSearch = async (inputElement) => {
-    const query = inputElement.value.trim();
-    const row = inputElement.closest('tr');
-    const suggestionsBox = row.querySelector('.search-suggestions');
+/* =========================================================
+   INITIALIZATION
+========================================================= */
+let dateWasManuallyChanged = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+    setDefaultTransactionDate();
+    validateForm();
+
+    document.getElementById('trans-date').addEventListener('change', () => {
+        dateWasManuallyChanged = true;
+    });
+});
+
+function setDefaultTransactionDate() {
+    const dateInput = document.getElementById('trans-date');
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    dateInput.value = new Date(now - offset).toISOString().slice(0, 16);
+}
+
+/* =========================================================
+   FORM VALIDATION
+========================================================= */
+function validateForm() {
+    const submitBtn = document.getElementById('submit-btn');
+    const salesNum = document.getElementById('sales-number').value.trim();
+    const customer = document.getElementById('customer-name').value.trim();
+    const paymentCat = document.getElementById('payment-category').value;
+    const refNo = document.getElementById('ref-no').value.trim();
+
+    let hasValidItem = false;
+    let hasInputError = false;
+
+    document.querySelectorAll('.item-row').forEach(row => {
+        const id = row.querySelector('.item-id-input').value;
+        const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+        const stockValue = row.querySelector('.stock-input').value;
+        const stock = parseFloat(stockValue) || 0;
+
+        if (id) {
+            hasValidItem = true;
+            // Check for both insufficient stock AND invalid quantity
+            if ((stockValue !== '--' && qty > stock) || qty <= 0) {
+                hasInputError = true;
+            }
+        }
+    });
+
+    const headerValid = salesNum !== "" && customer !== "";
+    const paymentValid = (paymentCat === 'Online') ? (refNo !== "") : true;
+
+    submitBtn.disabled = !(headerValid && paymentValid && hasValidItem && !hasInputError);
+}
+
+/* =========================================================
+   CALCULATIONS
+========================================================= */
+function calculateRow(row) {
+    const qtyInput = row.querySelector('.qty-input');
+    const stockInput = row.querySelector('.stock-input');
+    const warningLabel = row.querySelector('.stock-warning-text');
+    
+    const qty = parseFloat(qtyInput.value) || 0;
+    const price = parseFloat(row.querySelector('.price-input').value) || 0;
+    const stock = parseFloat(stockInput.value) || 0;
+
+    // VALIDATION LOGIC (Stock check + Zero/Negative check)
+    let errorMessage = "";
+    if (qty <= 0) {
+        errorMessage = "Qty must be at least 1";
+    } else if (stockInput.value !== '--' && qty > stock) {
+        errorMessage = "Insufficient stock";
+    }
+
+    if (errorMessage) {
+        qtyInput.classList.add('border-danger', 'text-danger');
+        qtyInput.style.boxShadow = "0 0 5px rgba(220, 53, 69, 0.5)";
+        if (warningLabel) {
+            warningLabel.innerText = errorMessage;
+            warningLabel.style.display = 'block';
+        }
+    } else {
+        qtyInput.classList.remove('border-danger', 'text-danger');
+        qtyInput.style.boxShadow = "none";
+        if (warningLabel) warningLabel.style.display = 'none';
+    }
+
+    const displayQty = qty > 0 ? qty : 0;
+    const subtotal = displayQty * price;
+    row.querySelector('.subtotal-display').innerText =
+        `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+    calculateGrandTotal();
+}
+
+function calculateGrandTotal() {
+    let total = 0;
+
+    document.querySelectorAll('.subtotal-display').forEach(display => {
+        total += parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
+    });
+
+    document.getElementById('grand-total').innerText =
+        `₱${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+    validateForm();
+}
+
+/* =========================================================
+   ITEM SEARCH / AUTOCOMPLETE
+========================================================= */
+const handleTableSearch = async (input) => {
+    const query = input.value.trim();
+    const row = input.closest('tr');
+    const suggestions = row.querySelector('.search-suggestions');
     const idInput = row.querySelector('.item-id-input');
 
-    if (inputElement.dataset.confirmedName !== query) {
+    if (input.dataset.confirmedName !== query) {
         idInput.value = '';
         row.querySelector('.price-input').value = '';
         row.querySelector('.stock-input').value = '--';
@@ -227,178 +272,287 @@ const handleTableSearch = async (inputElement) => {
     }
 
     if (query.length < 2) {
-        suggestionsBox.style.display = 'none';
+        suggestions.style.display = 'none';
         return;
     }
 
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        
-        suggestionsBox.innerHTML = '';
-        
-        if (data.items && data.items.length > 0) {
-            // LIMIT TO 5 RESULTS so it doesn't create a massive scroll
-            const topResults = data.items.slice(0, 5); 
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
 
-            topResults.forEach(item => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
-                
-                // Clean layout: Name on top, stock/price on a tiny row below
-                btn.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>${item.name}</strong>
-                        <span class="badge bg-danger">₱${item.a4s_selling_price}</span>
-                    </div>
-                    <small class="text-white-50" style="font-size: 0.7rem;">Stock: ${item.current_stock}</small>
-                `;
-                
-                btn.onclick = () => {
-                    inputElement.value = item.name;
-                    inputElement.dataset.confirmedName = item.name;
-                    row.querySelector('.item-id-input').value = item.id;
-                    row.querySelector('.price-input').value = item.a4s_selling_price;
-                    row.querySelector('.stock-input').value = item.current_stock;
-                    suggestionsBox.style.display = 'none';
-                    calculateRow(row);
-                };
-                suggestionsBox.appendChild(btn);
-            });
-            suggestionsBox.style.display = 'block';
-        } else {
-            suggestionsBox.style.display = 'none';
+        suggestions.innerHTML = '';
+
+        if (!data.items?.length) {
+            suggestions.style.display = 'none';
+            return;
         }
+
+        data.items.slice(0, 5).forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className =
+                'list-group-item list-group-item-action bg-dark text-white border-secondary small';
+
+            btn.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <strong>${item.name}</strong>
+                    <span class="badge bg-danger">₱${item.a4s_selling_price}</span>
+                </div>
+                <small class="text-white-50" style="font-size:0.7rem">
+                    Stock: ${item.current_stock}
+                </small>
+            `;
+
+            btn.onclick = () => {
+                input.value = item.name;
+                input.dataset.confirmedName = item.name;
+                row.querySelector('.item-id-input').value = item.id;
+                row.querySelector('.price-input').value = item.a4s_selling_price;
+                row.querySelector('.stock-input').value = item.current_stock;
+                suggestions.style.display = 'none';
+                calculateRow(row);
+            };
+
+            suggestions.appendChild(btn);
+        });
+
+        suggestions.style.display = 'block';
     } catch (err) {
-        console.error("Search error:", err);
+        console.error('Search error:', err);
     }
 };
 
-// Wire up the input listener
-document.addEventListener('input', function(e) {
+/* =========================================================
+   EVENT LISTENERS
+========================================================= */
+
+// Header inputs
+['sales-number', 'customer-name', 'ref-no'].forEach(id => {
+    document.getElementById(id).addEventListener('input', validateForm);
+});
+document.getElementById('payment-category').addEventListener('change', validateForm);
+
+// Payment category UI behavior
+document.getElementById('payment-category').addEventListener('change', function () {
+    const onlineDiv = document.getElementById('online-options');
+    const submitBtn = document.querySelector('.btn-lg');
+
+    if (this.value === 'Online') {
+        onlineDiv.style.display = 'block';
+        submitBtn.classList.replace('btn-danger', 'btn-info');
+    } else if (this.value === '5') {
+        onlineDiv.style.display = 'none';
+        submitBtn.classList.replace('btn-info', 'btn-warning');
+        submitBtn.classList.replace('btn-danger', 'btn-warning');
+    } else {
+        onlineDiv.style.display = 'none';
+        submitBtn.className = 'btn btn-danger btn-lg px-5 shadow';
+    }
+});
+
+// Table inputs
+document.addEventListener('input', (e) => {
     if (e.target.classList.contains('item-input')) {
         debounce(() => handleTableSearch(e.target), 300)();
     }
-    
-    // Keep your existing Qty/Price manual override listeners
-    if (e.target.classList.contains('qty-input') || e.target.classList.contains('price-input')) {
+
+    if (
+        e.target.classList.contains('qty-input') ||
+        e.target.classList.contains('price-input')
+    ) {
         calculateRow(e.target.closest('tr'));
     }
 });
 
-// Hide suggestions when clicking outside
+// Hide suggestions on outside click
 document.addEventListener('click', (e) => {
     if (!e.target.classList.contains('item-input')) {
-        document.querySelectorAll('.search-suggestions').forEach(box => {
-            box.style.display = 'none';
-        });
+        document.querySelectorAll('.search-suggestions')
+            .forEach(box => box.style.display = 'none');
     }
 });
 
-// 3. Handle Row Removal
-document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('remove-row-btn')) {
-        const row = e.target.closest('tr');
-        const allRows = document.querySelectorAll('.item-row');
+// Row removal
+document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('remove-row-btn')) return;
+
+    const row = e.target.closest('tr');
+    const rows = document.querySelectorAll('.item-row');
+
+    if (rows.length > 1) {
+        row.remove();
+        // The fix: calculate total AND validate form immediately
+        calculateGrandTotal(); 
+    } else {
+        // Reset single remaining row
+        row.querySelector('.item-id-input').value = '';
+        row.querySelector('.item-input').value = '';
+        row.querySelector('.price-input').value = '';
+        row.querySelector('.stock-input').value = '--';
         
-        // Don't delete the last remaining row, just clear it
-        if (allRows.length > 1) {
-            row.remove();
-            calculateGrandTotal();
-        } else {
-            row.querySelector('.item-input').value = '';
-            row.querySelector('.price-input').value = '';
-            row.querySelector('.stock-input').value = '--';
-            calculateRow(row);
+        // Reset styles for the single row too
+        const qtyInp = row.querySelector('.qty-input');
+        qtyInp.classList.remove('border-danger', 'text-danger');
+        qtyInp.style.boxShadow = "none";
+        row.querySelector('.stock-warning-text').style.display = 'none';
+        
+        calculateRow(row);
+    }
+});
+
+// Force Qty to 1 if user leaves it empty or invalid
+document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('qty-input')) {
+        const val = parseFloat(e.target.value);
+        if (isNaN(val) || val <= 0) {
+            e.target.value = 1;
+            calculateRow(e.target.closest('tr'));
         }
     }
 });
 
-function validateForm() {
-    const submitBtn = document.getElementById('submit-btn');
-    let hasValidItem = false;
-
-    // Check if at least one row has an Item ID selected
-    document.querySelectorAll('.item-id-input').forEach(idInput => {
-        if (idInput.value !== "") {
-            hasValidItem = true;
+// Prevent typing decimals, minus signs, or 'e'
+document.addEventListener('keydown', (e) => {
+    if (e.target.classList.contains('qty-input')) {
+        if (['.', '-', 'e', 'E'].includes(e.key)) {
+            e.preventDefault();
         }
-    });
+    }
+});
 
-    submitBtn.disabled = !hasValidItem;
-}
+// Clean up pasted values in Qty
+document.addEventListener('paste', (e) => {
+    if (e.target.classList.contains('qty-input')) {
+        const pasteData = (e.clipboardData || window.clipboardData).getData('text');
+        if (pasteData.includes('.') || pasteData.includes('-') || isNaN(pasteData)) {
+            e.preventDefault();
+            const cleanValue = parseInt(pasteData.replace(/[^0-9]/g, '')) || 1;
+            e.target.value = cleanValue;
+            calculateRow(e.target.closest('tr'));
+        }
+    }
+});
 
-function calculateRow(row) {
-    const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
-    const price = parseFloat(row.querySelector('.price-input').value) || 0;
-    const subtotal = qty * price;
-    row.querySelector('.subtotal-display').innerText = `₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    calculateGrandTotal();
-}
-
-function calculateGrandTotal() {
-    let total = 0;
-    document.querySelectorAll('.subtotal-display').forEach(display => {
-        const val = parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
-        total += val;
-    });
-    document.getElementById('grand-total').innerText = `₱${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    validateForm();
-}
-
-document.getElementById('add-row-btn').addEventListener('click', function(e) {
+// Add row
+document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
+
     const tbody = document.getElementById('transaction-body');
-    const firstRow = tbody.querySelector('.item-row');
-    const newRow = firstRow.cloneNode(true);
-    
-    // Clear everything for the new row
+    // Always clone the first row as a template, but we'll clean it up
+    const newRow = tbody.querySelector('.item-row').cloneNode(true);
+
+    // 1. Reset values
+    newRow.querySelector('.item-id-input').value = '';
     newRow.querySelector('.item-input').value = '';
+    newRow.querySelector('.item-input').dataset.confirmedName = ''; // Reset confirmation
     newRow.querySelector('.price-input').value = '';
     newRow.querySelector('.qty-input').value = 1;
     newRow.querySelector('.stock-input').value = '--';
     newRow.querySelector('.subtotal-display').innerText = '₱0.00';
-    
+
+    // 2. Reset Styles (The Fix for the "Glow")
+    const qtyInput = newRow.querySelector('.qty-input');
+    qtyInput.classList.remove('border-danger', 'text-danger');
+    qtyInput.style.boxShadow = "none"; // Remove the glow
+
+    // 3. Hide Warning Text
+    const newWarning = newRow.querySelector('.stock-warning-text');
+    if (newWarning) newWarning.style.display = 'none';
+
     tbody.appendChild(newRow);
+    validateForm(); // Re-validate just in case
 });
 
-async function saveTransaction(validItems) {
-    // 1. Collect the "Header" information
-    const paymentCategory = document.getElementById('payment-category');
-    let finalPaymentId = paymentCategory.value;
+/* =========================================================
+   SUBMISSION
+========================================================= */
+document.getElementById('submit-btn').addEventListener('click', async (e) => {
+    e.preventDefault();
 
-    // If 'Online' was selected, get the specific provider ID (GCash/Maya)
-    if (finalPaymentId === "Online") {
-        finalPaymentId = document.getElementById('payment-method').value;
+    const btn = e.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...';
+
+    const rows = document.querySelectorAll('.item-row');
+    const validItems = [];
+    let isClean = true;
+
+    rows.forEach(row => {
+        const id = row.querySelector('.item-id-input').value;
+        const qty = parseFloat(row.querySelector('.qty-input').value);
+        const name = row.querySelector('.item-input').value;
+
+        if (name.trim() && !id) isClean = false;
+        if (id && qty > 0) {
+            validItems.push({
+                item_id: id,
+                quantity: qty,
+                price: row.querySelector('.price-input').value
+            });
+        }
+    });
+
+    if (!isClean || !validItems.length) {
+        alert('Invalid items detected or cart is empty.');
+        btn.disabled = false;
+        btn.innerHTML = 'SAVE';
+        return;
+    }
+
+    await saveTransaction(validItems);
+});
+
+/* =========================================================
+   SAVE TRANSACTION
+========================================================= */
+async function saveTransaction(items) {
+    let paymentId = document.getElementById('payment-category').value;
+    let refNo = null;
+
+    let finalDate;
+    if (dateWasManuallyChanged) {
+        // User picked a specific time, use that (minutes only is fine)
+        finalDate = document.getElementById('trans-date').value;
+    } else {
+        // User didn't touch it, generate "Now" with seconds
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        finalDate = new Date(now - offset).toISOString().slice(0, 19);
+    }
+
+    if (paymentId === 'Online') {
+        paymentId = document.getElementById('payment-method').value;
+        refNo = document.getElementById('ref-no').value;
     }
 
     const payload = {
         sales_number: document.getElementById('sales-number').value,
-        customer_name: document.querySelector('input[placeholder="Customer Name / Loyalty ID"]').value,
-        payment_method_id: finalPaymentId,
-        total_amount: parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
+        customer_name: document.getElementById('customer-name').value,
+        payment_method_id: paymentId,
+        reference_no: refNo,
+        total_amount: parseFloat(
+            document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')
+        ),
         notes: document.getElementById('trans-notes').value,
-        transaction_date: document.getElementById('trans-date').value,
-        items: validItems // This is the array we built in the click listener
+        transaction_date: finalDate,
+        items
     };
 
-    // 2. Send it to the server
     try {
-        const response = await fetch('/transaction/out/save', {
+        const res = await fetch('/transaction/out/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (response.ok) {
-            window.location.href = "/transaction/out"; // Or wherever you want to go
+        if (res.ok) {
+            window.location.href = '/transaction/out';
         } else {
-            const result = await response.json();
-            alert("Error: " + result.message);
+            const result = await res.json();
+            alert(result.message);
         }
-    } catch (error) {
-        console.error("Submission failed:", error);
+    } catch (err) {
+        console.error('Submission failed:', err);
     }
 }
 </script>

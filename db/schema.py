@@ -52,6 +52,7 @@ def init_db():
         customer_name TEXT,
         total_amount REAL NOT NULL,
         payment_method_id INTEGER,
+        reference_no TEXT,
         status TEXT CHECK(status IN ('Paid', 'Unresolved')) NOT NULL,
         notes TEXT,
         user_id INTEGER,
@@ -91,6 +92,12 @@ def init_db():
         conn.execute("ALTER TABLE inventory_transactions ADD COLUMN unit_price REAL")
     except:
         pass # Column already exists
+
+    # NEW MIGRATION: Add reference_no to sales table for your current DB
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN reference_no TEXT")
+    except:
+        pass
 
     # 6. SEED DATA (Pre-fill payment methods)
     payment_data = [

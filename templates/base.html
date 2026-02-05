@@ -14,8 +14,10 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap; /* This allows items to move to the next line instead of squishing */
+            gap: 1rem;       /* Adds breathing room between logo and nav */
             border-bottom: 2px solid #e63946;
-            padding-bottom: 0.5rem;
+            padding-bottom: 1rem;
             margin-bottom: 2rem;
         }
         header img { height: 80px; margin-right: 1rem; }
@@ -31,6 +33,11 @@
         hr { border-color: #333; }
 
         /* Add this to your existing CSS */
+        .nav-links {
+            flex-wrap: wrap; 
+            justify-content: flex-end; 
+            gap: 0.5rem; /* Space between each link */
+        }
         .nav-links a {
             font-size: 1.1rem;
             font-weight: 500;
@@ -86,8 +93,15 @@
     </div>
     
     {% if session.get('user_id') %}
-    <nav class="ms-auto nav-links d-flex align-items-center">
+    <nav class="ms-auto nav-links d-flex align-items-center justify-content-end">
         <a href="/" class="mx-2">🏠 Items</a>
+        <a href="{{ url_for('transaction.transaction_in') }}" class="mx-2 text-success">
+            <i class="bi bi-box-arrow-in-down"></i> Stock In
+        </a>
+        <a href="{{ url_for('transaction.transaction_out') }}" class="mx-2" style="color: #ff4d4d; font-weight: bold;">
+            <i class="bi bi-cart-plus"></i> New Sale
+        </a>
+        
         <a href="/analytics" class="mx-2">🔥 Hot Items</a>
         <a href="/dead-stock" class="mx-2">🧟 Dead Stock</a>
         <a href="/low-stock" class="mx-2">⚠️ Low Stock</a>

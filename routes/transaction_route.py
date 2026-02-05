@@ -92,19 +92,27 @@ def save_transaction_out():
     data = request.get_json()
     conn = get_db()
     
-    # 1. TIME LOGIC: Get the current system time to "steal" the seconds
+    # 1. TIME LOGIC
     now_obj = datetime.now()
     raw_date = data.get('transaction_date')
+    
+    # Get current time string up to the minute for comparison
+    current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
 
     if raw_date:
-            # CASE 1: Secretary picked a time (e.g., 11:00 AM)
-            clean_time = raw_date.replace('T', ' ')
-            # If it's just YYYY-MM-DD HH:MM, add :00 to keep it clean and manual
-            if len(clean_time) == 16:
-                clean_time += ":00"
-            else:
-            # CASE 2: No time picked, use the ACTUAL current time with seconds
-                clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean_time = raw_date.replace('T', ' ')
+        
+        # Check if the user's input is just the current minute (the "stale" default)
+        # OR if they left it blank.
+        if clean_time[:16] == current_minute or not raw_date:
+            # Use the fresh system time with live seconds
+            clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
+        elif len(clean_time) == 16:
+            # It's a different time (manual entry), so use :00
+            clean_time += ":00"
+    else:
+        # Fallback: nothing sent, use live system time
+        clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
         # 2. Start the Atomic Transaction
@@ -112,14 +120,15 @@ def save_transaction_out():
 
         # 3. Insert into SALES
         cursor = conn.execute("""
-            INSERT INTO sales (sales_number, customer_name, total_amount, payment_method_id, status, notes, user_id, transaction_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sales (sales_number, customer_name, total_amount, payment_method_id, reference_no, status, notes, user_id, transaction_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get('sales_number'), 
             data.get('customer_name'), 
             data.get('total_amount'),
-            data.get('payment_method_id'), 
-            'Paid' if str(data.get('payment_method_id')) != '4' else 'Unresolved',
+            data.get('payment_method_id'),
+            data.get('reference_no'),
+            'Unresolved' if str(data.get('payment_method_id')) == '5' else 'Paid',
             data.get('notes'), 
             session.get('user_id'), 
             clean_time
