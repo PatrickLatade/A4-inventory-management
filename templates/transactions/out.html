@@ -43,6 +43,10 @@
                     <input type="text" class="form-control bg-dark text-white border-secondary" value="{{ session.get('username') }}" disabled>
                 </div>
                 <div class="col-md-4">
+                    <label class="form-label small text-warning">Paper Receipt # (Sales Number)</label>
+                    <input type="text" class="form-control bg-dark text-white border-warning" id="sales-number" placeholder="e.g. 4052">
+                </div>
+                <div class="col-md-4">
                     <label class="form-label small text-white-50">Customer</label>
                     <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
                 </div>
@@ -84,17 +88,6 @@
                                 </td>
                             </tr>
                         </tbody>
-
-                        <datalist id="items-datalist">
-                            {% for item in items %}
-                            <option value="{{ item.name }}" 
-                                    data-price="{{ item.a4s_selling_price }}" 
-                                    data-stock="{{ item.current_stock }}" 
-                                    data-id="{{ item.id }}">
-                                Stock: {{ item.current_stock }} | ₱{{ item.a4s_selling_price }}
-                            </option>
-                            {% endfor %}
-                        </datalist>
                     </table>
                     <button class="btn btn-outline-danger btn-sm mt-2" id="add-row-btn">
                         <i class="bi bi-plus-circle"></i> Add Another Item
@@ -104,20 +97,33 @@
                 <hr class="my-4 border-secondary opacity-25">
 
                 <div class="col-md-6">
-                    <label class="form-label small text-white-50">Payment Type</label>
-                    <select class="form-select bg-dark text-white border-secondary">
-                        <option>Cash</option>
-                        <option>GCash</option>
-                        <option>Utang (Pay Later)</option>
+                    <label class="form-label small text-white-50">Payment Category</label>
+                    <select class="form-select bg-dark text-white border-secondary" id="payment-category">
+                        <option value="1" data-status="Paid">Cash</option>
+                        <option value="Online" data-status="Paid">Online Payment</option>
+                        <option value="5" data-status="Unresolved">Utang (Pay Later)</option>
                     </select>
+
+                    <div id="online-options" class="mt-3" style="display: none;">
+                        <label class="form-label small text-info">Select Online Provider</label>
+                        <select class="form-select bg-dark text-white border-info" id="payment-method">
+                            {% for method in payment_methods %}
+                                {% if method.category == 'Online' %}
+                                <option value="{{ method.id }}">{{ method.name }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        <input type="text" class="form-control bg-dark text-white border-info mt-2" placeholder="Reference Number (Optional)" id="ref-no">
+                    </div>
+
                     <label class="form-label small text-white-50 mt-3">Notes</label>
-                    <textarea class="form-control bg-dark text-white border-secondary" rows="2"></textarea>
+                    <textarea class="form-control bg-dark text-white border-secondary" rows="2" id="trans-notes"></textarea>
                 </div>
 
                 <div class="col-md-6 d-flex flex-column justify-content-end align-items-end">
                     <h3 class="text-white-50 mb-0">TOTAL DUE</h3>
                     <h1 class="text-danger mb-4" id="grand-total">₱0.00</h1>
-                    <button class="btn btn-danger btn-lg px-5 shadow">SUBMIT TRANSACTION</button>
+                    <button id="submit-btn" class="btn btn-danger btn-lg px-5 shadow" disabled>SUBMIT TRANSACTION</button>
                 </div>
             </div>
         </div>
@@ -125,6 +131,79 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dateInput = document.getElementById('trans-date');
+    
+    // Create a date object for "Now" in the local timezone
+    const now = new Date();
+    
+    // Offset calculation to force Local Time instead of UTC
+    const offset = now.getTimezoneOffset() * 60000; 
+    const localISOTime = (new Date(now - offset)).toISOString().slice(0, 16);
+    
+    dateInput.value = localISOTime;
+});
+
+document.getElementById('submit-btn').addEventListener('click', async function(e) {
+    const submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...';
+    e.preventDefault(); // Stop the page from refreshing
+
+    // 1. THE FINAL GUARD: Double-check everything
+    const rows = document.querySelectorAll('.item-row');
+    let validItems = [];
+    let isDataClean = true;
+
+    rows.forEach(row => {
+        const itemId = row.querySelector('.item-id-input').value;
+        const qty = parseFloat(row.querySelector('.qty-input').value);
+        const itemName = row.querySelector('.item-input').value;
+
+        // If there's text in the box but NO ID, it's a "Ghost Item"
+        if (itemName.trim() !== "" && !itemId) {
+            isDataClean = false;
+        }
+
+        if (itemId && qty > 0) {
+            validItems.push({
+                item_id: itemId,
+                quantity: qty,
+                price: row.querySelector('.price-input').value
+            });
+        }
+    });
+
+    if (!isDataClean || validItems.length === 0) {
+        alert("Wait! Some items are invalid or the cart is empty. Please fix them before submitting.");
+        return; // KILL THE PROCESS HERE
+    }
+
+    // 2. If we got here, the data is officially "Locked and Loaded"
+    console.log("Data is clean! Proceeding to save...");
+    
+    // This is where we will call the save function next
+    await saveTransaction(validItems); 
+});
+
+document.getElementById('payment-category').addEventListener('change', function() {
+    const category = this.value;
+    const onlineDiv = document.getElementById('online-options');
+    const submitBtn = document.querySelector('.btn-lg'); // The Submit button
+
+    if (category === 'Online') {
+        onlineDiv.style.display = 'block';
+        submitBtn.classList.replace('btn-danger', 'btn-info'); // Change color for visual cue
+    } else if (category === '5') {
+        onlineDiv.style.display = 'none';
+        submitBtn.classList.replace('btn-info', 'btn-warning'); // Warning yellow for Utang
+        submitBtn.classList.replace('btn-danger', 'btn-warning');
+    } else {
+        onlineDiv.style.display = 'none';
+        submitBtn.className = 'btn btn-danger btn-lg px-5 shadow'; // Reset to red
+    }
+});
+
 // Add the debounce function at the top if it's not already there
 function debounce(func, delay) {
     let timeoutId;
@@ -138,6 +217,14 @@ const handleTableSearch = async (inputElement) => {
     const query = inputElement.value.trim();
     const row = inputElement.closest('tr');
     const suggestionsBox = row.querySelector('.search-suggestions');
+    const idInput = row.querySelector('.item-id-input');
+
+    if (inputElement.dataset.confirmedName !== query) {
+        idInput.value = '';
+        row.querySelector('.price-input').value = '';
+        row.querySelector('.stock-input').value = '--';
+        calculateRow(row);
+    }
 
     if (query.length < 2) {
         suggestionsBox.style.display = 'none';
@@ -170,6 +257,7 @@ const handleTableSearch = async (inputElement) => {
                 
                 btn.onclick = () => {
                     inputElement.value = item.name;
+                    inputElement.dataset.confirmedName = item.name;
                     row.querySelector('.item-id-input').value = item.id;
                     row.querySelector('.price-input').value = item.a4s_selling_price;
                     row.querySelector('.stock-input').value = item.current_stock;
@@ -227,6 +315,20 @@ document.addEventListener('click', function(e) {
     }
 });
 
+function validateForm() {
+    const submitBtn = document.getElementById('submit-btn');
+    let hasValidItem = false;
+
+    // Check if at least one row has an Item ID selected
+    document.querySelectorAll('.item-id-input').forEach(idInput => {
+        if (idInput.value !== "") {
+            hasValidItem = true;
+        }
+    });
+
+    submitBtn.disabled = !hasValidItem;
+}
+
 function calculateRow(row) {
     const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
     const price = parseFloat(row.querySelector('.price-input').value) || 0;
@@ -242,6 +344,7 @@ function calculateGrandTotal() {
         total += val;
     });
     document.getElementById('grand-total').innerText = `₱${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    validateForm();
 }
 
 document.getElementById('add-row-btn').addEventListener('click', function(e) {
@@ -259,6 +362,45 @@ document.getElementById('add-row-btn').addEventListener('click', function(e) {
     
     tbody.appendChild(newRow);
 });
+
+async function saveTransaction(validItems) {
+    // 1. Collect the "Header" information
+    const paymentCategory = document.getElementById('payment-category');
+    let finalPaymentId = paymentCategory.value;
+
+    // If 'Online' was selected, get the specific provider ID (GCash/Maya)
+    if (finalPaymentId === "Online") {
+        finalPaymentId = document.getElementById('payment-method').value;
+    }
+
+    const payload = {
+        sales_number: document.getElementById('sales-number').value,
+        customer_name: document.querySelector('input[placeholder="Customer Name / Loyalty ID"]').value,
+        payment_method_id: finalPaymentId,
+        total_amount: parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
+        notes: document.getElementById('trans-notes').value,
+        transaction_date: document.getElementById('trans-date').value,
+        items: validItems // This is the array we built in the click listener
+    };
+
+    // 2. Send it to the server
+    try {
+        const response = await fetch('/transaction/out/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            window.location.href = "/transaction/out"; // Or wherever you want to go
+        } else {
+            const result = await response.json();
+            alert("Error: " + result.message);
+        }
+    } catch (error) {
+        console.error("Submission failed:", error);
+    }
+}
 </script>
 
 {% endblock %}
