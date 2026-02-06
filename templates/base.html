@@ -3,41 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <title>Inventory System</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/inventory.ico') }}">
+
     <style>
         body { background-color: #121212; color: #ffffff; }
-        
-        /* The "Index" Standard Header */
+
+        /* =========================
+           HEADER
+        ========================== */
         header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap; /* This allows items to move to the next line instead of squishing */
-            gap: 1rem;       /* Adds breathing room between logo and nav */
+            flex-wrap: wrap;
+            gap: 1rem;
             border-bottom: 2px solid #e63946;
             padding-bottom: 1rem;
             margin-bottom: 2rem;
         }
-        header img { height: 80px; margin-right: 1rem; }
-        header h1 { color: #e63946; font-size: 2rem; margin: 0; text-align: left; }
 
-        /* Global Component Styles */
+        header img { height: 80px; margin-right: 1rem; }
+        header h1 { color: #e63946; font-size: 2rem; margin: 0; }
+
+        /* =========================
+           GLOBAL COMPONENTS
+        ========================== */
         .btn-danger { background-color: #e63946; border: none; }
         .btn-danger:hover { background-color: #d62839; }
-        .form-control, .form-select { background-color: #1e1e1e; color: #ffffff; border: 1px solid #333; }
+
+        .form-control, .form-select {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: 1px solid #333;
+        }
+
         .form-control::placeholder { color: #ccc; }
+
         a { color: #e63946; text-decoration: none; }
         a:hover { text-decoration: underline; }
+
         hr { border-color: #333; }
 
-        /* Add this to your existing CSS */
         .nav-links {
-            flex-wrap: wrap; 
-            justify-content: flex-end; 
-            gap: 0.5rem; /* Space between each link */
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.5rem;
         }
+
         .nav-links a {
             font-size: 1.1rem;
             font-weight: 500;
@@ -45,45 +60,58 @@
         }
 
         .nav-links a:hover {
-            color: #ffffff; /* Turns white when you hover over them */
+            color: #ffffff;
             text-decoration: none;
         }
 
         .hover-admin:hover {
-        border-color: #e63946 !important;
-        background-color: #252525 !important;
+            border-color: #e63946 !important;
+            background-color: #252525 !important;
         }
 
+        /* =========================
+           ALERT ANIMATION
+        ========================== */
         @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
 
         .animate-slide-in {
             animation: slideIn 0.5s ease-out forwards;
         }
 
-        /* Add these to your <style> in base.html */
-        .alert-success-custom { 
-            background-color: #2e7d32 !important; 
-            color: white; 
-            border: none; 
+        /* =========================
+           CUSTOM ALERT STYLES
+        ========================== */
+        .alert-success-custom {
+            background-color: #2e7d32 !important;
+            color: #ffffff;
+            border: none;
         }
 
-        .alert-danger-custom { 
-            background-color: #e63946 !important; 
-            color: white; 
-            border: none; 
+        .alert-danger-custom {
+            background-color: #e63946 !important;
+            color: #ffffff;
+            border: none;
+        }
+
+        .alert-warning-custom {
+            background-color: #f4a261 !important;
+            color: #000000;
+            border: none;
+        }
+
+        .alert-info-custom {
+            background-color: #1e88e5 !important;
+            color: #ffffff;
+            border: none;
         }
     </style>
+
     {% block styles %}{% endblock %}
 </head>
+
 <body class="container py-4">
 
 <header>
@@ -91,17 +119,19 @@
         <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
         <h1>Inventory System</h1>
     </div>
-    
+
     {% if session.get('user_id') %}
-    <nav class="ms-auto nav-links d-flex align-items-center justify-content-end">
+    <nav class="ms-auto nav-links d-flex align-items-center">
         <a href="/" class="mx-2">🏠 Items</a>
+
         <a href="{{ url_for('transaction.transaction_in') }}" class="mx-2 text-success">
             <i class="bi bi-box-arrow-in-down"></i> Stock In
         </a>
+
         <a href="{{ url_for('transaction.transaction_out') }}" class="mx-2" style="color: #ff4d4d; font-weight: bold;">
             <i class="bi bi-cart-plus"></i> New Sale
         </a>
-        
+
         <a href="/analytics" class="mx-2">🔥 Hot Items</a>
         <a href="/dead-stock" class="mx-2">🧟 Dead Stock</a>
         <a href="/low-stock" class="mx-2">⚠️ Low Stock</a>
@@ -109,46 +139,61 @@
         {% if session.get('role') == 'admin' %}
             <a href="/dashboard" class="mx-2">📊 Dashboard</a>
         {% endif %}
-        
-        <div class="border-start border-secondary h-100 mx-3" style="width: 1px; min-height: 25px;"></div>
 
-        <div class="d-flex align-items-center">
-            {% if session.get('role') == 'admin' %}
-                <a href="{{ url_for('auth.manage_users') }}" class="text-decoration-none border border-secondary rounded-pill px-3 py-1 bg-dark hover-admin" style="transition: 0.3s;">
-                    <span class="text-white-50 small">
-                        <i class="bi bi-shield-lock-fill text-danger"></i> {{ session.get('username') }} 
-                        <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">ADMIN</span>
-                    </span>
-                </a>
-            {% else %}
-                <div class="px-3 py-1">
-                    <span class="text-white-50 small">
-                        <i class="bi bi-person-circle"></i> {{ session.get('username') }} 
-                        <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">STAFF</span>
-                    </span>
-                </div>
-            {% endif %}
-            
-            <a href="/logout" class="btn btn-outline-secondary btn-sm ms-3" style="font-size: 0.7rem;">Logout</a>
-        </div>
+        <div class="border-start border-secondary mx-3" style="height: 25px;"></div>
+
+        {% if session.get('role') == 'admin' %}
+            <a href="{{ url_for('auth.manage_users') }}"
+               class="text-decoration-none border border-secondary rounded-pill px-3 py-1 bg-dark hover-admin">
+                <span class="text-white-50 small">
+                    <i class="bi bi-shield-lock-fill text-danger"></i>
+                    {{ session.get('username') }}
+                    <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">ADMIN</span>
+                </span>
+            </a>
+        {% else %}
+            <span class="text-white-50 small px-3">
+                <i class="bi bi-person-circle"></i>
+                {{ session.get('username') }}
+                <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">STAFF</span>
+            </span>
+        {% endif %}
+
+        <a href="/logout" class="btn btn-outline-secondary btn-sm ms-3" style="font-size: 0.7rem;">
+            Logout
+        </a>
     </nav>
     {% endif %}
 </header>
 
-<div id="flash-container" style="position: fixed; top: 20px; right: 20px; z-index: 1050; width: auto; max-width: 350px;">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}-custom alert-dismissible fade show shadow-lg animate-slide-in" role="alert" style="margin-bottom: 10px;">
-            
-            <i class="bi {% if category == 'success' %}bi-check-circle-fill{% else %}bi-exclamation-triangle-fill{% endif %} me-2"></i> 
-            {{ message }}
-            
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+<!-- =========================
+     FLASH MESSAGES
+========================== -->
+<div id="flash-container"
+     style="position: fixed; top: 20px; right: 20px; z-index: 1050; max-width: 350px;">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}-custom alert-dismissible fade show shadow-lg animate-slide-in"
+           role="alert" style="margin-bottom: 10px;">
+
+        <i class="bi
+            {% if category == 'success' %}bi-check-circle-fill
+            {% elif category == 'danger' %}bi-x-octagon-fill
+            {% elif category == 'warning' %}bi-arrow-counterclockwise
+            {% elif category == 'info' %}bi-info-circle-fill
+            {% endif %}
+            me-2"></i>
+
+        {{ message }}
+
+        <button type="button" class="btn-close btn-close-white"
+                data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
 </div>
 
 <main class="container">
@@ -156,21 +201,18 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Find all alert elements
-        const alerts = document.querySelectorAll('.alert');
-        
-        alerts.forEach(function(alert) {
-            // Set a timer for 5000ms (5 seconds)
-            setTimeout(function() {
-                // Use Bootstrap's alert instance to close it smoothly
-                let bsAlert = new bootstrap.Alert(alert);
-                bsAlert.close();
-            }, 5000);
-        });
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll('.alert').forEach(function (alert) {
+        setTimeout(function () {
+            let bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }, 5000);
     });
+});
 </script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

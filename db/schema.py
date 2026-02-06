@@ -17,7 +17,18 @@ def init_db():
     )
     """)
 
-    # 2. ITEMS TABLE
+    # 2. MECHANICS TABLE (Updated to include all fields)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS mechanics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        commission_rate REAL DEFAULT 0.80,
+        phone TEXT,
+        is_active INTEGER DEFAULT 1
+    )
+    """)
+
+    # 3. ITEMS TABLE
     conn.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +46,7 @@ def init_db():
     )
     """)
 
-    # 3. PAYMENT METHODS TABLE (The New Addition)
+    # 4. PAYMENT METHODS TABLE
     conn.execute("""
     CREATE TABLE IF NOT EXISTS payment_methods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +55,7 @@ def init_db():
     )
     """)
 
-    # 4. SALES TABLE (The New Addition)
+    # 5. SALES TABLE
     conn.execute("""
     CREATE TABLE IF NOT EXISTS sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,8 +73,7 @@ def init_db():
     )
     """)
 
-    # 5. INVENTORY TRANSACTIONS
-    # Note: We define the core table first
+    # 6. INVENTORY TRANSACTIONS
     conn.execute("""
     CREATE TABLE IF NOT EXISTS inventory_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,28 +88,38 @@ def init_db():
     )
     """)
 
-    # --- THE MIGRATION SECTION ---
-    # This keeps the schema in sync even if you move to a new machine.
+    # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
-    # Add sale_id if it doesn't exist
+    # Add mechanic_id to sales
     try:
-        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN sale_id INTEGER REFERENCES sales(id)")
+        conn.execute("ALTER TABLE sales ADD COLUMN mechanic_id INTEGER REFERENCES mechanics(id)")
     except:
-        pass # Column already exists
+        pass 
 
-    # Add unit_price if it doesn't exist
+    # Add service_fee to sales
     try:
-        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN unit_price REAL")
-    except:
-        pass # Column already exists
-
-    # NEW MIGRATION: Add reference_no to sales table for your current DB
-    try:
-        conn.execute("ALTER TABLE sales ADD COLUMN reference_no TEXT")
+        conn.execute("ALTER TABLE sales ADD COLUMN service_fee REAL DEFAULT 0")
     except:
         pass
 
-    # 6. SEED DATA (Pre-fill payment methods)
+    # Existing migrations...
+    try:
+        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN sale_id INTEGER REFERENCES sales(id)")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN unit_price REAL")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN reference_no TEXT")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE mechanics ADD COLUMN phone TEXT")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE mechanics ADD COLUMN is_active INTEGER DEFAULT 1")
+    except: pass
+
+    # 7. SEED DATA
     payment_data = [
         ('Cash', 'Cash'),
         ('GCash', 'Online'),

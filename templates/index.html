@@ -16,7 +16,10 @@
     .table th:nth-child(4), 
     .table th:nth-child(5) { width: 11%; } /* Prices (Slightly slimmer) */
     .table th:nth-child(6) { width: 9%; }  /* Markup */
-    .table th:nth-child(7) { width: 10%; } /* Stock (Given more room) */
+    .stock-col {
+    width: 10%;
+    }
+
 
     /* 3. Global Cell Styling */
     .table td, .table th {
@@ -30,6 +33,11 @@
 
     /* 4. Header Specifics */
     .table thead th {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        line-height: 1.2;
+        padding: 0.75rem 0.5rem;
         text-transform: uppercase;
         font-size: 0.85rem;
         letter-spacing: 1px;
@@ -188,8 +196,10 @@
                 <th>Vendor Price</th>
                 <th>Cost Per Piece</th>
                 <th>A4S Selling Price</th>
+                {% if session.get('role') == 'admin' %}
                 <th>Markup</th>
-                <th>Current Stock</th>
+                {% endif %}
+                <th class="stock-col">Current Stock</th>
             </tr>
         </thead>
         <tbody>
@@ -200,12 +210,16 @@
                 <td class="price-text">₱{{ item.vendor_price }}</td>
                 <td class="price-text">₱{{ item.cost_per_piece }}</td>
                 <td class="price-text text-warning">₱{{ item.a4s_selling_price }}</td>
+                {% if session.get('role') == 'admin' %}
                 <td>
                     <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
                         {{ "%.2f"|format(item.markup * 100) }}%
                     </span>
                 </td>
-                <td><div class="stock-badge">{{ item.current_stock }}</div></td>
+                {% endif %}
+                <td class="stock-col">
+                    <div class="stock-badge">{{ item.current_stock }}</div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -220,6 +234,7 @@ let lastSuccessfulSearch = "";
 
 // --- Helper: Render a single row (Keeps your exact UI/HTML) ---
 function createRowHtml(item) {
+    const isAdmin = "{{ session.get('role') }}" === "admin";
     return `
         <tr>
             <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
@@ -227,11 +242,12 @@ function createRowHtml(item) {
             <td class="price-text">₱${item.vendor_price || 0}</td>
             <td class="price-text">₱${item.cost_per_piece || 0}</td>
             <td class="price-text text-warning">₱${item.a4s_selling_price || 0}</td>
-            <td>
-                <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
-                    ${(item.markup * 100).toFixed(2)}%
-                </span>
-            </td>
+            ${isAdmin ? `
+                <td>
+                    <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
+                        ${(item.markup * 100).toFixed(2)}%
+                    </span>
+                </td>` : ''}
             <td><div class="stock-badge">${item.current_stock}</div></td>
         </tr>
     `;

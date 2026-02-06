@@ -9,7 +9,7 @@
         padding: 1.5rem;
         margin-bottom: 2rem;
     }
-    
+
     .table-dark {
         background-color: #1e1e1e;
         border: 1px solid #333;
@@ -25,177 +25,344 @@
         text-transform: uppercase;
         letter-spacing: 1px;
     }
+
+    /* Tabs dark theme */
+    .nav-tabs .nav-link {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: #bbb;
+        margin-right: 4px;
+    }
+
+    .nav-tabs .nav-link.active {
+        background: #1e1e1e;
+        color: #e63946;
+        border-bottom-color: transparent;
+        font-weight: bold;
+    }
+
+    .tab-content {
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-top: none;
+        padding: 1.5rem;
+        border-radius: 0 0 8px 8px;
+    }
+    /* CRITICAL FIX: Prevent base.html and striped rows from hiding icons */
+    .toggle-btn {
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        flex-direction: column;
+        align-items: center;
+        vertical-align: middle;
+        position: relative;
+        z-index: 2; /* Sits above the striped row background */
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .toggle-btn:hover {
+        transform: scale(1.15);
+        text-decoration: none !important;
+    }
+
+    /* Force the icon colors to stay vivid on dark backgrounds */
+    .toggle-btn.text-success i {
+        color: #28a745 !important;
+        opacity: 1 !important;
+    }
+
+    .toggle-btn.text-muted i {
+        color: #6c757d !important;
+        opacity: 1 !important;
+    }
+
+    /* Small label adjustments */
+    .toggle-btn small {
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        margin-top: -2px;
+    }
+
+    /* Fix for vanishing text labels */
+    .toggle-btn.text-success small {
+        color: #28a745 !important;
+    }
+
+    .toggle-btn.text-muted small {
+        color: #6c757d !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-people-fill"></i> User Management</h2>
+    <h2><i class="bi bi-shield-lock-fill"></i> Admin Panel</h2>
     <a href="/" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
     </a>
 </div>
 
-<div class="admin-card shadow-sm">
-    <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
-    <form method="post" class="row g-3">
-        <div class="col-md-5">
-            <input name="username" class="form-control" placeholder="New staff username" required>
-        </div>
-        <div class="col-md-5">
-            <input name="password" type="password" class="form-control" placeholder="Temporary password" required>
-        </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-danger w-100">
-                <i class="bi bi-person-plus-fill"></i> Create
-            </button>
-        </div>
-    </form>
-</div>
+<!-- TABS -->
+<ul class="nav nav-tabs mb-0" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
+            <i class="bi bi-people-fill"></i> Users
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
+            <i class="bi bi-tools"></i> Mechanics
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
+            <i class="bi bi-cash-stack"></i> Sales
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
+            <i class="bi bi-clock-history"></i> Audit Trail
+        </button>
+    </li>
+</ul>
 
-<hr class="my-4">
+<div class="tab-content">
 
-<div class="table-responsive">
-    <table class="table table-dark table-striped align-middle">
-        <thead>
-    <tr>
-        <th>Username</th>
-        <th>Role</th>
-        <th>Created At</th>
-        <th>Created By</th> <th class="text-center">Status</th>
-    </tr>
-        </thead>
-        <tbody>
-            {% for user in users %}
-            <tr>
-                <td class="fw-bold">{{ user.username }}</td>
-                <td>
-                    {% if user.role == 'admin' %}
-                        <span class="badge bg-danger role-badge">Admin</span>
-                    {% else %}
-                        <span class="badge bg-secondary role-badge">Staff</span>
-                    {% endif %}
-                </td>
-                <td class="text-white-50">{{ user.created_at }}</td>
-                
-                <td class="text-white-50">
-                    {% if user.creator_name %}
-                        <i class="bi bi-person-badge"></i> {{ user.creator_name }}
-                    {% else %}
-                        <span class="text-muted small">System</span>
-                    {% endif %}
-                </td>
+    <!-- USERS TAB -->
+    <div class="tab-pane fade show active" id="users-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
+            <form method="post" class="row g-3">
+                <div class="col-md-5">
+                    <input name="username" class="form-control" placeholder="New staff username" required>
+                </div>
+                <div class="col-md-5">
+                    <input name="password" type="password" class="form-control" placeholder="Temporary password" required>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-person-plus-fill"></i> Create
+                    </button>
+                </div>
+            </form>
+        </div>
 
-                <td class="text-center">
-                    {% if user.role == 'admin' %}
-                        <span class="text-success small fw-bold">
-                            <i class="bi bi-shield-check"></i> PROTECTED
-                        </span>
-                    {% else %}
-                        <form action="{{ url_for('auth.toggle_user', user_id=user.id) }}" method="POST" style="display: inline;">
-                            {% if user.is_active == 1 %}
-                                <button type="submit" class="btn btn-link p-0 text-success text-decoration-none" title="Click to Disable">
-                                    <i class="bi bi-toggle-on fs-4"></i> <small class="d-block" style="font-size: 0.6rem;">ACTIVE</small>
-                                </button>
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Created At</th>
+                        <th>Created By</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="fw-bold">{{ user.username }}</td>
+                        <td>
+                            {% if user.role == 'admin' %}
+                                <span class="badge bg-danger role-badge">Admin</span>
                             {% else %}
-                                <button type="submit" class="btn btn-link p-0 text-muted text-decoration-none" title="Click to Enable">
-                                    <i class="bi bi-toggle-off fs-4"></i> <small class="d-block" style="font-size: 0.6rem;">DISABLED</small>
-                                </button>
+                                <span class="badge bg-secondary role-badge">Staff</span>
                             {% endif %}
-                        </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <hr class="my-5">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-cash-stack"></i> Recent Sales Transactions</h2>
+                        </td>
+                        <td class="text-white-50">{{ user.created_at }}</td>
+                        <td class="text-white-50">
+                            {% if user.creator_name %}
+                                <i class="bi bi-person-badge"></i> {{ user.creator_name }}
+                            {% else %}
+                                <span class="text-muted small">System</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if user.role == 'admin' %}
+                                <span class="text-success small fw-bold">
+                                    <i class="bi bi-shield-check"></i> PROTECTED
+                                </span>
+                            {% else %}
+                                <form action="{{ url_for('auth.toggle_user', user_id=user.id) }}" method="POST">
+                                    {% if user.is_active == 1 %}
+                                        <button type="submit" class="toggle-btn p-0 text-success">
+                                            <i class="bi bi-toggle-on fs-4"></i>
+                                            <small class="d-block">ACTIVE</small>
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="toggle-btn p-0 text-muted">
+                                            <i class="bi bi-toggle-off fs-4"></i>
+                                            <small class="d-block">DISABLED</small>
+                                        </button>
+                                    {% endif %}
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="table-responsive mb-5">
-        <table class="table table-dark table-hover align-middle" style="border: 1px solid #333;">
-            <thead class="table-danger text-dark">
-                <tr>
-                    <th>Date</th>
-                    <th>Receipt #</th>
-                    <th>Customer</th>
-                    <th>Payment</th>
-                    <th>Total Amount</th>
-                    <th class="text-center">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sale in sales_history %}
-                <tr>
-                    <td class="text-white-50 small">{{ sale.transaction_date }}</td>
-                    <td class="fw-bold text-warning">{{ sale.sales_number }}</td>
-                    <td>{{ sale.customer_name }}</td>
-                    <td>
-                        <span class="badge bg-dark border border-secondary text-info">
-                            {{ sale.payment_method_name }}
-                        </span>
-                    </td>
-                    <td class="fw-bold text-danger">₱{{ "{:,.2f}".format(sale.total_amount) }}</td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-outline-secondary" title="View Details">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted">No sales recorded yet.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <!-- MECHANICS TAB -->
+    <div class="tab-pane fade" id="mechanics-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-3 text-white-50">Add New Mechanic</h5>
+            <form action="{{ url_for('auth.add_mechanic') }}" method="POST" class="row g-3">
+                <div class="col-md-5">
+                    <input name="name" class="form-control" placeholder="Mechanic Name" required>
+                </div>
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-white-50">Rate</span>
+                        <select name="commission" class="form-select border-secondary text-white bg-dark">
+                            <option value="0.80">80%</option>
+                            <option value="0.50">50%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <input name="phone" class="form-control" placeholder="Phone #">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-plus-circle"></i> Add
+                    </button>
+                </div>
+            </form>
+        </div>
 
-    <hr class="my-5">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-clock-history"></i> Audit Trail / History</h2>
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-dark table-hover align-middle" style="border: 1px solid #333;">
-            <thead class="table-secondary text-dark">
-                <tr>
-                    <th>Date & Time</th>
-                    <th>Item</th>
-                    <th>Action</th>
-                    <th>Quantity</th>
-                    <th>Staff</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in history %}
-                <tr>
-                    <td class="text-white-50 small">{{ log.transaction_date }}</td>
-                    <td class="fw-bold">{{ log.item_name }}</td>
-                    <td>
-                        {% if log.transaction_type == 'IN' %}
-                            <span class="badge bg-success-subtle text-success border border-success px-2">
-                                <i class="bi bi-arrow-down-left"></i> IN
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Standard Rate</th>
+                        <th>Phone</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mechanic in mechanics %}
+                    <tr>
+                        <td class="fw-bold">{{ mechanic.name }}</td>
+                        <td>
+                            <span class="badge bg-dark border border-secondary text-warning">
+                                {{ (mechanic.commission_rate * 100)|int }}%
                             </span>
-                        {% else %}
-                            <span class="badge bg-danger-subtle text-danger border border-danger px-2">
-                                <i class="bi bi-arrow-up-right"></i> OUT
-                            </span>
-                        {% endif %}
-                    </td>
-                    <td class="fw-bold">{{ log.quantity }}</td>
-                    <td>
-                        <span class="text-white-50"><i class="bi bi-person"></i> {{ log.user_name }}</span>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                        <td class="text-white-50">{{ mechanic.phone or '---' }}</td>
+                        <td class="text-center">
+                            <form action="{{ url_for('auth.toggle_mechanic', mechanic_id=mechanic.id) }}" method="POST">
+                                {% if mechanic.is_active == 1 %}
+                                    <button type="submit" class="toggle-btn text-success" title="Click to Disable">
+                                        <i class="bi bi-toggle-on fs-3"></i>
+                                        <small class="d-block fw-bold" style="font-size: 0.65rem;">ACTIVE</small>
+                                    </button>
+                                {% else %}
+                                    <button type="submit" class="toggle-btn p-0 text-muted" title="Click to Activate">
+                                        <i class="bi bi-toggle-off fs-3"></i>
+                                        <small class="d-block fw-bold" style="font-size: 0.65rem;">INACTIVE</small>
+                                    </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No mechanics added yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <!-- SALES TAB -->
+    <div class="tab-pane fade" id="sales-tab">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle">
+                <thead class="table-danger text-dark">
+                    <tr>
+                        <th>Date</th>
+                        <th>Receipt #</th>
+                        <th>Customer</th>
+                        <th>Payment</th>
+                        <th>Total Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales_history %}
+                    <tr>
+                        <td class="text-white-50 small">{{ sale.transaction_date }}</td>
+                        <td class="fw-bold text-warning">{{ sale.sales_number }}</td>
+                        <td>{{ sale.customer_name }}</td>
+                        <td>
+                            <span class="badge bg-dark border border-secondary text-info">
+                                {{ sale.payment_method_name }}
+                            </span>
+                        </td>
+                        <td class="fw-bold text-danger">₱{{ "{:,.2f}".format(sale.total_amount) }}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No sales recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- AUDIT TAB -->
+    <div class="tab-pane fade" id="audit-tab">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle">
+                <thead class="table-secondary text-dark">
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Item</th>
+                        <th>Action</th>
+                        <th>Quantity</th>
+                        <th>Staff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in history %}
+                    <tr>
+                        <td class="text-white-50 small">{{ log.transaction_date }}</td>
+                        <td class="fw-bold">{{ log.item_name }}</td>
+                        <td>
+                            {% if log.transaction_type == 'IN' %}
+                                <span class="badge bg-success-subtle text-success border border-success">
+                                    <i class="bi bi-arrow-down-left"></i> IN
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger">
+                                    <i class="bi bi-arrow-up-right"></i> OUT
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold">{{ log.quantity }}</td>
+                        <td class="text-white-50">
+                            <i class="bi bi-person"></i> {{ log.user_name }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 {% endblock %}

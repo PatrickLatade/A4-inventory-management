@@ -88,6 +88,9 @@ def manage_users():
         LIMIT 20
     """).fetchall()
 
+    # --- 3. NEW: FETCH MECHANICS (This was the missing piece!) ---
+    mechanics = conn.execute("SELECT * FROM mechanics ORDER BY name ASC").fetchall()
+
     # --- 3. FETCH TRANSACTION HISTORY (The Audit Trail / Item Movements) ---
     history = conn.execute("""
         SELECT 
@@ -106,30 +109,100 @@ def manage_users():
 
     # --- 4. SERVE THE PAGE ---
     # Add sales_history=sales_history to the list of variables sent to the template
-    return render_template("users/users.html", users=users, history=history, sales_history=sales_history)
+    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
 def toggle_user(user_id):
     conn = get_db()
-    
-    # 1. Fetch the user to check their role
-    user = conn.execute("SELECT role, is_active, username FROM users WHERE id = ?", (user_id,)).fetchone()
-    
+
+    user = conn.execute(
+        "SELECT role, is_active, username FROM users WHERE id = ?",
+        (user_id,)
+    ).fetchone()
+
     if not user:
         flash("User not found.", "danger")
+        conn.close()
         return redirect(url_for('auth.manage_users'))
 
-    # 2. Protection: Don't allow disabling Admins
     if user['role'] == 'admin':
-        flash("Cannot disable an Administrator account for security reasons.", "danger")
+        flash("Administrator accounts cannot be disabled.", "danger")
+        conn.close()
+        return redirect(url_for('auth.manage_users'))
+
+    was_active = user['is_active']
+    new_status = 0 if was_active == 1 else 1
+
+    conn.execute(
+        "UPDATE users SET is_active = ? WHERE id = ?",
+        (new_status, user_id)
+    )
+    conn.commit()
+
+    # 🔔 Alerts
+    if new_status == 0:
+        flash(f"User {user['username']} has been disabled.", "danger")
+    elif was_active == 0 and new_status == 1:
+        flash(f"User {user['username']} has been re-enabled.", "warning")
     else:
-        # Toggle: If 1, make 0. If 0, make 1.
-        new_status = 0 if user['is_active'] == 1 else 1
-        conn.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, user_id))
+        flash(f"User {user['username']} has been activated.", "success")
+
+    conn.close()
+    return redirect(url_for('auth.manage_users'))
+
+
+@auth_bp.route("/mechanics/add", methods=["POST"])
+def add_mechanic():
+    name = request.form.get("name")
+    commission = request.form.get("commission")
+    phone = request.form.get("phone")
+    
+    conn = get_db()
+    try:
+        conn.execute("""
+            INSERT INTO mechanics (name, commission_rate, phone, is_active) 
+            VALUES (?, ?, ?, 1)
+        """, (name, commission, phone))
         conn.commit()
-        
-        status_text = "activated" if new_status == 1 else "disabled"
-        flash(f"User {user['username']} has been {status_text}.", "success")
+        flash(f"Mechanic {name} added successfully!", "success")
+    except Exception as e:
+        flash(f"Error adding mechanic: {str(e)}", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('auth.manage_users'))
+
+@auth_bp.route("/mechanics/toggle/<int:mechanic_id>", methods=["POST"])
+def toggle_mechanic(mechanic_id):
+    conn = get_db()
+
+    mechanic = conn.execute(
+        "SELECT is_active, name FROM mechanics WHERE id = ?",
+        (mechanic_id,)
+    ).fetchone()
+
+    if not mechanic:
+        flash("Mechanic not found.", "danger")
+        conn.close()
+        return redirect(url_for('auth.manage_users'))
+
+    was_active = mechanic['is_active']
+
+    # Toggle
+    new_status = 0 if was_active == 1 else 1
+    conn.execute(
+        "UPDATE mechanics SET is_active = ? WHERE id = ?",
+        (new_status, mechanic_id)
+    )
+    conn.commit()
+
+    # 🔔 Alerts
+    if new_status == 0:
+        flash(f"Mechanic {mechanic['name']} has been disabled.", "danger")
+    elif was_active == 0 and new_status == 1:
+        flash(f"Mechanic {mechanic['name']} has been re-enabled.", "warning")
+    else:
+        flash(f"Mechanic {mechanic['name']} has been activated.", "success")
 
     conn.close()
     return redirect(url_for('auth.manage_users'))
