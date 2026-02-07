@@ -1,27 +1,34 @@
 from db.database import get_db
 from datetime import datetime
 
-def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name=None, sale_id=None, unit_price=None, transaction_date=None, external_conn=None):
+def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name=None, 
+                    reference_id=None, reference_type=None, change_reason=None, 
+                    unit_price=None, transaction_date=None, external_conn=None):
+    """
+    The Universal Ledger Entry. 
+    Can handle Sales, Returns, Purchase Orders, Swaps, etc.
+    """
     # 1. Use existing connection or get a new one
     conn = external_conn if external_conn else get_db()
     
     # 2. UNIFORM TIME LOGIC
     if transaction_date:
-        # User/Secretary picked a time. Clean it.
         final_time = transaction_date.replace('T', ' ')
-        # If it's 11:00, make it 11:00:00
         if len(final_time) == 16:
             final_time += ":00"
     else:
-        # No time provided (like an 'IN' transaction), use exact NOW
         final_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 3. EXECUTE
+    # 3. EXECUTE - Updated to use the new "Golden" columns
     conn.execute("""
         INSERT INTO inventory_transactions 
-        (item_id, quantity, transaction_type, transaction_date, user_id, user_name, sale_id, unit_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (item_id, quantity, transaction_type, final_time, user_id, user_name, sale_id, unit_price))
+        (item_id, quantity, transaction_type, transaction_date, user_id, user_name, 
+        reference_id, reference_type, change_reason, unit_price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        item_id, quantity, transaction_type, final_time, user_id, user_name, 
+        reference_id, reference_type, change_reason, unit_price
+    ))
     
     # 4. Only commit/close if we opened the connection ourselves
     if not external_conn:

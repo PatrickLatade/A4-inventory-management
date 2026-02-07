@@ -76,7 +76,8 @@ def manage_users():
     # --- 2.5 NEW: FETCH SALES HISTORY ---
     # Using your actual table name 'sales' and matching the schema columns
     sales_history = conn.execute("""
-        SELECT 
+        SELECT
+            s.id,
             s.transaction_date, 
             s.sales_number, 
             s.customer_name, 
@@ -96,11 +97,17 @@ def manage_users():
         SELECT 
             t.transaction_date, 
             t.transaction_type, 
-            t.quantity, 
-            t.user_name, 
-            i.name as item_name
+            SUM(t.quantity) as total_qty, 
+            t.user_name,
+            t.change_reason,
+            t.reference_type,
+            t.reference_id,
+            s.sales_number,
+            GROUP_CONCAT(i.name, ', ') as items_summary
         FROM inventory_transactions t
         JOIN items i ON t.item_id = i.id
+        LEFT JOIN sales s ON t.reference_id = s.id AND t.reference_type = 'SALE'
+        GROUP BY t.reference_id, t.transaction_date, t.transaction_type
         ORDER BY t.transaction_date DESC
         LIMIT 50
     """).fetchall()
@@ -206,3 +213,30 @@ def toggle_mechanic(mechanic_id):
 
     conn.close()
     return redirect(url_for('auth.manage_users'))
+
+# --- NEW ROUTE: Get Sale Details for the Modal ---
+@auth_bp.route("/sales/details/<reference_id>")
+def sale_details(reference_id):
+    # Debug: Check your terminal/console to see what ID is being passed
+    print(f"DEBUG: Fetching details for Reference ID: {reference_id}")
+    
+    conn = get_db()
+    try:
+        # We ensure reference_id is treated as a string
+        ref_str = str(reference_id)
+        
+        items = conn.execute("""
+            SELECT i.name, t.quantity, t.unit_price
+            FROM inventory_transactions t
+            JOIN items i ON t.item_id = i.id
+            WHERE CAST(t.reference_id AS TEXT) = ? 
+            AND t.reference_type = 'SALE'
+        """, (ref_str,)).fetchall()
+        
+        print(f"DEBUG: Found {len(items)} items")
+        return {"items": [dict(ix) for ix in items]}
+    except Exception as e:
+        print(f"DEBUG ERROR: {str(e)}")
+        return {"error": str(e)}, 500
+    finally:
+        conn.close()

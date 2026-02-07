@@ -119,6 +119,37 @@ def init_db():
         conn.execute("ALTER TABLE mechanics ADD COLUMN is_active INTEGER DEFAULT 1")
     except: pass
 
+    # --- THE GOLDEN LEDGER MIGRATION ---
+
+    # 1. Rename sale_id to reference_id (The "Universal Key")
+    try:
+        conn.execute("ALTER TABLE inventory_transactions RENAME COLUMN sale_id TO reference_id")
+    except:
+        # If the column doesn't exist yet (new DB), add it directly
+        try:
+            conn.execute("ALTER TABLE inventory_transactions ADD COLUMN reference_id INTEGER")
+        except:
+            pass
+
+    # 2. Add the "Map" (Reference Type) - This tells us if ID is a Sale, PO, or Swap
+    try:
+        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN reference_type TEXT")
+    except:
+        pass
+
+    # 3. Add the "Reason" (Change Reason) - This tells us the 'Why' (Return, Recall, etc.)
+    try:
+        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN change_reason TEXT")
+    except:
+        pass
+
+    # 4. Clean up legacy data: If it has a reference_id but no type, it was a Sale.
+    conn.execute("""
+        UPDATE inventory_transactions 
+        SET reference_type = 'SALE' 
+        WHERE reference_id IS NOT NULL AND reference_type IS NULL
+    """)
+
     # 7. SEED DATA
     payment_data = [
         ('Cash', 'Cash'),

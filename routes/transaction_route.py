@@ -92,26 +92,18 @@ def save_transaction_out():
     data = request.get_json()
     conn = get_db()
     
-    # 1. TIME LOGIC
+    # 1. TIME LOGIC (remains the same)
     now_obj = datetime.now()
     raw_date = data.get('transaction_date')
-    
-    # Get current time string up to the minute for comparison
     current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
 
     if raw_date:
         clean_time = raw_date.replace('T', ' ')
-        
-        # Check if the user's input is just the current minute (the "stale" default)
-        # OR if they left it blank.
         if clean_time[:16] == current_minute or not raw_date:
-            # Use the fresh system time with live seconds
             clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
         elif len(clean_time) == 16:
-            # It's a different time (manual entry), so use :00
             clean_time += ":00"
     else:
-        # Fallback: nothing sent, use live system time
         clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
@@ -134,9 +126,11 @@ def save_transaction_out():
             clean_time
         ))
         
-        sale_id = cursor.lastrowid 
+        # This is the ID from the Sales table
+        new_sale_id = cursor.lastrowid 
 
         # 4. Loop items and call the Chef (add_transaction)
+        # --- THE CHANGE HAPPENS HERE ---
         for item in data['items']:
             add_transaction(
                 item_id=item['item_id'],
@@ -144,10 +138,15 @@ def save_transaction_out():
                 transaction_type='OUT',
                 user_id=session.get('user_id'),
                 user_name=session.get('username'),
-                sale_id=sale_id,
+                # RENAME: sale_id became reference_id
+                reference_id=new_sale_id, 
+                # ADD: We tell the ledger this ID belongs to a SALE
+                reference_type='SALE',
+                # ADD: A human-readable reason
+                change_reason='CUSTOMER_PURCHASE',
                 unit_price=item['price'],
-                transaction_date=clean_time, # Matches Sales perfectly
-                external_conn=conn           # Prevents "Database is locked"
+                transaction_date=clean_time,
+                external_conn=conn
             )
 
         conn.commit()
@@ -155,7 +154,7 @@ def save_transaction_out():
         return jsonify({"status": "success"}), 200
 
     except Exception as e:
-        conn.rollback() # Rolls back everything if any part fails
+        conn.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()
