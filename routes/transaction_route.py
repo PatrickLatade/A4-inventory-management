@@ -13,8 +13,9 @@ def transaction_out():
     conn = get_db()
     # We fetch items so the user can select them in the dropdown/search
     payment_methods = conn.execute("SELECT * FROM payment_methods").fetchall()
+    mechanics = conn.execute("SELECT id, name FROM mechanics WHERE is_active = 1").fetchall()
     conn.close()
-    return render_template("transactions/out.html", payment_methods=payment_methods)
+    return render_template("transactions/out.html", payment_methods=payment_methods, mechanics=mechanics)
 
 @transaction_bp.route("/transaction/in")
 def transaction_in():
@@ -92,7 +93,7 @@ def save_transaction_out():
     data = request.get_json()
     conn = get_db()
     
-    # 1. TIME LOGIC (remains the same)
+    # 1. TIME LOGIC
     now_obj = datetime.now()
     raw_date = data.get('transaction_date')
     current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
@@ -107,13 +108,16 @@ def save_transaction_out():
         clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        # 2. Start the Atomic Transaction
         conn.execute("BEGIN")
 
-        # 3. Insert into SALES
+        # 2. Insert into SALES
         cursor = conn.execute("""
-            INSERT INTO sales (sales_number, customer_name, total_amount, payment_method_id, reference_no, status, notes, user_id, transaction_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sales (
+                sales_number, customer_name, total_amount, 
+                payment_method_id, reference_no, status, 
+                notes, user_id, transaction_date, mechanic_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get('sales_number'), 
             data.get('customer_name'), 
@@ -123,38 +127,58 @@ def save_transaction_out():
             'Unresolved' if str(data.get('payment_method_id')) == '5' else 'Paid',
             data.get('notes'), 
             session.get('user_id'), 
-            clean_time
+            clean_time,
+            data.get('mechanic_id') or None
         ))
         
-        # This is the ID from the Sales table
         new_sale_id = cursor.lastrowid 
 
-        # 4. Loop items and call the Chef (add_transaction)
-        # --- THE CHANGE HAPPENS HERE ---
-        for item in data['items']:
+        # 3. Loop PHYSICAL items (Stock items)
+        for item in data.get('items', []):
             add_transaction(
                 item_id=item['item_id'],
                 quantity=item['quantity'],
                 transaction_type='OUT',
                 user_id=session.get('user_id'),
                 user_name=session.get('username'),
-                # RENAME: sale_id became reference_id
                 reference_id=new_sale_id, 
-                # ADD: We tell the ledger this ID belongs to a SALE
                 reference_type='SALE',
-                # ADD: A human-readable reason
                 change_reason='CUSTOMER_PURCHASE',
                 unit_price=item['price'],
                 transaction_date=clean_time,
                 external_conn=conn
             )
 
+        # --- FIX: MOVED OUTSIDE THE LOOP ---
+        service_subtotal = 0 
+
+        # 4. Loop LABOR items (Services)
+        for service in data.get('services', []):
+            price = float(service.get('price', 0))
+            service_subtotal += price
+
+            conn.execute("""
+                INSERT INTO sales_services (sale_id, service_id, price)
+                VALUES (?, ?, ?)
+            """, (
+                new_sale_id, 
+                service['service_id'], 
+                price
+            ))
+
+        # 5. Update main Sale with the subtotal
+        conn.execute("""
+            UPDATE sales SET service_fee = ? WHERE id = ?
+        """, (service_subtotal, new_sale_id))
+
         conn.commit()
+        
         flash(f"Sale #{data.get('sales_number')} recorded successfully!", "success")
         return jsonify({"status": "success"}), 200
 
     except Exception as e:
         conn.rollback()
+        print(f"DATABASE ERROR: {str(e)}") 
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()

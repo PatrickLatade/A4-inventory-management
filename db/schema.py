@@ -88,6 +88,18 @@ def init_db():
     )
     """)
 
+    # 8. SALES SERVICES TABLE (The "Labor" Ledger)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS sales_services (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        service_id INTEGER NOT NULL,
+        price REAL NOT NULL,
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (service_id) REFERENCES items(id)
+    )
+    """)
+
     # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
     # Add mechanic_id to sales

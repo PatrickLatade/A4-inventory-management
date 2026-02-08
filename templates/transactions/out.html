@@ -51,7 +51,7 @@
                     <input type="text" id="customer-name" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
                 </div>
 
-                <hr class="my-4 border-secondary opacity-25">
+                <hr class="my-4 border-secondary opacity-25">                
 
                 <div class="table-responsive">
                     <table class="table table-dark table-hover align-middle" id="items-table">
@@ -97,7 +97,54 @@
                     </button>
                 </div>
 
-                <hr class="my-4 border-secondary opacity-25">
+                <div class="col-12">
+                    <hr class="my-4 border-secondary opacity-25">
+                </div>
+
+                <div class="col-md-4">
+                        <label class="form-label small text-info">Assigned Mechanic (Optional)</label>
+                        <select class="form-select bg-dark text-white border-info" id="mechanic-id">
+                            <option value="">-- No Mechanic --</option>
+                            {% for mech in mechanics %}
+                                <option value="{{ mech.id }}">{{ mech.name }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+
+                <div id="services-section" class="mt-3" style="display: none;">
+                    <label class="form-label small text-info">Performed Services <span class="text-danger">* if mechanic chosen</span></label>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm align-middle" id="services-table">
+                            <thead>
+                                <tr class="small text-info">
+                                    <th style="width: 60%;">Service Description</th>
+                                    <th style="width: 35%;">Price</th>
+                                    <th style="width: 25%;">Subtotal</th>
+                                    <th style="width: 5%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="services-body">
+                                <tr class="service-row">
+                                    <td>
+                                        <div class="position-relative">
+                                            <input type="text" class="form-control form-control-sm bg-dark text-white border-info service-input" placeholder="Search service..." autocomplete="off">
+                                            <div class="search-suggestions list-group position-absolute w-100 shadow-lg" style="display: none; z-index: 1000;"></div>
+                                            <input type="hidden" class="service-id-input">
+                                        </div>
+                                    </td>
+                                    <td><input type="number" class="form-control form-control-sm bg-dark text-white border-info service-price-input"></td>
+                                    <td class="text-info fw-bold service-subtotal-display">₱0.00</td>
+                                    <td><button type="button" class="btn btn-sm text-secondary remove-service-btn">×</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <button class="btn btn-outline-info btn-sm" id="add-service-btn"><i class="bi bi-plus-circle"></i> Add Service</button>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <hr class="my-4 border-secondary opacity-25">
+                </div>
 
                 <div class="col-md-6">
                     <label class="form-label small text-white-50">Payment Category</label>
@@ -242,10 +289,25 @@ function calculateRow(row) {
     calculateGrandTotal();
 }
 
+function calculateServiceRow(row) {
+    const price = parseFloat(row.querySelector('.service-price-input').value) || 0;
+    // Services are usually 1x, so subtotal = price
+    const subtotal = price; 
+    
+    row.querySelector('.service-subtotal-display').innerText = 
+        `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    
+    calculateGrandTotal();
+}
+
 function calculateGrandTotal() {
     let total = 0;
 
     document.querySelectorAll('.subtotal-display').forEach(display => {
+        total += parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
+    });
+
+    document.querySelectorAll('.service-subtotal-display').forEach(display => {
         total += parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
     });
 
@@ -323,6 +385,68 @@ const handleTableSearch = async (input) => {
 };
 
 /* =========================================================
+   SERVICE SEARCH (REUSING ITEM API)
+========================================================= */
+const handleServiceSearch = async (input) => {
+    const query = input.value.trim();
+    const row = input.closest('tr');
+    const suggestions = row.querySelector('.search-suggestions');
+    const idInput = row.querySelector('.service-id-input');
+    const priceInput = row.querySelector('.service-price-input');
+
+    // Clear ID if the user changes the text
+    if (query.length < 2) {
+        idInput.value = '';
+        priceInput.value = '';
+        calculateServiceRow(row);
+        suggestions.style.display = 'none';
+        return;
+    }
+
+    try {
+        // Hitting the SAME API you already have
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        suggestions.innerHTML = '';
+
+        if (!data.items?.length) {
+            suggestions.style.display = 'none';
+            return;
+        }
+
+        // Show only the top 5 matches
+        data.items.slice(0, 5).forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
+
+            btn.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <strong>${item.name}</strong>
+                    <span class="text-info">₱${item.a4s_selling_price}</span>
+                </div>
+            `;
+
+            btn.onclick = () => {
+                input.value = item.name;
+                idInput.value = item.id;
+                priceInput.value = item.a4s_selling_price;
+                suggestions.style.display = 'none';
+                calculateServiceRow(row);
+                calculateGrandTotal(); // Update the big total at the bottom
+            };
+
+            suggestions.appendChild(btn);
+        });
+
+        suggestions.style.display = 'block';
+    } catch (err) {
+        console.error('Service search error:', err);
+    }
+};
+
+/* =========================================================
    EVENT LISTENERS
 ========================================================= */
 
@@ -372,10 +496,50 @@ document.getElementById('payment-category').addEventListener('change', function 
     validateForm();
 });
 
+/* =========================================================
+MECHANIC / SERVICES TOGGLE
+========================================================= */
+document.getElementById('mechanic-id').addEventListener('change', function() {
+    const servicesSection = document.getElementById('services-section');
+    
+    if (this.value !== "") {
+        // Mechanic is selected - Show section
+        servicesSection.style.display = 'block';
+    } else {
+        // No mechanic - Hide section and clear any services added
+        servicesSection.style.display = 'none';
+        clearServices(); 
+    }
+});
+
+// Helper to clear services if the user unselects a mechanic
+function clearServices() {
+    const tbody = document.getElementById('services-body');
+    const rows = tbody.querySelectorAll('.service-row');
+    
+    rows.forEach((row, index) => {
+        if (index === 0) {
+            // Reset the first row instead of deleting it
+            row.querySelector('.service-input').value = '';
+            row.querySelector('.service-id-input').value = '';
+            row.querySelector('.service-price-input').value = '';
+            // ADD THIS LINE:
+            row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+        } else {
+            row.remove();
+        }
+    });
+    // ADD THIS LINE to refresh the bottom total:
+    calculateGrandTotal();
+}
+
 // Table inputs
 document.addEventListener('input', (e) => {
     if (e.target.classList.contains('item-input')) {
         debounce(() => handleTableSearch(e.target), 300)();
+    }
+    if (e.target.classList.contains('service-input')) {
+        debounce(() => handleServiceSearch(e.target), 300)();
     }
 
     if (
@@ -383,6 +547,9 @@ document.addEventListener('input', (e) => {
         e.target.classList.contains('price-input')
     ) {
         calculateRow(e.target.closest('tr'));
+    }
+    if (e.target.classList.contains('service-price-input')) {
+        calculateServiceRow(e.target.closest('tr')); // Changed from calculateGrandTotal
     }
 });
 
@@ -485,6 +652,42 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     validateForm(); // Re-validate just in case
 });
 
+// Add Service Row
+document.getElementById('add-service-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    const tbody = document.getElementById('services-body');
+    const newRow = tbody.querySelector('.service-row').cloneNode(true);
+
+    // Reset values in the new row
+    newRow.querySelector('.service-input').value = '';
+    newRow.querySelector('.service-id-input').value = '';
+    newRow.querySelector('.service-price-input').value = '';
+    newRow.querySelector('.search-suggestions').style.display = 'none';
+    newRow.querySelector('.service-subtotal-display').innerText = '₱0.00';
+
+    tbody.appendChild(newRow);
+});
+
+// Remove Service Row
+document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('remove-service-btn')) return;
+    const row = e.target.closest('tr');
+    const rows = document.querySelectorAll('.service-row');
+    
+    if (rows.length > 1) {
+        row.remove();
+        calculateGrandTotal();
+    } else {
+        // Just clear it if it's the last row
+        row.querySelector('.service-input').value = '';
+        row.querySelector('.service-id-input').value = '';
+        row.querySelector('.service-price-input').value = '';
+        // ADD THIS LINE:
+        row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+        calculateGrandTotal();
+    }
+});
+
 /* =========================================================
    SUBMISSION
 ========================================================= */
@@ -532,6 +735,19 @@ async function saveTransaction(items) {
     let refNo = null;
 
     let finalDate;
+
+    const services = [];
+    document.querySelectorAll('.service-row').forEach(row => {
+        const sId = row.querySelector('.service-id-input').value;
+        const sPrice = parseFloat(row.querySelector('.service-price-input').value) || 0;
+        if (sId) {
+            services.push({
+                service_id: sId,
+                price: sPrice
+            });
+        }
+    });
+
     if (dateWasManuallyChanged) {
         // User picked a specific time, use that (minutes only is fine)
         finalDate = document.getElementById('trans-date').value;
@@ -550,6 +766,7 @@ async function saveTransaction(items) {
     const payload = {
         sales_number: document.getElementById('sales-number').value,
         customer_name: document.getElementById('customer-name').value,
+        mechanic_id: document.getElementById('mechanic-id').value || null,
         payment_method_id: paymentId,
         reference_no: refNo,
         total_amount: parseFloat(
@@ -557,7 +774,8 @@ async function saveTransaction(items) {
         ),
         notes: document.getElementById('trans-notes').value,
         transaction_date: finalDate,
-        items
+        items,
+        services: services
     };
 
     try {
