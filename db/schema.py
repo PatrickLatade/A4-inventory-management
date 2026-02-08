@@ -150,14 +150,22 @@ def init_db():
         WHERE reference_id IS NOT NULL AND reference_type IS NULL
     """)
 
-    # 7. SEED DATA
+    # 7. SEED DATA (Updated to separate Bank)
     payment_data = [
         ('Cash', 'Cash'),
         ('GCash', 'Online'),
         ('PayMaya', 'Online'),
-        ('Bank Transfer', 'Online'),
+        ('Bank Transfer', 'Bank'),     # The Trigger
+        ('General / Other', 'Bank'),   # The Fallback
+        ('BPI', 'Bank'),
+        ('BDO', 'Bank'),
         ('Utang', 'Debt')
     ]
+
+    # Force update existing records if they already exist
+    for name, cat in payment_data:
+        conn.execute("UPDATE payment_methods SET category = ? WHERE name = ?", (cat, name))
+        
     conn.executemany("INSERT OR IGNORE INTO payment_methods (name, category) VALUES (?, ?)", payment_data)
 
     conn.commit()
