@@ -88,6 +88,16 @@ def init_db():
     )
     """)
 
+    # 7. SERVICES TABLE (The Master List of Labor Types)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS services (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        category TEXT DEFAULT 'Labor',
+        is_active INTEGER DEFAULT 1
+    )
+    """)
+
     # 8. SALES SERVICES TABLE (The "Labor" Ledger)
     conn.execute("""
     CREATE TABLE IF NOT EXISTS sales_services (
@@ -96,7 +106,31 @@ def init_db():
         service_id INTEGER NOT NULL,
         price REAL NOT NULL,
         FOREIGN KEY (sale_id) REFERENCES sales(id),
-        FOREIGN KEY (service_id) REFERENCES items(id)
+        FOREIGN KEY (service_id) REFERENCES services(id)
+    )
+    """)
+
+    # 9. SALES ITEMS TABLE (Item-level sales & discounts)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS sales_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        sale_id INTEGER NOT NULL,
+        item_id INTEGER NOT NULL,
+
+        quantity INTEGER NOT NULL,
+
+        original_unit_price REAL NOT NULL,
+        discount_percent REAL DEFAULT 0,
+        discount_amount REAL DEFAULT 0,
+        final_unit_price REAL NOT NULL,
+
+        discounted_by INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (item_id) REFERENCES items(id),
+        FOREIGN KEY (discounted_by) REFERENCES users(id)
     )
     """)
 
@@ -173,6 +207,18 @@ def init_db():
         ('BDO', 'Bank'),
         ('Utang', 'Debt')
     ]
+
+    initial_services = [
+        ('Oil Change', 'Maintenance'),
+        ('Tire Mounting', 'Labor'),
+        ('Brake Cleaning', 'Maintenance'),
+        ('Tune-up', 'Labor'),
+        ('Chain Adjustment', 'Labor'),
+        ('Engine Overhaul', 'Major Repair')
+    ]
+    conn.executemany("""
+        INSERT OR IGNORE INTO services (name, category) VALUES (?, ?)
+    """, initial_services)
 
     # Force update existing records if they already exist
     for name, cat in payment_data:

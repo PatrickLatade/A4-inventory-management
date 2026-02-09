@@ -24,6 +24,13 @@
     .table-responsive {
         overflow: visible !important;
     }
+
+    .service-price-input {
+    border: 1px solid #0dcaf0 !important;
+    }
+    .service-price-input:focus {
+        box-shadow: 0 0 8px rgba(13, 202, 240, 0.5) !important;
+    }
 </style>
 {% endblock %}
 
@@ -60,6 +67,7 @@
                                 <th style="width: 40%;">Item</th>
                                 <th style="width: 15%;">Stock</th>
                                 <th style="width: 15%;">Qty OUT</th>
+                                <th style="width: 10%;">Discount %</th>
                                 <th style="width: 15%;">Price</th>
                                 <th style="width: 20%;">Subtotal</th>
                                 <th style="width: 5%;"></th> </tr>
@@ -84,7 +92,21 @@
                                     <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" step="1" value="1">
                                     <div class="stock-warning-text text-danger" style="font-size: 0.65rem; display: none;">Insufficient stock</div>
                                 </td>
-                                <td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary price-input"></td>
+                                <td>
+                                <input type="number"
+                                    class="form-control form-control-sm bg-dark text-white border-secondary discount-input" min="0" max="50" step="1" value="0">
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <small class="text-white-50 text-decoration-line-through original-price"
+                                            style="display:none;">
+                                            ₱0.00
+                                        </small>
+                                        <input type="number"
+                                            class="form-control form-control-sm bg-dark text-white border-secondary price-input"
+                                            readonly>
+                                    </div>
+                                </td>
                                 <td class="text-warning fw-bold subtotal-display">₱0.00</td>
                                 <td>
                                     <button type="button" class="btn btn-sm text-secondary remove-row-btn" tabindex="-1">×</button>
@@ -252,16 +274,50 @@ function validateForm() {
    CALCULATIONS
 ========================================================= */
 function calculateRow(row) {
+    if (!row.querySelector('.item-id-input').value) {
+    row.querySelector('.price-input').value = '';
+    row.querySelector('.subtotal-display').innerText = '₱0.00';
+    row.querySelector('.original-price').style.display = 'none';
+    return;
+    }
+
     const qtyInput = row.querySelector('.qty-input');
     const stockInput = row.querySelector('.stock-input');
     const warningLabel = row.querySelector('.stock-warning-text');
-    
+
     const qty = parseFloat(qtyInput.value) || 0;
-    const price = parseFloat(row.querySelector('.price-input').value) || 0;
     const stock = parseFloat(stockInput.value) || 0;
 
-    // VALIDATION LOGIC (Stock check + Zero/Negative check)
+    const basePrice = parseFloat(row.dataset.basePrice) || 0;
+    const priceInput = row.querySelector('.price-input');
+    const discountInput = row.querySelector('.discount-input');
+
+    // Clamp discount (0–50)
+    let discount = parseFloat(discountInput.value) || 0;
+    if (discount < 0) discount = 0;
+    if (discount > 50) discount = 50;
+    discountInput.value = discount;
+
+    // Apply discount
+    const discountedPrice = basePrice * (1 - discount / 100);
+    priceInput.value = discountedPrice.toFixed(2);
+
+    // Strikethrough UI
+    const originalPriceEl = row.querySelector('.original-price');
+
+    if (discount > 0) {
+        originalPriceEl.style.display = 'block';
+        originalPriceEl.innerText =
+            `₱${basePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    } else {
+        originalPriceEl.style.display = 'none';
+    }
+
+    /* ==========================
+    VALIDATION
+    ========================== */
     let errorMessage = "";
+
     if (qty <= 0) {
         errorMessage = "Qty must be at least 1";
     } else if (stockInput.value !== '--' && qty > stock) {
@@ -281,13 +337,16 @@ function calculateRow(row) {
         if (warningLabel) warningLabel.style.display = 'none';
     }
 
-    const displayQty = qty > 0 ? qty : 0;
-    const subtotal = displayQty * price;
+    /* ==========================
+    SUBTOTAL
+    ========================== */
+    const subtotal = qty * discountedPrice;
     row.querySelector('.subtotal-display').innerText =
         `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
     calculateGrandTotal();
 }
+
 
 function calculateServiceRow(row) {
     const price = parseFloat(row.querySelector('.service-price-input').value) || 0;
@@ -370,6 +429,7 @@ const handleTableSearch = async (input) => {
                 input.dataset.confirmedName = item.name;
                 row.querySelector('.item-id-input').value = item.id;
                 row.querySelector('.price-input').value = item.a4s_selling_price;
+                row.dataset.basePrice = item.a4s_selling_price;
                 row.querySelector('.stock-input').value = item.current_stock;
                 suggestions.style.display = 'none';
                 calculateRow(row);
@@ -385,58 +445,52 @@ const handleTableSearch = async (input) => {
 };
 
 /* =========================================================
-   SERVICE SEARCH (REUSING ITEM API)
+   SERVICE SEARCH
 ========================================================= */
 const handleServiceSearch = async (input) => {
     const query = input.value.trim();
     const row = input.closest('tr');
     const suggestions = row.querySelector('.search-suggestions');
     const idInput = row.querySelector('.service-id-input');
-    const priceInput = row.querySelector('.service-price-input');
 
     // Clear ID if the user changes the text
     if (query.length < 2) {
         idInput.value = '';
-        priceInput.value = '';
-        calculateServiceRow(row);
         suggestions.style.display = 'none';
         return;
     }
 
     try {
-        // Hitting the SAME API you already have
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/search/services?q=${encodeURIComponent(query)}`);
         const data = await res.json();
 
         suggestions.innerHTML = '';
 
-        if (!data.items?.length) {
+        if (!data.services?.length) {
             suggestions.style.display = 'none';
             return;
         }
 
-        // Show only the top 5 matches
-        data.items.slice(0, 5).forEach(item => {
+        data.services.forEach(service => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
 
             btn.innerHTML = `
                 <div class="d-flex justify-content-between">
-                    <strong>${item.name}</strong>
-                    <span class="text-info">₱${item.a4s_selling_price}</span>
+                    <strong>${service.name}</strong>
+                    <span class="text-info-50 small">${service.category}</span>
                 </div>
             `;
 
             btn.onclick = () => {
-                input.value = item.name;
-                idInput.value = item.id;
-                priceInput.value = item.a4s_selling_price;
+                input.value = service.name;
+                idInput.value = service.id;
+                // Leave price empty for manual input (Jake's price)
+                row.querySelector('.service-price-input').focus(); 
                 suggestions.style.display = 'none';
                 calculateServiceRow(row);
-                calculateGrandTotal(); // Update the big total at the bottom
             };
-
             suggestions.appendChild(btn);
         });
 
@@ -447,7 +501,7 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
-   EVENT LISTENERS
+EVENT LISTENERS
 ========================================================= */
 
 // Header inputs
@@ -544,7 +598,7 @@ document.addEventListener('input', (e) => {
 
     if (
         e.target.classList.contains('qty-input') ||
-        e.target.classList.contains('price-input')
+        e.target.classList.contains('discount-input')
     ) {
         calculateRow(e.target.closest('tr'));
     }
@@ -573,19 +627,39 @@ document.addEventListener('click', (e) => {
         // The fix: calculate total AND validate form immediately
         calculateGrandTotal(); 
     } else {
-        // Reset single remaining row
+        // Reset single remaining row (FULL RESET)
         row.querySelector('.item-id-input').value = '';
         row.querySelector('.item-input').value = '';
+        row.querySelector('.item-input').dataset.confirmedName = '';
+
         row.querySelector('.price-input').value = '';
         row.querySelector('.stock-input').value = '--';
-        
-        // Reset styles for the single row too
+
+        // Reset discount
+        const discountInput = row.querySelector('.discount-input');
+        discountInput.value = 0;
+
+        // Clear base price
+        delete row.dataset.basePrice;
+
+        // Hide strikethrough
+        const originalPriceEl = row.querySelector('.original-price');
+        originalPriceEl.style.display = 'none';
+        originalPriceEl.innerText = '₱0.00';
+
+        // Reset subtotal
+        row.querySelector('.subtotal-display').innerText = '₱0.00';
+
+        // Reset qty styles
         const qtyInp = row.querySelector('.qty-input');
+        qtyInp.value = 1;
         qtyInp.classList.remove('border-danger', 'text-danger');
         qtyInp.style.boxShadow = "none";
+
         row.querySelector('.stock-warning-text').style.display = 'none';
-        
-        calculateRow(row);
+
+        calculateGrandTotal();
+        validateForm();
     }
 });
 
@@ -627,29 +701,43 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
 
     const tbody = document.getElementById('transaction-body');
-    // Always clone the first row as a template, but we'll clean it up
     const newRow = tbody.querySelector('.item-row').cloneNode(true);
 
     // 1. Reset values
     newRow.querySelector('.item-id-input').value = '';
     newRow.querySelector('.item-input').value = '';
-    newRow.querySelector('.item-input').dataset.confirmedName = ''; // Reset confirmation
+    newRow.querySelector('.item-input').dataset.confirmedName = ''; 
     newRow.querySelector('.price-input').value = '';
     newRow.querySelector('.qty-input').value = 1;
     newRow.querySelector('.stock-input').value = '--';
     newRow.querySelector('.subtotal-display').innerText = '₱0.00';
 
-    // 2. Reset Styles (The Fix for the "Glow")
+    // --- NEW FIXES START HERE ---
+    // 2. Reset Discount
+    newRow.querySelector('.discount-input').value = 0;
+
+    // 3. Clear the hidden base price data attribute
+    delete newRow.dataset.basePrice;
+
+    // 4. Hide/Reset the strikethrough original price
+    const originalPriceEl = newRow.querySelector('.original-price');
+    if (originalPriceEl) {
+        originalPriceEl.style.display = 'none';
+        originalPriceEl.innerText = '₱0.00';
+    }
+    // --- NEW FIXES END HERE ---
+
+    // 5. Reset Styles (The Fix for the "Glow")
     const qtyInput = newRow.querySelector('.qty-input');
     qtyInput.classList.remove('border-danger', 'text-danger');
-    qtyInput.style.boxShadow = "none"; // Remove the glow
+    qtyInput.style.boxShadow = "none"; 
 
-    // 3. Hide Warning Text
+    // 6. Hide Warning Text
     const newWarning = newRow.querySelector('.stock-warning-text');
     if (newWarning) newWarning.style.display = 'none';
 
     tbody.appendChild(newRow);
-    validateForm(); // Re-validate just in case
+    validateForm(); 
 });
 
 // Add Service Row
@@ -709,10 +797,17 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
         if (name.trim() && !id) isClean = false;
         if (id && qty > 0) {
+            // Extract discount information from the row
+            const discountPercent = parseFloat(row.querySelector('.discount-input').value) || 0;
+            const originalPrice = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
+            const finalPrice = parseFloat(row.querySelector('.price-input').value);
+            
             validItems.push({
                 item_id: id,
                 quantity: qty,
-                price: row.querySelector('.price-input').value
+                original_price: originalPrice,
+                discount_percent: discountPercent,
+                final_price: finalPrice
             });
         }
     });

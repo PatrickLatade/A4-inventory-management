@@ -135,6 +135,16 @@ def save_transaction_out():
 
         # 3. Loop PHYSICAL items (Stock items)
         for item in data.get('items', []):
+            # Calculate discount amount
+            original_price = float(item.get('original_price', 0))
+            final_price = float(item.get('final_price', 0))
+            discount_percent_whole = float(item.get('discount_percent', 0))
+            
+            # Convert discount from whole number (10) to decimal (0.10) for consistency with markup
+            discount_percent_decimal = discount_percent_whole / 100
+            discount_amount = original_price - final_price
+            
+            # 3A. Save to inventory_transactions (with ORIGINAL price)
             add_transaction(
                 item_id=item['item_id'],
                 quantity=item['quantity'],
@@ -144,10 +154,30 @@ def save_transaction_out():
                 reference_id=new_sale_id, 
                 reference_type='SALE',
                 change_reason='CUSTOMER_PURCHASE',
-                unit_price=item['price'],
+                unit_price=original_price,  # <-- THE FIX: Use original price here
                 transaction_date=clean_time,
                 external_conn=conn
             )
+            
+            # 3B. Save to sales_items (with discount tracking)
+            conn.execute("""
+                INSERT INTO sales_items (
+                    sale_id, item_id, quantity, 
+                    original_unit_price, discount_percent, discount_amount, final_unit_price,
+                    discounted_by, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                new_sale_id,
+                item['item_id'],
+                item['quantity'],
+                original_price,
+                discount_percent_decimal,  # Store as decimal (0.10 instead of 10.0)
+                discount_amount,
+                final_price,
+                session.get('user_id') if discount_percent_whole > 0 else None,
+                clean_time  # Use the same timestamp as other tables
+            ))
 
         # --- FIX: MOVED OUTSIDE THE LOOP ---
         service_subtotal = 0 

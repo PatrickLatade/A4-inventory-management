@@ -84,3 +84,23 @@ def top_items_chart():
         "labels": [row["name"] for row in rows],
         "values": [row["total_out"] for row in rows]
     }
+
+@dashboard_api.route("/api/search/services")
+def search_services():
+    query = request.args.get('q', '').strip()
+    if len(query) < 2:
+        return jsonify({"services": []})
+
+    conn = get_db()
+    # Query your 'services' table, NOT the 'items' table
+    cursor = conn.execute("""
+        SELECT id, name, category 
+        FROM services 
+        WHERE name LIKE ? AND is_active = 1
+        LIMIT 10
+    """, (f'%{query}%',))
+    
+    services = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    return jsonify({"services": services})
