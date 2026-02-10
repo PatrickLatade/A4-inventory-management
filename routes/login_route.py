@@ -112,11 +112,14 @@ def manage_users():
         LIMIT 50
     """).fetchall()
 
+    services_list = conn.execute("SELECT * FROM services ORDER BY category ASC, name ASC LIMIT 20").fetchall()
+    categories = conn.execute("SELECT DISTINCT category FROM services WHERE category IS NOT NULL").fetchall()
+
     conn.close()
 
     # --- 4. SERVE THE PAGE ---
     # Add sales_history=sales_history to the list of variables sent to the template
-    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics)
+    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics, services_list=services_list, categories=categories)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
 def toggle_user(user_id):
@@ -265,3 +268,62 @@ def sale_details(reference_id):
         return {"error": str(e)}, 500
     finally:
         conn.close()
+
+@auth_bp.route("/services/add", methods=["POST"])
+def add_service():
+    name = request.form.get("name", "").strip()
+    existing_cat = request.form.get("existing_category")
+    new_cat = request.form.get("new_category", "").strip()
+
+    # --- CATEGORY LOGIC ---
+    if existing_cat == "__OTHER__" and new_cat:
+        conn = get_db()
+        # Normalization: Check if what they typed exists in another casing
+        match = conn.execute(
+            "SELECT category FROM services WHERE LOWER(TRIM(category)) = ? LIMIT 1",
+            (new_cat.lower(),)
+        ).fetchone()
+        category = match['category'] if match else new_cat
+    else:
+        # Fallback sequence: Selected Dropdown -> "Labor" if empty/invalid
+        category = existing_cat if existing_cat and existing_cat != "__OTHER__" else "Labor"
+
+    # --- DUPLICATE SERVICE CHECK ---
+    conn = get_db()
+    existing_service = conn.execute(
+        "SELECT name FROM services WHERE LOWER(TRIM(name)) = ? LIMIT 1",
+        (name.lower(),)
+    ).fetchone()
+
+    if existing_service:
+        flash(f"Service '{name}' already exists!", "warning")
+        conn.close()
+        return redirect(url_for('auth.manage_users'))
+
+    # --- SAVE ---
+    try:
+        conn.execute(
+            "INSERT INTO services (name, category, is_active) VALUES (?, ?, 1)",
+            (name, category)
+        )
+        conn.commit()
+        flash(f"Success: '{name}' added to '{category}'.", "success")
+    except Exception as e:
+        flash(f"Error: {str(e)}", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('auth.manage_users'))
+
+# NEW ROUTE: Toggle Service Status
+@auth_bp.route("/services/toggle/<int:service_id>", methods=["POST"])
+def toggle_service(service_id):
+    conn = get_db()
+    service = conn.execute("SELECT is_active, name FROM services WHERE id = ?", (service_id,)).fetchone()
+    if service:
+        new_status = 0 if service['is_active'] == 1 else 1
+        conn.execute("UPDATE services SET is_active = ? WHERE id = ?", (new_status, service_id))
+        conn.commit()
+        flash(f"Service '{service['name']}' status updated.", "info")
+    conn.close()
+    return redirect(url_for('auth.manage_users'))

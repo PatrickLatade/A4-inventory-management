@@ -196,35 +196,43 @@ def init_db():
         WHERE reference_id IS NOT NULL AND reference_type IS NULL
     """)
 
-    # 7. SEED DATA (Updated to separate Bank)
+    # --- IMPROVED SEEDING LOGIC ---
+
+    # 1. Seed Services (Only if empty)
+    service_count = conn.execute("SELECT COUNT(*) FROM services").fetchone()[0]
+    if service_count == 0:
+        initial_services = [
+            ('Oil Change', 'Maintenance'),
+            ('Tire Mounting', 'Labor'),
+            ('Brake Cleaning', 'Maintenance'),
+            ('Tune-up', 'Labor'),
+            ('Chain Adjustment', 'Labor'),
+            ('Engine Overhaul', 'Major Repair')
+        ]
+        conn.executemany("INSERT INTO services (name, category) VALUES (?, ?)", initial_services)
+        print("Services seeded successfully.")
+
+    # 2. Seed Payment Methods (Only if empty)
+    pm_count = conn.execute("SELECT COUNT(*) FROM payment_methods").fetchone()[0]
     payment_data = [
         ('Cash', 'Cash'),
         ('GCash', 'Online'),
         ('PayMaya', 'Online'),
-        ('Bank Transfer', 'Bank'),     # The Trigger
-        ('General / Other', 'Bank'),   # The Fallback
+        ('Bank Transfer', 'Bank'),
+        ('General / Other', 'Bank'),
         ('BPI', 'Bank'),
         ('BDO', 'Bank'),
         ('Utang', 'Debt')
     ]
 
-    initial_services = [
-        ('Oil Change', 'Maintenance'),
-        ('Tire Mounting', 'Labor'),
-        ('Brake Cleaning', 'Maintenance'),
-        ('Tune-up', 'Labor'),
-        ('Chain Adjustment', 'Labor'),
-        ('Engine Overhaul', 'Major Repair')
-    ]
-    conn.executemany("""
-        INSERT OR IGNORE INTO services (name, category) VALUES (?, ?)
-    """, initial_services)
-
-    # Force update existing records if they already exist
-    for name, cat in payment_data:
-        conn.execute("UPDATE payment_methods SET category = ? WHERE name = ?", (cat, name))
-        
-    conn.executemany("INSERT OR IGNORE INTO payment_methods (name, category) VALUES (?, ?)", payment_data)
+    if pm_count == 0:
+        conn.executemany("INSERT INTO payment_methods (name, category) VALUES (?, ?)", payment_data)
+        print("Payment methods seeded successfully.")
+    else:
+        # If they already exist, we just update the categories to keep them in sync
+        # This UPDATE won't burn IDs!
+        for name, cat in payment_data:
+            conn.execute("UPDATE payment_methods SET category = ? WHERE name = ?", (cat, name))
 
     conn.commit()
     conn.close()

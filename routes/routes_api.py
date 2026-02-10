@@ -88,17 +88,24 @@ def top_items_chart():
 @dashboard_api.route("/api/search/services")
 def search_services():
     query = request.args.get('q', '').strip()
-    if len(query) < 2:
+    if not query:
         return jsonify({"services": []})
 
+    # Split the query into words for forgiving search
+    words = query.split()
+    # Create multiple LIKE clauses: WHERE name LIKE %word1% AND name LIKE %word2%...
+    where_clause = " AND ".join(["(name LIKE ? OR category LIKE ?)" for _ in words])
+    params = []
+    for word in words:
+        params.extend([f'%{word}%', f'%{word}%'])
+
     conn = get_db()
-    # Query your 'services' table, NOT the 'items' table
-    cursor = conn.execute("""
-        SELECT id, name, category 
+    cursor = conn.execute(f"""
+        SELECT id, name, category, is_active
         FROM services 
-        WHERE name LIKE ? AND is_active = 1
-        LIMIT 10
-    """, (f'%{query}%',))
+        WHERE {where_clause}
+        LIMIT 20
+    """, params)
     
     services = [dict(row) for row in cursor.fetchall()]
     conn.close()

@@ -94,6 +94,26 @@
     .toggle-btn.text-muted small {
         color: #6c757d !important;
     }
+
+    #newCategoryInput:disabled {
+    background-color: #121212 !important; /* Very dark/black background */
+    color: #555 !important;              /* Dimmed text color */
+    border-color: #333 !important;        /* Darker border */
+    cursor: not-allowed;                  /* Shows the "stop" cursor */
+    opacity: 1;                           /* Prevents browser-default transparency */
+    }
+
+    #newCategoryInput:not(:disabled) {
+    border-color: #e63946; /* Match your red theme when active */
+    }
+
+    #newCategoryInput {
+    transition: all 0.3s ease;
+    }
+
+    #newCategoryInput:required {
+    border-left: 4px solid #e63946; /* Visual hint that this is now mandatory */
+    }
 </style>
 {% endblock %}
 
@@ -115,6 +135,11 @@
     <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
             <i class="bi bi-tools"></i> Mechanics
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#manage-services-tab" type="button">
+            <i class="bi bi-gear-wide-connected"></i> Services
         </button>
     </li>
     <li class="nav-item">
@@ -282,6 +307,89 @@
         </div>
     </div>
 
+    <!-- SERVICES TAB -->
+    <div class="tab-pane fade" id="manage-services-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
+            <form action="{{ url_for('auth.add_service') }}" method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <input name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
+                </div>
+                <div class="col-md-3">
+                    <select name="existing_category" id="categorySelect" class="form-select bg-dark text-white border-secondary">
+                        <option value="Labor">Labor</option> 
+                        {% for cat in categories %}
+                            {% if cat.category != 'Labor' %}
+                                <option value="{{ cat.category }}">{{ cat.category }}</option>
+                            {% endif %}
+                        {% endfor %}
+                        <option value="__OTHER__">-- New Category --</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input name="new_category" id="newCategoryInput" class="form-control" placeholder="Select '-- New Category --' to type" disabled>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-plus-lg"></i> Add
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-dark border-secondary text-white-50">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="serviceSearch" class="form-control bg-dark text-white border-secondary" 
+                        placeholder="Search services (e.g. 'change oil')..." onkeyup="filterServices()">
+                </div>
+                <small class="text-muted">Showing up to 20 results from the master list.</small>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Service Name</th>
+                        <th>Category</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="servicesBody">
+                    {% for svc in services_list %}
+                    <tr>
+                        <td class="fw-bold">{{ svc.name }}</td>
+                        <td><span class="badge bg-dark border border-secondary text-info">{{ svc.category }}</span></td>
+                        <td class="text-center">
+                            <form action="{{ url_for('auth.toggle_service', service_id=svc.id) }}" method="POST">
+                                {% if svc.is_active == 1 %}
+                                    <button type="submit" class="toggle-btn text-success">
+                                        <i class="bi bi-toggle-on fs-3"></i>
+                                        <small class="d-block">ACTIVE</small>
+                                    </button>
+                                {% else %}
+                                    <button type="submit" class="toggle-btn text-muted">
+                                        <i class="bi bi-toggle-off fs-3"></i>
+                                        <small class="d-block">DISABLED</small>
+                                    </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">No services configured yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- SALES TAB -->
     <div class="tab-pane fade" id="sales-tab">
         <div class="table-responsive">
@@ -430,6 +538,83 @@
 
 {% block scripts %}
 <script>
+let initialServicesHTML = "";
+document.addEventListener('DOMContentLoaded', () => {
+    initialServicesHTML = document.getElementById('servicesBody').innerHTML;
+    
+    syncCategoryFields();
+});
+
+    const categorySelect = document.getElementById('categorySelect');
+    const newCategoryInput = document.getElementById('newCategoryInput');
+
+function syncCategoryFields() {
+    const categorySelect = document.getElementById('categorySelect');
+    const newCategoryInput = document.getElementById('newCategoryInput');
+
+    if (categorySelect.value === "__OTHER__") {
+        // ENABLED STATE
+        newCategoryInput.disabled = false;
+        newCategoryInput.required = true; // Force validation
+        newCategoryInput.placeholder = "Type new category name...";
+        newCategoryInput.focus(); // Quality of Life: auto-focus for the user
+    } else {
+        // DISABLED STATE
+        newCategoryInput.value = ""; 
+        newCategoryInput.disabled = true;
+        newCategoryInput.required = false; // Remove validation
+        newCategoryInput.placeholder = "Select '-- New Category --' to type";
+    }
+}
+
+categorySelect.addEventListener('change', syncCategoryFields);
+
+let searchTimeout;
+function filterServices() {
+    const query = document.getElementById('serviceSearch').value.trim();
+    const tbody = document.getElementById('servicesBody');
+
+    // FIX: If the search box is empty, restore the original 20 items and stop
+    if (query.length === 0) {
+        tbody.innerHTML = initialServicesHTML;
+        return;
+    }
+
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        // Optional: don't search for just 1 character to save server resources
+        if (query.length < 1) return; 
+
+        fetch(`/api/search/services?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                tbody.innerHTML = ''; 
+
+                if (data.services.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No services found.</td></tr>';
+                    return;
+                }
+
+                data.services.forEach(svc => {
+                    let statusHtml = svc.is_active === 1 
+                        ? `<button type="submit" class="toggle-btn text-success"><i class="bi bi-toggle-on fs-3"></i><small class="d-block">ACTIVE</small></button>`
+                        : `<button type="submit" class="toggle-btn text-muted"><i class="bi bi-toggle-off fs-3"></i><small class="d-block">DISABLED</small></button>`;
+
+                    tbody.innerHTML += `
+                        <tr class="service-row">
+                            <td class="fw-bold service-name">${svc.name}</td>
+                            <td><span class="badge bg-dark border border-secondary text-info">${svc.category}</span></td>
+                            <td class="text-center">
+                                <form action="/services/toggle/${svc.id}" method="POST">
+                                    ${statusHtml}
+                                </form>
+                            </td>
+                        </tr>`;
+                });
+            });
+    }, 300);
+}
+
 function viewSaleDetails(saleID, displayNum) {
     document.getElementById('modalSaleID').innerText = displayNum || saleID;
     const list = document.getElementById('saleItemsList');
