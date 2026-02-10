@@ -413,7 +413,7 @@
                         <thead>
                             <tr>
                                 <th>Item Name</th>
-                                <th class="text-center">Price</th>
+                                <th class="text-center">Price (₱)</th>
                                 <th class="text-center">Qty</th>
                             </tr>
                         </thead>
@@ -431,34 +431,73 @@
 {% block scripts %}
 <script>
 function viewSaleDetails(saleID, displayNum) {
-    // Show loading state or clear previous content
     document.getElementById('modalSaleID').innerText = displayNum || saleID;
     const list = document.getElementById('saleItemsList');
     list.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
     
-    // Show the modal
     const myModal = new bootstrap.Modal(document.getElementById('saleDetailsModal'));
     myModal.show();
 
-    // Fetch details from our new route
     fetch(`/sales/details/${saleID}`)
         .then(response => response.json())
         .then(data => {
             list.innerHTML = '';
+            
+            // 1. Show Physical Items
             data.items.forEach(item => {
-                // Format the price to currency format
-                const price = parseFloat(item.unit_price).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                });
+                let hasDisc = item.discount_amount && item.discount_amount > 0;
+                let itemLabel = `<div>${item.name}</div>`;
+                if(hasDisc) {
+                    itemLabel += `<small class="text-success">Disc: -₱${item.discount_amount.toFixed(2)}</small>`;
+                }
                 
+                let priceDisplay = `<div>₱${parseFloat(item.original_price).toFixed(2)}</div>`;
+                if(hasDisc) {
+                    priceDisplay += `<div class="text-success fw-bold">₱${parseFloat(item.final_unit_price).toFixed(2)}</div>`;
+                }
+
                 list.innerHTML += `
                     <tr>
-                        <td>${item.name}</td>
-                        <td class="text-center">₱${price}</td>
-                        <td class="text-center fw-bold text-warning">${item.quantity}</td>
+                        <td>${itemLabel}</td>
+                        <td class="text-center align-middle">${priceDisplay}</td>
+                        <td class="text-center align-middle fw-bold text-warning">${item.quantity}</td>
                     </tr>`;
             });
+
+            // 2. Show Services/Labor
+            if(data.services && data.services.length > 0) {
+                let mechanicLabel = data.mechanic ? ` (by ${data.mechanic})` : '';
+                list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services${mechanicLabel}</td></tr>`;
+                data.services.forEach(svc => {
+                    list.innerHTML += `
+                        <tr>
+                            <td>${svc.name}</td>
+                            <td class="text-center">₱${parseFloat(svc.price).toFixed(2)}</td>
+                            <td class="text-center text-muted">1</td>
+                        </tr>`;
+                });
+            }
+
+            // 3. The Golden Total Row with Payment Badge
+            const badgeMap = {
+            'Cash': 'bg-success',
+            'Utang': 'bg-warning'
+            };
+            let badgeClass = badgeMap[data.payment_method] || 'bg-primary';
+            
+            list.innerHTML += `
+                <tr class="border-top border-danger">
+                    <td class="fw-bold pt-3 text-danger">
+                        GRAND TOTAL 
+                        <span class="badge ${badgeClass} ms-2" style="font-size: 0.65rem; vertical-align: middle;">
+                            ${data.payment_method}
+                        </span>
+                    </td>
+                    <td class="pt-3 fw-bold fs-5 text-danger text-center">
+                        ₱${parseFloat(data.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td></td>
+                </tr>`;
         });
 }
 </script>

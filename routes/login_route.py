@@ -217,26 +217,51 @@ def toggle_mechanic(mechanic_id):
 # --- NEW ROUTE: Get Sale Details for the Modal ---
 @auth_bp.route("/sales/details/<reference_id>")
 def sale_details(reference_id):
-    # Debug: Check your terminal/console to see what ID is being passed
-    print(f"DEBUG: Fetching details for Reference ID: {reference_id}")
-    
     conn = get_db()
     try:
-        # We ensure reference_id is treated as a string
-        ref_str = str(reference_id)
-        
+        # 1. Fetch Sale Metadata (Total, Mechanic, AND Payment Method)
+        sale_info = conn.execute("""
+            SELECT 
+                s.total_amount, 
+                m.name as mechanic_name,
+                pm.name as payment_method
+            FROM sales s
+            LEFT JOIN mechanics m ON s.mechanic_id = m.id
+            LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
+            WHERE s.id = ?
+        """, (reference_id,)).fetchone()
+
+        # 2. Fetch Items
         items = conn.execute("""
-            SELECT i.name, t.quantity, t.unit_price
+            SELECT 
+                i.name, 
+                t.quantity, 
+                t.unit_price as original_price,
+                si.discount_amount,
+                si.final_unit_price
             FROM inventory_transactions t
             JOIN items i ON t.item_id = i.id
+            LEFT JOIN sales_items si ON (t.reference_id = si.sale_id AND t.item_id = si.item_id)
             WHERE CAST(t.reference_id AS TEXT) = ? 
             AND t.reference_type = 'SALE'
-        """, (ref_str,)).fetchall()
+        """, (str(reference_id),)).fetchall()
+
+        # 3. Fetch Services
+        services = conn.execute("""
+            SELECT s.name, ss.price
+            FROM sales_services ss
+            JOIN services s ON ss.service_id = s.id
+            WHERE ss.sale_id = ?
+        """, (reference_id,)).fetchall()
         
-        print(f"DEBUG: Found {len(items)} items")
-        return {"items": [dict(ix) for ix in items]}
+        return {
+            "total_amount": sale_info["total_amount"] if sale_info else 0,
+            "mechanic": sale_info["mechanic_name"] if sale_info else None,
+            "payment_method": sale_info["payment_method"] if sale_info else "N/A",
+            "items": [dict(ix) for ix in items],
+            "services": [dict(sx) for sx in services]
+        }
     except Exception as e:
-        print(f"DEBUG ERROR: {str(e)}")
         return {"error": str(e)}, 500
     finally:
         conn.close()
