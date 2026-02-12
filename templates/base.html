@@ -12,7 +12,7 @@
         body { background-color: #121212; color: #ffffff; }
 
         /* =========================
-           HEADER
+        HEADER
         ========================== */
         header {
             display: flex;
@@ -29,7 +29,7 @@
         header h1 { color: #e63946; font-size: 2rem; margin: 0; }
 
         /* =========================
-           GLOBAL COMPONENTS
+        GLOBAL COMPONENTS
         ========================== */
         .btn-danger { background-color: #e63946; border: none; }
         .btn-danger:hover { background-color: #d62839; }
@@ -69,8 +69,17 @@
             background-color: #252525 !important;
         }
 
+        html {
+            overflow-y: scroll;
+        }
+
+        
+        body.modal-open {
+            padding-right: 0 !important;
+        }
+
         /* =========================
-           ALERT ANIMATION
+        ALERT ANIMATION
         ========================== */
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
@@ -82,37 +91,56 @@
         }
 
         /* =========================
-           CUSTOM ALERT STYLES
+        CUSTOM ALERT STYLES
         ========================== */
-        .alert-success {
+        .alert-success-custom {
             background-color: #2e7d32 !important;
             color: #ffffff;
             border: none;
         }
 
-        .alert-danger {
+        .alert-danger-custom {
             background-color: #e63946 !important;
             color: #ffffff;
             border: none;
         }
 
-        .alert-warning {
+        .alert-warning-custom {
             background-color: #f4a261 !important;
             color: #000000;
             border: none;
         }
 
-        .alert-info {
+        .alert-info-custom {
             background-color: #1e88e5 !important;
             color: #ffffff;
             border: none;
+        }
+
+        .bg-success-custom {
+            background-color: #2e7d32 !important;
+            color: #ffffff;
+        }
+        .bg-danger-custom {
+            background-color: #e63946 !important;
+            color: #ffffff;
+        }
+        .bg-warning-custom {
+            background-color: #e6d70b !important;
+            color: #000000;
+        }
+        .bg-info-custom {
+            background-color: #1e88e5 !important;
+            color: #ffffff;
         }
     </style>
 
     {% block styles %}{% endblock %}
 </head>
 
-<body class="container py-4">
+<body class="py-4">
+
+<div class="container">
 
 <header>
     <div class="d-flex align-items-center">

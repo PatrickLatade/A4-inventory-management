@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify
 from services.transactions_service import add_transaction
 from services.inventory_service import get_unique_categories
-from services.transactions_service import add_item_to_db
+from services.transactions_service import add_item_to_db, format_date, get_status_class
 from db.database import get_db
 from datetime import datetime
 
@@ -225,7 +225,7 @@ def save_purchase_order():
     data = request.get_json()
     conn = get_db()
     
-    # 1. TIME LOGIC (The Philippine Fix)
+    # 1. TIME LOGIC
     now_obj = datetime.now()
     clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
     today_str = now_obj.strftime("%Y%m%d")
@@ -237,36 +237,47 @@ def save_purchase_order():
         count = conn.execute("SELECT COUNT(*) FROM purchase_orders WHERE po_number LIKE ?", (f"PO-{today_str}%",)).fetchone()[0]
         po_number = f"PO-{today_str}-{str(count + 1).zfill(3)}"
 
-        # 3. Insert the Header (Explicitly passing clean_time to created_at)
+        # 3. Insert the Header
         cursor = conn.execute("""
             INSERT INTO purchase_orders (po_number, vendor_name, notes, status, created_by, created_at)
             VALUES (?, ?, ?, 'PENDING', ?, ?)
-        """, (
-            po_number,
-            data.get('vendor_name'),
-            data.get('notes'),
-            session.get('user_id'),
-            clean_time  # <--- Manual Timestamp
-        ))
+        """, (po_number, data.get('vendor_name'), data.get('notes'), session.get('user_id'), clean_time))
         new_po_id = cursor.lastrowid
 
-        # 4. Insert the Line Items
+        # 4. Insert the Line Items & LOG TO AUDIT TRAIL
         total_order_amount = 0
         for item in data.get('items', []):
             qty = int(item['qty'])
             cost = float(item['cost'])
             total_order_amount += (qty * cost)
             
+            # Save to PO Items table
             conn.execute("""
                 INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
                 VALUES (?, ?, ?, ?)
             """, (new_po_id, item['id'], qty, cost))
 
+            # --- NEW: Log the ORDER placement in Audit Trail ---
+            # We use transaction_type='ORDER'
+            add_transaction(
+                item_id=item['id'],
+                quantity=qty,
+                transaction_type='ORDER',  # <--- Crucial: 'ORDER' type
+                user_id=session.get('user_id'),
+                user_name=session.get('username'),
+                reference_id=new_po_id,
+                reference_type='PURCHASE_ORDER',
+                change_reason='ORDER_PLACEMENT',
+                unit_price=cost,
+                transaction_date=clean_time,
+                external_conn=conn
+            )
+
         # 5. Update the Header with total amount
         conn.execute("UPDATE purchase_orders SET total_amount = ? WHERE id = ?", (total_order_amount, new_po_id))
 
         conn.commit()
-        flash(f"Purchase Order {po_number} saved!", "success")
+        flash(f"Purchase Order {po_number} saved and logged!", "success")
         return jsonify({"status": "success", "po_id": new_po_id}), 200
 
     except Exception as e:
@@ -389,3 +400,51 @@ def confirm_reception():
         return jsonify({"status": "error", "message": str(e)})
     finally:
         conn.close()
+
+@transaction_bp.route("/purchase-order/details/<int:po_id>")
+def get_po_details(po_id):
+    conn = get_db()
+    po = conn.execute("""
+        SELECT po_number, vendor_name, status, total_amount, created_at, received_at 
+        FROM purchase_orders
+        WHERE id = ?
+    """, (po_id,)).fetchone()
+
+    if not po:
+        conn.close()
+        return jsonify({"error": "Order not found"}), 404
+
+    mode = 'IN' if po['received_at'] else 'ORDER'
+    display_created_at = format_date(po['created_at'])
+    display_received_at = format_date(po['received_at'])
+
+    items = conn.execute("""
+        SELECT i.name, 
+            pi.quantity_ordered, 
+            pi.unit_cost AS unit_price,
+            (pi.quantity_ordered * pi.unit_cost) AS subtotal
+        FROM po_items pi
+        JOIN items i ON pi.item_id = i.id
+        WHERE pi.po_id = ?
+    """, (po_id,)).fetchall()
+    conn.close()
+
+    return jsonify({
+        "po_number": po['po_number'],
+        "vendor_name": po['vendor_name'],
+        "status": po['status'] or "Pending",
+        "status_class": get_status_class(po['status']),  # <-- added
+        "total_amount": po['total_amount'],
+        "mode": mode,
+        "created_at": display_created_at,
+        "received_at": display_received_at,
+        "items": [
+            {
+                "name": item['name'],
+                "quantity_ordered": item['quantity_ordered'],
+                "unit_price": float(item['unit_price']),
+                "subtotal": float(item['subtotal'])
+            }
+            for item in items
+        ]
+    })

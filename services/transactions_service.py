@@ -6,7 +6,7 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
                     unit_price=None, transaction_date=None, external_conn=None):
     """
     The Universal Ledger Entry. 
-    Can handle Sales, Returns, Purchase Orders, Swaps, etc.
+    Handles Logging and Stock Updates.
     """
     # 1. Use existing connection or get a new one
     conn = external_conn if external_conn else get_db()
@@ -19,7 +19,7 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
     else:
         final_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 3. EXECUTE - Updated to use the new "Golden" columns
+    # 3. LOG THE TRANSACTION - This happens for ALL types (IN, OUT, and ORDER)
     conn.execute("""
         INSERT INTO inventory_transactions 
         (item_id, quantity, transaction_type, transaction_date, user_id, user_name, 
@@ -30,7 +30,7 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
         reference_id, reference_type, change_reason, unit_price
     ))
     
-    # 4. Only commit/close if we opened the connection ourselves
+    # 5. Only commit/close if we opened the connection ourselves
     if not external_conn:
         conn.commit()
         conn.close()
@@ -40,9 +40,8 @@ def add_item_to_db(data):
     Saves a brand new product to the items table.
     """
     conn = get_db()
-    
-    # We use a cursor so we can get the ID of the item we just created
     cursor = conn.cursor()
+    
     cursor.execute("""
         INSERT INTO items (
             name, category, description, pack_size, 
@@ -55,9 +54,30 @@ def add_item_to_db(data):
         data['markup'], data['reorder_level'], data['vendor'], data['mechanic']
     ))
     
-    # This grabs the ID of the new item (we will need this for the "IN" transaction later!)
     new_id = cursor.lastrowid
-    
     conn.commit()
     conn.close()
     return new_id
+
+def format_date(dt_str):
+    """Format datetime string for display with date + time. Returns '-' if None/empty."""
+    if not dt_str or dt_str.strip() == '':
+        return "-"
+    try:
+        return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").strftime("%b %d, %Y %I:%M %p")
+    except:
+        return dt_str  # fallback if parsing fails
+    
+def get_status_class(status):
+    """Return bootstrap class for status badge."""
+    status = (status or "Pending").upper()
+    if status == "COMPLETED":
+        return "bg-success-custom"
+    elif status == "PARTIAL":
+        return "bg-info-custom"
+    elif status == "PENDING":
+        return "bg-warning-custom text-dark"
+    elif status == "CANCELLED":
+        return "bg-danger-custom"
+    else:
+        return "bg-secondary"

@@ -79,7 +79,7 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         item_id INTEGER NOT NULL,
         quantity INTEGER NOT NULL,
-        transaction_type TEXT CHECK(transaction_type IN ('IN', 'OUT')),
+        transaction_type TEXT CHECK(transaction_type IN ('IN', 'OUT', 'ORDER')),
         transaction_date DATETIME DEFAULT (DATETIME('now', 'localtime')),
         user_id INTEGER,
         user_name TEXT,

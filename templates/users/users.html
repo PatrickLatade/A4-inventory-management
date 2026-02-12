@@ -114,6 +114,18 @@
     #newCategoryInput:required {
     border-left: 4px solid #e63946; /* Visual hint that this is now mandatory */
     }
+
+    .audit-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 110px;
+    height: 36px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.6px;
+    border-radius: 50px;
+    }
 </style>
 {% endblock %}
 
@@ -439,74 +451,86 @@
     </div>
 
     <!-- AUDIT TAB -->
-        <div class="tab-pane fade" id="audit-tab">
-            <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle">
-                    <thead>
-                        <tr class="border-bottom border-secondary">
-                            <th>Date & Time</th>
-                            <th>Item Summary</th>
-                            <th class="text-center">Movement</th>
-                            <th>Reason</th>
-                            <th class="text-center">Qty</th>
-                            <th>Reference</th>
-                            <th>Staff</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in history %}
-                        <tr>
-                            <td class="text-white-50 small">{{ log.transaction_date }}</td>
-                            <td>
-                                <div class="fw-bold text-white">{{ log.items_summary[:40] }}{% if log.items_summary|length > 40 %}...{% endif %}</div>
-                            </td>
-                            <td class="text-center">
-                                {% set type = log.transaction_type|upper %}
-                                {% set display_type = log.transaction_type|replace('_', ' ')|upper %}
-                                
-                                {# RED PILL: If it's a Sale or specifically says 'OUT' #}
-                                {% if type == 'SALE' or type == 'OUT' or type == 'REMOVE' %}
-                                    <span class="badge rounded-pill bg-danger px-3 py-2" style="min-width: 80px;">
-                                        <i class="bi bi-box-arrow-up me-1"></i> OUT
-                                    </span>
-
-                                {# GREEN PILL: If it's a Restock or says 'IN' #}
-                                {% elif type in ['RESTOCK', 'IN', 'ADD', 'RECEIVED'] %}
-                                    <span class="badge rounded-pill bg-success px-3 py-2" style="min-width: 80px;">
-                                        <i class="bi bi-box-arrow-in-down me-1"></i> IN
-                                    </span>
-
-                                {# GRAY PILL: Fallback for anything else #}
-                                {% else %}
-                                    <span class="badge rounded-pill bg-secondary px-3 py-2" style="min-width: 80px;">
-                                        {{ log.transaction_type }}
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="text-white-50 small fst-italic fw-bold">
-                                    {{ log.change_reason and log.change_reason|replace('_', ' ') or '<span class="text-muted fw-bold">No reason provided</span>'|safe }}
+    <div class="tab-pane fade" id="audit-tab">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th>Date & Time</th>
+                        <th>Item Summary</th>
+                        <th class="text-center">Movement</th>
+                        <th>Reason</th>
+                        <th class="text-center">Qty</th>
+                        <th>Reference</th>
+                        <th>Staff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in history %}
+                    <tr>
+                        <td class="text-white-50 small">{{ log.transaction_date }}</td>
+                        <td>
+                            <div class="fw-bold text-white">{{ log.items_summary[:40] }}{% if log.items_summary|length > 40 %}...{% endif %}</div>
+                        </td>
+                        <td class="text-center">
+                            {% set type = log.transaction_type|upper %}
+                            
+                            {# RED PILL: OUT #}
+                            {% if type == 'SALE' or type == 'OUT' or type == 'REMOVE' %}
+                                <span class="badge rounded-pill bg-danger audit-badge">
+                                    <i class="bi bi-box-arrow-up me-1"></i> OUT
                                 </span>
-                            </td>
-                            <td class="text-center fw-bold">{{ log.total_qty }}</td>
-                            <td>
-                                {% if log.reference_id %}
-                                    {# 1st Arg: reference_id (for the DB fetch) | 2nd Arg: sales_number or ID (for the UI) #}
-                                    <button class="btn btn-sm btn-outline-info border-0" 
-                                            onclick="viewSaleDetails('{{ log.reference_id }}', '{{ log.sales_number or log.reference_id }}')">
-                                        <i class="bi bi-hash"></i> {{ log.sales_number or log.reference_id }}
-                                    </button>
+
+                            {# GREEN PILL: IN #}
+                            {% elif type in ['RESTOCK', 'IN', 'ADD', 'RECEIVED'] %}
+                                <span class="badge rounded-pill bg-success audit-badge">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i> IN
+                                </span>
+
+                            {# BLUE PILL: ORDER (New clipboard design) #}
+                            {% elif type == 'ORDER' %}
+                                <span class="badge rounded-pill bg-info text-dark audit-badge">
+                                    <i class="bi bi-clipboard-check-fill me-1"></i> ORDER
+                                </span>
+
+                            {# GRAY PILL: Fallback #}
+                            {% else %}
+                                <span class="badge rounded-pill bg-secondary px-3 py-2" audit-badge">
+                                    {{ log.transaction_type }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="text-white-50 small fst-italic fw-bold">
+                                {{ log.change_reason and log.change_reason|replace('_', ' ') or '<span class="text-muted fw-bold">No reason provided</span>'|safe }}
+                            </span>
+                        </td>
+                        <td class="text-center fw-bold">{{ log.total_qty }}</td>
+                        <td>
+                            {% if log.reference_id %}
+                                {% if log.reference_type == 'PURCHASE_ORDER' %}
+                                <button class="btn btn-sm btn-outline-warning border-0"
+                                        onclick="viewOrder('{{ log.reference_id }}')">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                    {{ log.po_number or log.reference_id }}
+                                </button>
                                 {% else %}
-                                    <span class="text-muted">---</span>
+                                    <button class="btn btn-sm btn-outline-danger border-0" 
+                                            onclick="viewSaleDetails('{{ log.reference_id }}', '{{ log.sales_number or log.reference_id }}')">
+                                        <i class="bi bi-receipt-cutoff"></i> {{ log.sales_number or log.reference_id }}
+                                    </button>
                                 {% endif %}
-                            </td>
-                            <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                            {% else %}
+                                <span class="text-muted">---</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+    </div>
 
     <!-- SALES MODAL -->
     <div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-hidden="true">
@@ -530,6 +554,64 @@
                     </table>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ORDERS MODAL -->
+    <div class="modal fade" id="poDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark text-white border-secondary">
+        <div class="modal-header border-secondary">
+            <h5 class="modal-title" id="poModalLabel">Purchase Order Details</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <!-- Header info -->
+            <div class="row mb-4">
+            <div class="col-6">
+                <small class="text-white-50 d-block">PO NUMBER</small>
+                <strong id="modal-po-number" class="text-danger fs-5"></strong>
+            </div>
+            <div class="col-6 text-end">
+                <small class="text-white-50 d-block">STATUS</small>
+                <span id="modal-po-status" class="badge"></span>
+            </div>
+            </div>
+
+            <!-- Vendor & Dates -->
+            <div class="row mb-4">
+            <div class="col-6">
+                <small class="text-white-50 d-block">VENDOR</small>
+                <span id="modal-po-vendor"></span>
+            </div>
+            <div class="col-6 text-end">
+                <small class="text-white-50 d-block">ORDER DATE</small>
+                <span id="modal-po-order-date"></span>
+                <br>
+                <small class="text-white-50 d-block mt-2">RECEIVED DATE</small>
+                <span id="modal-po-received-date"></span>
+            </div>
+            </div>
+
+            <!-- Items table -->
+            <table class="table table-dark table-hover border-secondary">
+            <thead>
+                <tr class="text-muted">
+                <th>Item Name</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Unit Price</th>
+                <th class="text-end">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody id="po-items-list"></tbody>
+            <tfoot>
+                <tr class="border-top border-danger">
+                <td colspan="3" class="fw-bold text-danger pt-3">GRAND TOTAL</td>
+                <td id="modal-po-total" class="fw-bold text-danger text-end pt-3 fs-5"></td>
+                </tr>
+            </tfoot>
+            </table>
+        </div>
         </div>
     </div>
 
@@ -683,6 +765,50 @@ function viewSaleDetails(saleID, displayNum) {
                     </td>
                     <td></td>
                 </tr>`;
+        });
+}
+
+function viewOrder(poId) {
+    fetch(`/purchase-order/details/${poId}`)
+        .then(response => response.json())
+        .then(data => {
+            const titleEl = document.getElementById('poModalLabel');
+            const orderDateEl = document.getElementById('modal-po-order-date');
+            const receivedDateEl = document.getElementById('modal-po-received-date');
+            const statusEl = document.getElementById('modal-po-status');
+
+            // Title stays generic
+            titleEl.innerText = "Purchase Order Details";
+
+            // Dates
+            orderDateEl.innerText = data.created_at || '-';
+            receivedDateEl.innerText = data.received_at || '-';
+
+            // Status badge
+            statusEl.innerText = data.status;
+            statusEl.className = `badge ${data.status_class}`;
+
+            // Other header fields
+            document.getElementById('modal-po-number').innerText = data.po_number;
+            document.getElementById('modal-po-vendor').innerText = data.vendor_name;
+            document.getElementById('modal-po-total').innerText = '₱' + parseFloat(data.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            // Itemized list
+            const list = document.getElementById('po-items-list');
+            list.innerHTML = data.items.map(item => `
+                <tr>
+                    <td>${item.name}</td>
+                    <td class="text-center">${item.quantity_ordered}</td>
+                    <td class="text-end">₱${parseFloat(item.unit_price).toFixed(2)}</td>
+                    <td class="text-end text-info">₱${parseFloat(item.subtotal).toFixed(2)}</td>
+                </tr>
+            `).join('');
+
+            new bootstrap.Modal(document.getElementById('poDetailsModal')).show();
+        })
+        .catch(err => {
+            console.error("Error fetching PO details:", err);
+            alert("Failed to load order details. Please try again.");
         });
 }
 </script>
