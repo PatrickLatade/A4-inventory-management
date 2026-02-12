@@ -84,25 +84,25 @@
         /* =========================
            CUSTOM ALERT STYLES
         ========================== */
-        .alert-success-custom {
+        .alert-success {
             background-color: #2e7d32 !important;
             color: #ffffff;
             border: none;
         }
 
-        .alert-danger-custom {
+        .alert-danger {
             background-color: #e63946 !important;
             color: #ffffff;
             border: none;
         }
 
-        .alert-warning-custom {
+        .alert-warning {
             background-color: #f4a261 !important;
             color: #000000;
             border: none;
         }
 
-        .alert-info-custom {
+        .alert-info {
             background-color: #1e88e5 !important;
             color: #ffffff;
             border: none;
@@ -124,7 +124,7 @@
     <nav class="ms-auto nav-links d-flex align-items-center">
         <a href="/" class="mx-2">🏠 Items</a>
 
-        <a href="{{ url_for('transaction.transaction_in') }}" class="mx-2 text-success">
+        <a href="{{ url_for('transaction.list_orders') }}" class="mx-2 text-success">
             <i class="bi bi-box-arrow-in-down"></i> Stock In
         </a>
 

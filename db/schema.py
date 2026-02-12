@@ -134,6 +134,36 @@ def init_db():
     )
     """)
 
+    # 10. PURCHASE ORDERS (The Header)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        po_number TEXT UNIQUE,
+        vendor_name TEXT,
+        status TEXT CHECK(status IN ('PENDING', 'PARTIAL', 'COMPLETED', 'CANCELLED')) DEFAULT 'PENDING',
+        total_amount REAL DEFAULT 0,
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        received_at DATETIME,
+        created_by INTEGER,
+        notes TEXT,
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+    """)
+
+    # 11. PURCHASE ORDER ITEMS (The Details)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS po_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        po_id INTEGER NOT NULL,
+        item_id INTEGER NOT NULL,
+        quantity_ordered INTEGER NOT NULL,
+        quantity_received INTEGER DEFAULT 0,
+        unit_cost REAL,
+        FOREIGN KEY (po_id) REFERENCES purchase_orders(id),
+        FOREIGN KEY (item_id) REFERENCES items(id)
+    )
+    """)
+
     # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
     # Add mechanic_id to sales

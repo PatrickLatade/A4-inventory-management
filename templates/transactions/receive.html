@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-danger"><i class="fas fa-truck-loading"></i> Receiving: {{ po.po_number }}</h2>
+        <a href="/transaction/orders/list" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+
+    <div class="card bg-dark text-white border-secondary">
+        <div class="card-header border-secondary bg-black">
+            <h5 class="mb-0">Vendor: {{ po.vendor_name }}</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-dark table-hover">
+                <thead>
+                    <tr>
+                        <th>Item Description</th>
+                        <th class="text-center">Ordered</th>
+                        <th class="text-center">Already Received</th>
+                        <th class="text-center" width="200">Arrived Today</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    {% set remaining = item.quantity_ordered - item.quantity_received %}
+                    <tr class="item-row" data-item-id="{{ item.item_id }}">
+                        <td>
+                            <div class="fw-bold">{{ item.name }}</div>
+                            <small class="text-muted">{{ item.pack_size }}</small>
+                        </td>
+                        <td class="text-center fs-5">{{ item.quantity_ordered }}</td>
+                        <td class="text-center text-info">{{ item.quantity_received }}</td>
+                        <td>
+                            <input type="number" 
+                                   class="form-control form-control-lg bg-black text-white border-danger text-center qty-input" 
+                                   value="{{ remaining }}" 
+                                   min="0" 
+                                   max="{{ remaining }}">
+                            {% if remaining > 0 %}
+                            <small class="text-center d-block text-warning mt-1">Pending: {{ remaining }}</small>
+                            {% else %}
+                            <small class="text-center d-block text-success mt-1">Fully Received</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="d-grid mt-4">
+                <button onclick="submitReception()" class="btn btn-danger btn-lg">
+                    Confirm and Add to Stock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function submitReception() {
+    const rows = document.querySelectorAll('.item-row');
+    const items = [];
+
+    rows.forEach(row => {
+        const itemId = row.getAttribute('data-item-id');
+        const qtyReceived = row.querySelector('.qty-input').value;
+        items.push({
+            item_id: itemId,
+            qty_received: qtyReceived
+        });
+    });
+
+    const response = await fetch('/transaction/receive/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            po_id: {{ po.id }},
+            items: items
+        })
+    });
+
+    const result = await response.json();
+    if (result.status === 'success') {
+        window.location.href = '/transaction/orders/list';
+    } else {
+        alert("Error: " + result.message);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block styles %}
+<style>
+    .po-box {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 10px;
+        /* Added 'background' to the transition list for smoothness */
+        transition: transform 0.2s, border-color 0.2s, background 0.2s;
+        cursor: pointer;
+        height: 100%;
+        /* Force Hardware Acceleration to prevent flickering */
+        backface-visibility: hidden;
+        -webkit-font-smoothing: subpixel-antialiased;
+    }
+
+    .po-box:hover {
+        transform: translateY(-5px);
+        background: #252525; /* Slight lift in background color on hover */
+    }
+
+    /* Status Colors */
+    .status-pending { 
+        color: #ff4444; 
+        border-left: 4px solid #ff4444 !important; 
+    }
+    .status-pending:hover { border-color: #ff4444; }
+
+    .status-partial { 
+        color: #ffca28; 
+        border-left: 4px solid #ffca28 !important; 
+    }
+    .status-partial:hover { border-color: #ffca28; }
+
+    /* Fix: Removed 'opacity' which causes the flickering */
+    .status-completed { 
+        color: #66bb6a; 
+        border-left: 4px solid #66bb6a !important;
+        background: #151515; /* Slightly darker to signify 'dimmed/done' */
+    }
+    .status-completed:hover { 
+        border-color: #66bb6a; 
+        background: #1a1a1a; 
+    }
+    
+    .section-divider {
+        border-bottom: 1px solid #333;
+        margin: 2.5rem 0 1.2rem 0;
+        padding-bottom: 0.5rem;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.85rem;
+        font-weight: bold;
+    }
+
+    .modal-content { background-color: #1a1a1a; border: 1px solid #444; color: white; }
+    .table-po-items { background: #222; border-radius: 5px; }
+    
+    .badge-pending { background-color: #7f1d1d; color: #fca5a5; }
+    .badge-partial { background-color: #78350f; color: #fcd34d; }
+    .badge-completed { background-color: #064e3b; color: #6ee7b7; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-danger"><i class="fas fa-boxes"></i> Purchase Orders</h2>
+        <a href="/transaction/order" class="btn btn-danger">
+            <i class="fas fa-plus"></i> New Order
+        </a>
+    </div>
+
+    <div class="section-divider text-danger"><i class="fas fa-clock"></i> Pending (Not yet received)</div>
+    <div class="row g-3">
+        {% set pending_count = namespace(value=0) %}
+        {% for order in orders if order.status == 'PENDING' %}
+            {% set pending_count.value = pending_count.value + 1 %}
+            <div class="col-md-4">
+                <div class="po-box p-3 status-pending" onclick="openOrderDetails({{ order.id }})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h5 class="text-white mb-1">{{ order.po_number }}</h5>
+                        <span class="badge badge-pending">{{ order.status }}</span>
+                    </div>
+                    <p class="text-muted small mb-2">{{ order.vendor_name }}</p>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <span class="text-secondary small">{{ order.item_count }} Items</span>
+                        <span class="text-white fw-bold">₱{{ "{:,.2f}" .format(order.total_amount) }}</span>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        {% if pending_count.value == 0 %}
+            <div class="col-12 text-muted small ps-3">No pending orders.</div>
+        {% endif %}
+    </div>
+
+    <div class="section-divider text-warning"><i class="fas fa-truck-loading"></i> Partial (In-Progress)</div>
+    <div class="row g-3">
+        {% set partial_count = namespace(value=0) %}
+        {% for order in orders if order.status == 'PARTIAL' %}
+            {% set partial_count.value = partial_count.value + 1 %}
+            <div class="col-md-4">
+                <div class="po-box p-3 status-partial" onclick="openOrderDetails({{ order.id }})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h5 class="text-white mb-1">{{ order.po_number }}</h5>
+                        <span class="badge badge-partial">{{ order.status }}</span>
+                    </div>
+                    <p class="text-muted small mb-2">{{ order.vendor_name }}</p>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <span class="text-secondary small">{{ order.item_count }} Items</span>
+                        <span class="text-white fw-bold">₱{{ "{:,.2f}" .format(order.total_amount) }}</span>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        {% if partial_count.value == 0 %}
+            <div class="col-12 text-muted small ps-3">No partial orders.</div>
+        {% endif %}
+    </div>
+
+    <div class="section-divider text-success"><i class="fas fa-check-circle"></i> Completed</div>
+    <div class="row g-3">
+        {% set comp_count = namespace(value=0) %}
+        {% for order in orders if order.status == 'COMPLETED' %}
+            {% set comp_count.value = comp_count.value + 1 %}
+            <div class="col-md-3">
+                <div class="po-box p-3 status-completed" onclick="openOrderDetails({{ order.id }})">
+                    <div class="d-flex justify-content-between">
+                        <small class="text-white fw-bold">{{ order.po_number }}</small>
+                        <i class="fas fa-check-circle text-success"></i>
+                    </div>
+                    <p class="text-muted extra-small mb-1">{{ order.vendor_name }}</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-secondary" style="font-size: 0.75rem;">₱{{ "{:,.2f}" .format(order.total_amount) }}</span>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        {% if comp_count.value == 0 %}
+            <div class="col-12 text-muted small ps-3">No history yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="modalPONumber">Order Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <small class="text-danger d-block">Vendor</small>
+                        <span id="modalVendor" class="fs-5"></span>
+                    </div>
+                    <div class="col-6 text-end">
+                        <small class="text-danger d-block">Created At</small>
+                        <span id="modalDate"></span>
+                    </div>
+                </div>
+
+                <table class="table table-dark table-sm table-po-items">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="text-center">Ordered</th>
+                            <th class="text-center">Received</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalItemsBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a id="receiveBtn" href="#" class="btn btn-danger">
+                    <i class="fas fa-truck-loading"></i> Go to Receiving
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let orderModal;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('orderModal');
+    if (modalElement) {
+        orderModal = new bootstrap.Modal(modalElement);
+    }
+});
+
+async function openOrderDetails(poId) {
+    if (!orderModal) {
+        const modalElement = document.getElementById('orderModal');
+        orderModal = new bootstrap.Modal(modalElement);
+    }
+
+    try {
+        const response = await fetch(`/api/order/${poId}`);
+        if (!response.ok) throw new Error("Failed to fetch PO details");
+        
+        const data = await response.json();
+
+        document.getElementById('modalPONumber').innerText = data.po.po_number;
+        document.getElementById('modalVendor').innerText = data.po.vendor_name;
+        document.getElementById('modalDate').innerText = data.po.created_at;
+        
+        // Hide the receive button if already completed
+        const receiveBtn = document.getElementById('receiveBtn');
+        if (data.po.status === 'COMPLETED') {
+            receiveBtn.style.display = 'none';
+        } else {
+            receiveBtn.style.display = 'inline-block';
+            receiveBtn.href = `/transaction/receive/${poId}`;
+        }
+
+        const itemsBody = document.getElementById('modalItemsBody');
+        itemsBody.innerHTML = '';
+        data.items.forEach(item => {
+            itemsBody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td class="text-center">${item.quantity_ordered}</td>
+                    <td class="text-center">${item.quantity_received}</td>
+                </tr>
+            `;
+        });
+
+        orderModal.show();
+    } catch (err) {
+        console.error("Modal Error:", err);
+        alert("Could not load order details.");
+    }
+}
+</script>
+{% endblock %}

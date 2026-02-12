@@ -212,3 +212,180 @@ def save_transaction_out():
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()
+
+# --- PURCHASE ORDER ROUTES ---
+
+@transaction_bp.route("/transaction/order")
+def create_order_page():
+    """Renders the Purchase Order creation page"""
+    return render_template("transactions/order.html")
+
+@transaction_bp.route("/transaction/order/save", methods=["POST"])
+def save_purchase_order():
+    data = request.get_json()
+    conn = get_db()
+    
+    # 1. TIME LOGIC (The Philippine Fix)
+    now_obj = datetime.now()
+    clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
+    today_str = now_obj.strftime("%Y%m%d")
+    
+    try:
+        conn.execute("BEGIN")
+        
+        # 2. Generate a PO Number
+        count = conn.execute("SELECT COUNT(*) FROM purchase_orders WHERE po_number LIKE ?", (f"PO-{today_str}%",)).fetchone()[0]
+        po_number = f"PO-{today_str}-{str(count + 1).zfill(3)}"
+
+        # 3. Insert the Header (Explicitly passing clean_time to created_at)
+        cursor = conn.execute("""
+            INSERT INTO purchase_orders (po_number, vendor_name, notes, status, created_by, created_at)
+            VALUES (?, ?, ?, 'PENDING', ?, ?)
+        """, (
+            po_number,
+            data.get('vendor_name'),
+            data.get('notes'),
+            session.get('user_id'),
+            clean_time  # <--- Manual Timestamp
+        ))
+        new_po_id = cursor.lastrowid
+
+        # 4. Insert the Line Items
+        total_order_amount = 0
+        for item in data.get('items', []):
+            qty = int(item['qty'])
+            cost = float(item['cost'])
+            total_order_amount += (qty * cost)
+            
+            conn.execute("""
+                INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
+                VALUES (?, ?, ?, ?)
+            """, (new_po_id, item['id'], qty, cost))
+
+        # 5. Update the Header with total amount
+        conn.execute("UPDATE purchase_orders SET total_amount = ? WHERE id = ?", (total_order_amount, new_po_id))
+
+        conn.commit()
+        flash(f"Purchase Order {po_number} saved!", "success")
+        return jsonify({"status": "success", "po_id": new_po_id}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        conn.close()
+
+@transaction_bp.route("/transaction/orders/list")
+def list_orders():
+    conn = get_db()
+    # We fetch the POs and count how many items are in each
+    orders = conn.execute("""
+        SELECT po.*, 
+            (SELECT COUNT(*) FROM po_items WHERE po_id = po.id) as item_count
+        FROM purchase_orders po
+        ORDER BY created_at DESC
+    """).fetchall()
+    conn.close()
+    return render_template("transactions/order_overview.html", orders=orders)
+
+@transaction_bp.route("/api/order/<int:po_id>")
+def get_order_details(po_id):
+    """API for the Modal to get full PO details"""
+    conn = get_db()
+    po = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (po_id,)).fetchone()
+    items = conn.execute("""
+        SELECT pi.*, i.name 
+        FROM po_items pi 
+        JOIN items i ON pi.item_id = i.id 
+        WHERE pi.po_id = ?
+    """, (po_id,)).fetchall()
+    conn.close()
+    
+    return jsonify({
+        "po": dict(po),
+        "items": [dict(ix) for ix in items]
+    })
+
+@transaction_bp.route("/transaction/receive/<int:po_id>")
+def receive_order_page(po_id):
+    conn = get_db()
+    po = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (po_id,)).fetchone()
+    # Only allow receiving if not already completed
+    if po['status'] == 'COMPLETED':
+        flash("This order is already completed.", "info")
+        return redirect(url_for('transaction.list_orders'))
+        
+    items = conn.execute("""
+        SELECT pi.*, i.name, i.pack_size
+        FROM po_items pi 
+        JOIN items i ON pi.item_id = i.id 
+        WHERE pi.po_id = ?
+    """, (po_id,)).fetchall()
+    conn.close()
+    return render_template("transactions/receive.html", po=po, items=items)
+
+@transaction_bp.route("/transaction/receive/confirm", methods=["POST"])
+def confirm_reception():
+    data = request.get_json()
+    po_id = data.get('po_id')
+    received_items = data.get('items')
+    
+    # TIME LOGIC (The Philippine Fix)
+    clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        
+        all_completed = True
+        
+        for entry in received_items:
+            item_id = entry['item_id']
+            qty_in = int(entry['qty_received'])
+            
+            if qty_in > 0:
+                # ADD TO INVENTORY (Explicitly passing the transaction_date)
+                add_transaction(
+                    item_id=item_id,
+                    quantity=qty_in,
+                    transaction_type='IN',
+                    user_id=session.get('user_id'),
+                    user_name=session.get('username'),
+                    reference_id=po_id,
+                    reference_type='PURCHASE_ORDER',
+                    change_reason='PO_ARRIVAL',
+                    transaction_date=clean_time, # <--- Manual Timestamp
+                    external_conn=conn
+                )
+                
+                # UPDATE PO_ITEMS
+                conn.execute("""
+                    UPDATE po_items 
+                    SET quantity_received = quantity_received + ? 
+                    WHERE po_id = ? AND item_id = ?
+                """, (qty_in, po_id, item_id))
+
+            # CHECK STATUS
+            check = conn.execute("""
+                SELECT quantity_ordered, quantity_received 
+                FROM po_items WHERE po_id = ? AND item_id = ?
+            """, (po_id, item_id)).fetchone()
+            
+            if check['quantity_received'] < check['quantity_ordered']:
+                all_completed = False
+
+        # 4. UPDATE PO HEADER (Passing clean_time to received_at)
+        new_status = 'COMPLETED' if all_completed else 'PARTIAL'
+        conn.execute("""
+            UPDATE purchase_orders 
+            SET status = ?, received_at = ? 
+            WHERE id = ?
+        """, (new_status, clean_time, po_id))
+
+        conn.commit()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"status": "error", "message": str(e)})
+    finally:
+        conn.close()

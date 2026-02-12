@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .order-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; }
+    .search-results { 
+        position: absolute; width: 100%; z-index: 1000; 
+        background: #252525; border: 1px solid #444; display: none;
+    }
+    .result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; }
+    .result-item:hover { background: #e63946; color: white; }
+    .table-order thead { background-color: #e63946; color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-danger"><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
+        <span class="badge bg-secondary">Status: DRAFT</span>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="order-card mb-3">
+                <h5>Order Header</h5>
+                <div class="mb-3">
+                    <label class="form-label text-muted">Vendor / Supplier</label>
+                    <input type="text" id="vendor_name" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Parts Master Inc.">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted">Notes</label>
+                    <textarea id="po_notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="order-card">
+                <h5>Search Items</h5>
+                <div class="position-relative mb-4">
+                    <input type="text" id="itemSearch" class="form-control form-control-lg bg-dark text-white border-danger" placeholder="Type item name...">
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <table class="table table-dark table-hover table-order">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th width="150">Qty to Order</th>
+                            <th width="150">Est. Cost</th>
+                            <th width="50"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderTableBody">
+                        <tr id="emptyRow">
+                            <td colspan="4" class="text-center text-muted">No items added yet. Search above to start.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="d-grid mt-4">
+                    <button type="button" onclick="submitOrder()" class="btn btn-danger btn-lg">
+                        <i class="fas fa-save"></i> Save Purchase Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let orderItems = [];
+
+const itemSearch = document.getElementById('itemSearch');
+const searchResults = document.getElementById('searchResults');
+const orderTableBody = document.getElementById('orderTableBody');
+
+// 1. Search Logic
+itemSearch.addEventListener('input', async (e) => {
+    const query = e.target.value;
+    if (query.length < 2) {
+        searchResults.style.display = 'none';
+        return;
+    }
+
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    const items = data.items;
+
+    searchResults.innerHTML = '';
+
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        div.innerHTML = `<strong>${item.name}</strong> 
+                        <small class="text-muted">(Stock: ${item.current_stock})</small>`;
+        div.onclick = () => addItemToOrder(item);
+        searchResults.appendChild(div);
+    });
+
+    searchResults.style.display = 'block';
+});
+
+// 2. Add Item to Table
+function addItemToOrder(item) {
+    if (orderItems.some(i => i.id === item.id)) {
+        alert("Item already in the list!");
+        return;
+    }
+
+    const itemObj = { 
+        id: item.id, 
+        name: item.name, 
+        qty: 1, 
+        cost: item.cost_per_piece || 0 
+    };
+    orderItems.push(itemObj);
+    renderTable();
+    
+    itemSearch.value = '';
+    searchResults.style.display = 'none';
+}
+
+function renderTable() {
+    if (orderItems.length === 0) {
+        orderTableBody.innerHTML = `<tr id="emptyRow"><td colspan="4" class="text-center text-muted">No items added yet.</td></tr>`;
+        return;
+    }
+
+    orderTableBody.innerHTML = '';
+    orderItems.forEach((item, index) => {
+        orderTableBody.innerHTML += `
+            <tr>
+                <td>${item.name}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm bg-dark text-white" 
+                           value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm bg-dark text-white" 
+                           value="${item.cost}" step="0.01" onchange="updateCost(${index}, this.value)">
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})">&times;</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function updateQty(index, val) { orderItems[index].qty = parseInt(val); }
+function updateCost(index, val) { orderItems[index].cost = parseFloat(val); }
+function removeItem(index) { orderItems.splice(index, 1); renderTable(); }
+
+// 3. Final Submit
+async function submitOrder() {
+    if (orderItems.length === 0) { alert("Add at least one item!"); return; }
+    
+    const payload = {
+        vendor_name: document.getElementById('vendor_name').value,
+        notes: document.getElementById('po_notes').value,
+        items: orderItems
+    };
+
+    const response = await fetch('/transaction/order/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result.status === 'success') {
+        window.location.href = '/transaction/orders/list'; // Redirect to a list of POs
+    } else {
+        alert("Error saving order: " + result.message);
+    }
+}
+</script>
+{% endblock %}
