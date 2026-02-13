@@ -9,224 +9,327 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/inventory.ico') }}">
 
     <style>
-        body { background-color: #121212; color: #ffffff; }
+        :root {
+            --bg-main: #0f1115;
+            --bg-sidebar: #151821;
+            --bg-card: #1c1f26;
+
+            --accent: #c1121f;          /* Refined brand red */
+            --accent-hover: #a10f1a;
+
+            --text-primary: #f5f5f5;
+            --text-muted: #9ca3af;
+            --border-soft: #232733;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            font-family: Inter, system-ui, -apple-system, sans-serif;
+        }
 
         /* =========================
-        HEADER
+           LAYOUT
         ========================== */
-        header {
+        .wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* =========================
+           SIDEBAR
+        ========================== */
+        .sidebar {
+            flex: 0 0 250px;
+            background: var(--bg-sidebar);
+            padding: 28px 22px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-soft);
+        }
+
+        .sidebar .logo {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 1rem;
-            border-bottom: 2px solid #e63946;
-            padding-bottom: 1rem;
-            margin-bottom: 2rem;
+            gap: 12px;
+            margin-bottom: 45px;
         }
 
-        header img { height: 80px; margin-right: 1rem; }
-        header h1 { color: #e63946; font-size: 2rem; margin: 0; }
-
-        /* =========================
-        GLOBAL COMPONENTS
-        ========================== */
-        .btn-danger { background-color: #e63946; border: none; }
-        .btn-danger:hover { background-color: #d62839; }
-
-        .form-control, .form-select {
-            background-color: #1e1e1e;
-            color: #ffffff;
-            border: 1px solid #333;
+        .sidebar img {
+            height: 42px;
         }
 
-        .form-control::placeholder { color: #ccc; }
-
-        a { color: #e63946; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-
-        hr { border-color: #333; }
-
-        .nav-links {
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 0.5rem;
+        .sidebar h5 {
+            margin: 0;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
 
-        .nav-links a {
-            font-size: 1.1rem;
-            font-weight: 500;
-            transition: 0.3s;
-        }
-
-        .nav-links a:hover {
-            color: #ffffff;
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 14px;
+            margin-bottom: 6px;
+            border-radius: 10px;
+            color: var(--text-muted);
             text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
 
-        .hover-admin:hover {
-            border-color: #e63946 !important;
-            background-color: #252525 !important;
+        .sidebar a:hover {
+            background: rgba(193,18,31,0.08);
+            color: var(--text-primary);
         }
 
-        html {
-            overflow-y: scroll;
+        .sidebar .active-link {
+            background: var(--accent);
+            color: #ffffff !important;
+            box-shadow: 0 6px 18px rgba(193,18,31,0.35);
         }
 
-        
-        body.modal-open {
-            padding-right: 0 !important;
-        }
-
-        /* =========================
-        ALERT ANIMATION
-        ========================== */
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        .animate-slide-in {
-            animation: slideIn 0.5s ease-out forwards;
+        .sidebar .admin-section {
+            margin-top: 35px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-soft);
         }
 
         /* =========================
-        CUSTOM ALERT STYLES
+           CONTENT
         ========================== */
-        .alert-success-custom {
-            background-color: #2e7d32 !important;
-            color: #ffffff;
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* =========================
+           TOPBAR
+        ========================== */
+        .topbar {
+            background: var(--bg-sidebar);
+            padding: 16px 28px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 18px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .badge-role {
+            font-size: 0.65rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--accent);
+            letter-spacing: 0.5px;
+        }
+
+        .logout-btn {
+            border-radius: 8px;
+            border: 1px solid var(--border-soft);
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        /* =========================
+           MAIN
+        ========================== */
+        main {
+            padding: 35px;
+        }
+
+        /* =========================
+           CARDS
+        ========================== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-soft);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        }
+
+        /* =========================
+           FORMS
+        ========================== */
+        .form-control, .form-select {
+            background: #141720;
+            border: 1px solid var(--border-soft);
+            color: #fff;
+            border-radius: 10px;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(193,18,31,0.25);
+        }
+
+        /* =========================
+           BUTTONS
+        ========================== */
+        .btn-primary {
+            background: var(--accent);
+            border: none;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-danger {
+            border-radius: 10px;
+        }
+
+        /* =========================
+           TABLES
+        ========================== */
+        .table {
+            color: #fff;
+        }
+
+        .table thead {
+            background: #181b23;
+        }
+
+        .table-hover tbody tr:hover {
+            background: rgba(193,18,31,0.05);
+        }
+
+        /* =========================
+           FLASH
+        ========================== */
+        #flash-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 350px;
+        }
+
+        .alert {
+            border-radius: 12px;
             border: none;
         }
 
-        .alert-danger-custom {
-            background-color: #e63946 !important;
-            color: #ffffff;
-            border: none;
+        .alert-success {
+            background: #1e3a2f;
         }
 
-        .alert-warning-custom {
-            background-color: #f4a261 !important;
-            color: #000000;
-            border: none;
+        .alert-danger {
+            background: #3a1e1e;
         }
 
-        .alert-info-custom {
-            background-color: #1e88e5 !important;
-            color: #ffffff;
-            border: none;
+        .alert-warning {
+            background: #3a321e;
+            color: #fff;
         }
 
-        .bg-success-custom {
-            background-color: #2e7d32 !important;
-            color: #ffffff;
-        }
-        .bg-danger-custom {
-            background-color: #e63946 !important;
-            color: #ffffff;
-        }
-        .bg-warning-custom {
-            background-color: #e6d70b !important;
-            color: #000000;
-        }
-        .bg-info-custom {
-            background-color: #1e88e5 !important;
-            color: #ffffff;
+        .alert-info {
+            background: #1e2d3a;
         }
     </style>
 
     {% block styles %}{% endblock %}
 </head>
 
-<body class="py-4">
+<body>
 
-<div class="container">
+<div class="wrapper">
 
-<header>
-    <div class="d-flex align-items-center">
-        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo">
-        <h1>Inventory System</h1>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+        <div class="logo">
+            <img src="{{ url_for('static', filename='media/logo.png') }}">
+            <h5>Inventory</h5>
+        </div>
+
+        {% if session.get('user_id') %}
+            <a href="/" class="{% if request.path == '/' %}active-link{% endif %}">
+                <i class="bi bi-box"></i> Items
+            </a>
+
+            <a href="{{ url_for('transaction.list_orders') }}"
+               class="{% if 'orders' in request.path %}active-link{% endif %}">
+                <i class="bi bi-box-arrow-in-down"></i> Stock In
+            </a>
+
+            <a href="{{ url_for('transaction.transaction_out') }}"
+               class="{% if 'transaction_out' in request.path %}active-link{% endif %}">
+                <i class="bi bi-cart-plus"></i> New Sale
+            </a>
+
+            <a href="/analytics"><i class="bi bi-fire"></i> Hot Items</a>
+            <a href="/dead-stock"><i class="bi bi-emoji-frown"></i> Dead Stock</a>
+            <a href="/low-stock"><i class="bi bi-exclamation-triangle"></i> Low Stock</a>
+
+            {% if session.get('role') == 'admin' %}
+            <div class="admin-section">
+                <a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                <a href="{{ url_for('auth.manage_users') }}">
+                    <i class="bi bi-shield-lock"></i> Manage Users
+                </a>
+            </div>
+            {% endif %}
+        {% endif %}
     </div>
 
-    {% if session.get('user_id') %}
-    <nav class="ms-auto nav-links d-flex align-items-center">
-        <a href="/" class="mx-2">🏠 Items</a>
+    <!-- CONTENT -->
+    <div class="content">
 
-        <a href="{{ url_for('transaction.list_orders') }}" class="mx-2 text-success">
-            <i class="bi bi-box-arrow-in-down"></i> Stock In
-        </a>
-
-        <a href="{{ url_for('transaction.transaction_out') }}" class="mx-2" style="color: #ff4d4d; font-weight: bold;">
-            <i class="bi bi-cart-plus"></i> New Sale
-        </a>
-
-        <a href="/analytics" class="mx-2">🔥 Hot Items</a>
-        <a href="/dead-stock" class="mx-2">🧟 Dead Stock</a>
-        <a href="/low-stock" class="mx-2">⚠️ Low Stock</a>
-
-        {% if session.get('role') == 'admin' %}
-            <a href="/dashboard" class="mx-2">📊 Dashboard</a>
-        {% endif %}
-
-        <div class="border-start border-secondary mx-3" style="height: 25px;"></div>
-
-        {% if session.get('role') == 'admin' %}
-            <a href="{{ url_for('auth.manage_users') }}"
-               class="text-decoration-none border border-secondary rounded-pill px-3 py-1 bg-dark hover-admin">
-                <span class="text-white-50 small">
-                    <i class="bi bi-shield-lock-fill text-danger"></i>
+        <div class="topbar">
+            {% if session.get('user_id') %}
+                <div class="user-badge">
+                    <i class="bi bi-person-circle"></i>
                     {{ session.get('username') }}
-                    <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">ADMIN</span>
-                </span>
-            </a>
-        {% else %}
-            <span class="text-white-50 small px-3">
-                <i class="bi bi-person-circle"></i>
-                {{ session.get('username') }}
-                <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">STAFF</span>
-            </span>
-        {% endif %}
 
-        <a href="/logout" class="btn btn-outline-secondary btn-sm ms-3" style="font-size: 0.7rem;">
-            Logout
-        </a>
-    </nav>
-    {% endif %}
-</header>
+                    {% if session.get('role') == 'admin' %}
+                        <span class="badge-role">ADMIN</span>
+                    {% else %}
+                        <span class="badge-role bg-secondary">STAFF</span>
+                    {% endif %}
+                </div>
 
-<!-- =========================
-     FLASH MESSAGES
-========================== -->
-<div id="flash-container"
-     style="position: fixed; top: 20px; right: 20px; z-index: 1050; max-width: 350px;">
-
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      <div class="alert alert-{{ category }}-custom alert-dismissible fade show shadow-lg animate-slide-in"
-           role="alert" style="margin-bottom: 10px;">
-
-        <i class="bi
-            {% if category == 'success' %}bi-check-circle-fill
-            {% elif category == 'danger' %}bi-x-octagon-fill
-            {% elif category == 'warning' %}bi-arrow-counterclockwise
-            {% elif category == 'info' %}bi-info-circle-fill
+                <a href="/logout" class="btn btn-outline-light btn-sm logout-btn">
+                    Logout
+                </a>
             {% endif %}
-            me-2"></i>
+        </div>
 
-        {{ message }}
+        <!-- FLASH -->
+        <div id="flash-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} shadow-lg fade show">
+                {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+        </div>
 
-        <button type="button" class="btn-close btn-close-white"
-                data-bs-dismiss="alert" aria-label="Close"></button>
-      </div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+
+    </div>
+
 </div>
-
-<main class="container">
-    {% block content %}{% endblock %}
-</main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 

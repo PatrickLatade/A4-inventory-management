@@ -2,166 +2,352 @@
 
 {% block styles %}
 <style>
-    /* 1. Base Table Layout - No Jumping */
+    /* =====================
+       TABLE LAYOUT
+    ===================== */
     .table {
         table-layout: fixed;
         width: 100%;
-        background-color: #1e1e1e;
+        background: transparent;
     }
 
-    /* 2. Column Widths - Totaling exactly 100% */
-    .table th:nth-child(1) { width: 18%; } /* Item Name (Increased) */
-    .table th:nth-child(2) { width: 30%; } /* Description */
-    .table th:nth-child(3), 
-    .table th:nth-child(4), 
-    .table th:nth-child(5) { width: 11%; } /* Prices (Slightly slimmer) */
-    .table th:nth-child(6) { width: 9%; }  /* Markup */
-    .stock-col {
-    width: 10%;
-    }
+    .table th:nth-child(1) { width: 18%; }
+    .table th:nth-child(2) { width: 30%; }
+    .table th:nth-child(3),
+    .table th:nth-child(4),
+    .table th:nth-child(5) { width: 11%; }
+    .table th:nth-child(6) { width: 9%; }
+    .stock-col { width: 10%; }
 
-
-    /* 3. Global Cell Styling */
+    /* =====================
+       CELL STYLING
+    ===================== */
     .table td, .table th {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         vertical-align: middle !important;
-        text-align: center !important; /* Forces everything to center */
-        border-color: #333;
+        text-align: center !important;
+        border-color: var(--border-soft);
     }
 
-    /* 4. Header Specifics */
     .table thead th {
         white-space: normal !important;
         overflow: visible !important;
         text-overflow: unset !important;
         line-height: 1.2;
-        padding: 0.75rem 0.5rem;
+        padding: 0.85rem 0.5rem;
         text-transform: uppercase;
-        font-size: 0.85rem;
-        letter-spacing: 1px;
-        color: #e63946;
+        font-size: 0.75rem;
+        letter-spacing: 1.5px;
+        color: var(--accent);
+        background: #13161e;
+        font-weight: 600;
     }
 
-    /* 5. Description Cell Customizations */
-    .description-cell { 
-        color: #bbb;
-        font-size: 0.9rem;
+    .table tbody tr {
+        border-bottom: 1px solid var(--border-soft);
+        transition: background 0.15s ease;
+    }
+
+    .table tbody tr:hover {
+        background: rgba(193, 18, 31, 0.06) !important;
+    }
+
+    /* =====================
+       CELL TYPES
+    ===================== */
+    .description-cell {
+        color: var(--text-muted);
+        font-size: 0.875rem;
         cursor: help;
     }
 
-    .description-cell:hover {
-        white-space: normal;
-        word-break: break-word;
-        background: #252525 !important;
-        z-index: 10;
-        position: relative;
-    }
-
-    /* Update the Item Cell to handle overflow just like Description */
     .item-cell {
-        font-weight: bold;
+        font-weight: 600;
+        color: var(--text-primary);
         cursor: help;
     }
 
-    /* Apply the hover expansion to BOTH Item and Description cells */
     .item-cell:hover,
     .description-cell:hover {
         white-space: normal !important;
         word-break: break-word;
-        background: #252525 !important;
+        background: #1a1d26 !important;
         z-index: 10;
         position: relative;
-        overflow: visible; /* Ensure it pops out of the container if needed */
+        overflow: visible;
     }
 
-    /* 6. Utility Styles */
-    .price-text { font-family: 'Courier New', Courier, monospace; font-weight: bold; }
-    .stock-badge { 
-    background-color: #333; 
-    padding: 0.5rem; 
-    border-radius: 4px; 
-    border: 1px solid #444;
-    display: inline-block; /* Helps with centering */
-    min-width: 50px;       /* Keeps the box consistent */
+    .price-text {
+        font-family: 'Courier New', Courier, monospace;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--text-primary);
     }
-    .action-group { display: flex; gap: 5px; justify-content: center; }
 
-    /* Recent Search Chips */
+    .selling-price {
+        color: #f4c430;
+    }
+
+    /* =====================
+       STOCK BADGE
+    ===================== */
+    .stock-badge {
+        background: #13161e;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        padding: 4px 10px;
+        border-radius: 8px;
+        display: inline-block;
+        min-width: 46px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .stock-badge.low {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(193, 18, 31, 0.08);
+    }
+
+    /* =====================
+       MARKUP BADGE
+    ===================== */
+    .markup-badge {
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        background: rgba(193, 18, 31, 0.08);
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    /* =====================
+       SEARCH BAR
+    ===================== */
+    .search-wrapper {
+        position: relative;
+    }
+
+    .search-wrapper .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+        font-size: 0.95rem;
+    }
+
+    #inventorySearch {
+        padding-left: 40px;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 12px;
+        height: 44px;
+        font-size: 0.9rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #inventorySearch:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.15);
+        outline: none;
+        background: #141720;
+        color: var(--text-primary);
+    }
+
+    #inventorySearch::placeholder {
+        color: var(--text-muted);
+    }
+
+    /* =====================
+       RECENT SEARCH CHIPS
+    ===================== */
+    .chips-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        margin-right: 6px;
+    }
+
     .search-chip {
         display: inline-flex;
         align-items: center;
-        background-color: #252525;
-        border: 1px solid #444;
-        border-radius: 16px;
-        padding: 4px 10px;
-        margin: 4px 6px 0 0;
-        font-size: 0.8rem;
+        background: #1c1f26;
+        border: 1px solid var(--border-soft);
+        border-radius: 20px;
+        padding: 4px 12px;
+        margin: 4px 5px 0 0;
+        font-size: 0.78rem;
         cursor: pointer;
-        color: #e63946;
+        color: var(--text-muted);
+        transition: all 0.15s ease;
     }
 
     .search-chip:hover {
-        background-color: #2e2e2e;
+        border-color: rgba(193, 18, 31, 0.4);
+        color: var(--text-primary);
+        background: #22262f;
     }
 
     .search-chip .close-btn {
         margin-left: 8px;
-        color: #888;
+        color: #555;
         cursor: pointer;
+        font-size: 0.9rem;
+        line-height: 1;
+        transition: color 0.15s;
     }
 
     .search-chip .close-btn:hover {
-        color: #fff;
+        color: var(--accent);
     }
 
     .search-chip.frequent {
-        border-color: #e63946;
-        background-color: #2b1f1f;
-        font-weight: bold;
-        box-shadow: 0 0 6px rgba(230, 57, 70, 0.4);
+        border-color: rgba(193, 18, 31, 0.6);
+        background: rgba(193, 18, 31, 0.1);
+        color: #f08080;
+        font-weight: 600;
     }
 
+    /* =====================
+       HIGHLIGHT
+    ===================== */
     .highlight {
-    background-color: rgba(230, 57, 70, 0.25);
-    padding: 0 2px;
-    border-radius: 3px;
+        background: rgba(193, 18, 31, 0.28);
+        padding: 0 2px;
+        border-radius: 3px;
+        color: #ffaaaa;
+    }
+
+    /* =====================
+       ADMIN IMPORT CARD
+    ===================== */
+    .admin-import-card {
+        background: var(--bg-card);
+        border: 1px solid rgba(193, 18, 31, 0.35);
+        border-radius: 14px;
+        padding: 20px 24px;
+        margin-bottom: 28px;
+    }
+
+    .admin-import-card .section-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--accent);
+        font-weight: 600;
+        margin-bottom: 16px;
+    }
+
+    .admin-import-card .form-control {
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 10px 0 0 10px;
+        font-size: 0.85rem;
+    }
+
+    .admin-import-card .form-label {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .admin-import-card .btn {
+        border-radius: 0 10px 10px 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+
+    /* =====================
+       TABLE WRAPPER CARD
+    ===================== */
+    .table-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .table-card .table-responsive {
+        margin: 0;
+    }
+
+    /* =====================
+       PAGE HEADER
+    ===================== */
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+    }
+
+    .page-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+    }
+
+    .page-title span {
+        color: var(--accent);
+    }
+
+    .item-count {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        background: #1c1f26;
+        border: 1px solid var(--border-soft);
+        padding: 4px 14px;
+        border-radius: 20px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- ADMIN IMPORT SECTION -->
 {% if session.get('role') == 'admin' %}
-<div class="admin-card mb-4 p-3 shadow-sm" style="background-color: #1a1a1a; border: 1px solid #e63946; border-radius: 8px;">
-    <h6 class="text-white-50 mb-3 small text-center"><i class="bi bi-shield-lock-fill text-danger"></i> ADMIN DATA IMPORT CONTROLS</h6>
-    
+<div class="admin-import-card">
+    <div class="section-label">
+        <i class="bi bi-shield-lock-fill me-2"></i>Admin — Data Import Controls
+    </div>
     <div class="row g-3">
         <div class="col-md-4">
             <form action="/import/items" method="POST" enctype="multipart/form-data">
-                <label class="form-label small text-white-50">Import items</label>
+                <label class="form-label">Import Items</label>
                 <div class="input-group input-group-sm">
-                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="file" name="file" class="form-control" required>
                     <button type="submit" class="btn btn-danger">Import</button>
                 </div>
             </form>
         </div>
-
         <div class="col-md-4">
             <form action="/import/sales" method="POST" enctype="multipart/form-data">
-                <label class="form-label small text-white-50">Import Sales</label>
+                <label class="form-label">Import Sales</label>
                 <div class="input-group input-group-sm">
-                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="file" name="file" class="form-control" required>
                     <button type="submit" class="btn btn-warning">Import</button>
                 </div>
             </form>
         </div>
-
         <div class="col-md-4">
             <form action="/import/inventory" method="POST" enctype="multipart/form-data">
-                <label class="form-label small text-white-50">Import Inventory</label>
+                <label class="form-label">Import Inventory</label>
                 <div class="input-group input-group-sm">
-                    <input type="file" name="file" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="file" name="file" class="form-control" required>
                     <button type="submit" class="btn btn-success">Import</button>
                 </div>
             </form>
@@ -170,312 +356,239 @@
 </div>
 {% endif %}
 
-<div class="row justify-content-center mb-3">
+<!-- PAGE HEADER -->
+<div class="page-header">
+    <div class="page-title">
+        <i class="bi bi-box me-2" style="color: var(--accent);"></i>Inventory <span>Items</span>
+    </div>
+    <div class="item-count" id="itemCountBadge">
+        {{ items | length }} items
+    </div>
+</div>
+
+<!-- SEARCH -->
+<div class="row justify-content-center mb-2">
     <div class="col-md-6">
-        <div class="input-group">
-            <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-search"></i></span>
-            <input type="text" id="inventorySearch" class="form-control" placeholder="Search for items...">
+        <div class="search-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" id="inventorySearch" class="form-control" placeholder="Search items or descriptions…">
         </div>
     </div>
 </div>
 
-<div class="row justify-content-center mb-3">
+<div class="row justify-content-center mb-4">
     <div class="col-md-6">
-        <div id="recentSearches" class="small text-muted mt-2"></div>
+        <div id="recentSearches" class="mt-2"></div>
     </div>
 </div>
 
-<hr class="mb-4">
-
-<div class="table-responsive">
-    <table class="table table-dark table-striped align-middle text-center">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Description</th>
-                <th>Vendor Price</th>
-                <th>Cost Per Piece</th>
-                <th>A4S Selling Price</th>
-                {% if session.get('role') == 'admin' %}
-                <th>Markup</th>
-                {% endif %}
-                <th class="stock-col">Current Stock</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td class="fw-bold item-cell">{{ item.name }}</td>
-                <td class="description-cell text-center">{{ item.description }}</td>
-                <td class="price-text">₱{{ item.vendor_price }}</td>
-                <td class="price-text">₱{{ item.cost_per_piece }}</td>
-                <td class="price-text text-warning">₱{{ item.a4s_selling_price }}</td>
-                {% if session.get('role') == 'admin' %}
-                <td>
-                    <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
-                        {{ "%.2f"|format(item.markup * 100) }}%
-                    </span>
-                </td>
-                {% endif %}
-                <td class="stock-col">
-                    <div class="stock-badge">{{ item.current_stock }}</div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- TABLE -->
+<div class="table-card">
+    <div class="table-responsive">
+        <table class="table table-dark mb-0">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Description</th>
+                    <th>Vendor Price</th>
+                    <th>Cost / Piece</th>
+                    <th>Selling Price</th>
+                    {% if session.get('role') == 'admin' %}
+                    <th>Markup</th>
+                    {% endif %}
+                    <th class="stock-col">Stock</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="fw-bold item-cell">{{ item.name }}</td>
+                    <td class="description-cell text-center">{{ item.description }}</td>
+                    <td class="price-text">₱{{ item.vendor_price }}</td>
+                    <td class="price-text">₱{{ item.cost_per_piece }}</td>
+                    <td class="price-text selling-price">₱{{ item.a4s_selling_price }}</td>
+                    {% if session.get('role') == 'admin' %}
+                    <td>
+                        <span class="markup-badge">{{ "%.2f"|format(item.markup * 100) }}%</span>
+                    </td>
+                    {% endif %}
+                    <td class="stock-col">
+                        <div class="stock-badge {% if item.current_stock <= 5 %}low{% endif %}">
+                            {{ item.current_stock }}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-let lastSavedSearch = "";
 let lastSuccessfulSearch = "";
 
-// --- Helper: Render a single row (Keeps your exact UI/HTML) ---
+/* ---- Row Builder ---- */
 function createRowHtml(item) {
     const isAdmin = "{{ session.get('role') }}" === "admin";
+    const isLow = item.current_stock <= 5;
     return `
         <tr>
             <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
             <td class="description-cell text-center" data-original="${item.description || ''}">${item.description || ''}</td>
             <td class="price-text">₱${item.vendor_price || 0}</td>
             <td class="price-text">₱${item.cost_per_piece || 0}</td>
-            <td class="price-text text-warning">₱${item.a4s_selling_price || 0}</td>
-            ${isAdmin ? `
-                <td>
-                    <span class="badge bg-outline-danger" style="border: 1px solid #e63946;">
-                        ${(item.markup * 100).toFixed(2)}%
-                    </span>
-                </td>` : ''}
-            <td><div class="stock-badge">${item.current_stock}</div></td>
+            <td class="price-text selling-price">₱${item.a4s_selling_price || 0}</td>
+            ${isAdmin ? `<td><span class="markup-badge">${(item.markup * 100).toFixed(2)}%</span></td>` : ''}
+            <td><div class="stock-badge ${isLow ? 'low' : ''}">${item.current_stock}</div></td>
         </tr>
     `;
 }
 
-/**
- * Normalize text so search is forgiving.
- * - lowercase
- * - remove spaces
- * - remove special characters
- */
-function normalize(text) {
-    if (!text) return "";
-    return text
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, " "); // Just collapse multiple spaces into one, don't delete them!
-}
-
+/* ---- Highlight ---- */
 function escapeRegExp(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function highlightText(element, tokens) {
-    if (!element.dataset.original) return;
-
-    // ALWAYS reset first
-    const originalText = element.dataset.original;
-    let highlighted = originalText;
-
+    if (!element || !element.dataset.original) return;
+    let highlighted = element.dataset.original;
     tokens.forEach(token => {
         if (!token) return;
-
-        const escaped = escapeRegExp(token);
-        const regex = new RegExp(`(${escaped})`, "gi");
-
-        highlighted = highlighted.replace(
-            regex,
-            `<span class="highlight">$1</span>`
-        );
+        const regex = new RegExp(`(${escapeRegExp(token)})`, "gi");
+        highlighted = highlighted.replace(regex, `<span class="highlight">$1</span>`);
     });
-
     element.innerHTML = highlighted;
 }
 
-function resetHighlight(element) {
-    if (!element.dataset.original) return;
-    element.innerHTML = element.dataset.original;
-}
-
-/**
- * Debounce function to prevent excessive firing
- */
+/* ---- Debounce ---- */
 function debounce(func, delay) {
-    let timeoutId;
+    let id;
     return function (...args) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => func.apply(this, args), delay);
+        clearTimeout(id);
+        id = setTimeout(() => func.apply(this, args), delay);
     };
 }
 
-// --- The New Search (Talks to the API) ---
+/* ---- Search ---- */
 const performSearch = async () => {
     const rawInput = document.getElementById('inventorySearch').value.trim();
     const tbody = document.querySelector('table tbody');
+    const badge = document.getElementById('itemCountBadge');
 
-    // If empty, we could reload the page or just leave the 50 items there. 
-    // For now, let's only trigger if 2+ characters
     if (rawInput.length === 0) {
-    location.reload(); // Simplest way to get your original 50 back
-    return;
+        location.reload();
+        return;
     }
     if (rawInput.length < 2) return;
 
     try {
         const response = await fetch(`/api/search?q=${encodeURIComponent(rawInput)}`);
         const data = await response.json();
-        
-        // Clear the table
+
         tbody.innerHTML = "";
 
         if (data.items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-muted p-4">No items found in the full database.</td></tr>';
+            const cols = "{{ session.get('role') }}" === "admin" ? 7 : 6;
+            tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center py-5" style="color: var(--text-muted);">
+                <i class="bi bi-inbox" style="font-size:1.6rem; display:block; margin-bottom:8px;"></i>
+                No items found for "<strong style="color:var(--text-primary)">${rawInput}</strong>"
+            </td></tr>`;
+            if (badge) badge.textContent = '0 items';
             return;
         }
 
-        // Add the new rows
-        data.items.forEach(item => {
-            tbody.insertAdjacentHTML('beforeend', createRowHtml(item));
-        });
+        data.items.forEach(item => tbody.insertAdjacentHTML('beforeend', createRowHtml(item)));
+        if (badge) badge.textContent = `${data.items.length} item${data.items.length !== 1 ? 's' : ''}`;
 
-        // Re-apply your highlighting logic
         const tokens = rawInput.toLowerCase().split(" ").filter(t => t.length >= 2);
-        const newRows = tbody.querySelectorAll('tr');
-        newRows.forEach(row => {
-            const nameCell = row.querySelector('.item-cell');
-            const descCell = row.querySelector('.description-cell');
-            highlightText(nameCell, tokens);
-            highlightText(descCell, tokens);
+        tbody.querySelectorAll('tr').forEach(row => {
+            highlightText(row.querySelector('.item-cell'), tokens);
+            highlightText(row.querySelector('.description-cell'), tokens);
         });
 
-        // Save to chips!
-        if (rawInput.length >= 3) {
-            saveRecentSearch(rawInput);
-        }
+        if (rawInput.length >= 3) saveRecentSearch(rawInput);
 
     } catch (err) {
         console.error("Search failed:", err);
     }
 };
 
+/* ---- Recent Searches ---- */
 const RECENT_SEARCH_LIMIT = 8;
 const STORAGE_KEY = "inventory_recent_searches";
-const EXPIRY_DAYS = 7;
-const EXPIRY_MS = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getRecentSearches() {
     let searches = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
     const now = Date.now();
-
-    // Auto-expire old searches
     searches = searches.filter(s => now - s.lastUsed <= EXPIRY_MS);
-
     localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
     return searches;
-}
-
-function normalizeForCompare(text) {
-    return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function saveRecentSearch(term) {
     term = term.trim();
     if (term.length < 3) return;
-
     const normalizedTerm = term.toLowerCase();
-    
-    // 🛑 CORRECTED PROTECTOR: 
-    // Only block if the last search starts with this one AND they aren't identical.
-    // This allows "Yamaha" -> "Yamaha" to count, but blocks "Yamaha" -> "Yamah".
-    if (lastSuccessfulSearch && 
-        lastSuccessfulSearch.startsWith(normalizedTerm) && 
-        lastSuccessfulSearch !== normalizedTerm) {
-        return;
-    }
+    if (lastSuccessfulSearch &&
+        lastSuccessfulSearch.startsWith(normalizedTerm) &&
+        lastSuccessfulSearch !== normalizedTerm) return;
 
     const now = Date.now();
     let searches = getRecentSearches();
-
     const existing = searches.find(s => s.term.toLowerCase() === normalizedTerm);
 
     if (existing) {
-        // This is what turns the chip red!
         existing.count += 1;
         existing.lastUsed = now;
     } else {
-        searches.unshift({ term: term, count: 1, lastUsed: now });
+        searches.unshift({ term, count: 1, lastUsed: now });
     }
 
-    // 2. Sort: Most frequent searches first, then the most recent
-    searches.sort((a, b) => {
-        // Strongly prefer recency
-        if (b.lastUsed !== a.lastUsed) {
-            return b.lastUsed - a.lastUsed;
-        }
-        // Use frequency only as a tiebreaker
-        return b.count - a.count;
-    });
-
-    // 3. Keep only the top 8 and save to LocalStorage
+    searches.sort((a, b) => b.lastUsed - a.lastUsed || b.count - a.count);
     searches = searches.slice(0, RECENT_SEARCH_LIMIT);
-    
     localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
-    lastSuccessfulSearch = normalizedTerm; 
+    lastSuccessfulSearch = normalizedTerm;
     renderRecentSearches();
 }
 
 function renderRecentSearches() {
     const container = document.getElementById("recentSearches");
     const searches = getRecentSearches();
-
-    if (!searches.length) {
-        container.innerHTML = "";
-        return;
-    }
+    if (!searches.length) { container.innerHTML = ""; return; }
 
     container.innerHTML = `
-        <strong>Quick picks:</strong>
+        <span class="chips-label">Quick picks:</span>
         ${searches.map(s => `
             <span class="search-chip ${s.count >= 3 ? "frequent" : ""}">
                 <span onclick="applyRecentSearch('${s.term.replace(/'/g, "\\'")}')">
                     ${s.term}
                 </span>
-                <span class="close-btn" onclick="removeRecentSearch('${s.term.replace(/'/g, "\\'")}')">
-                    ×
-                </span>
+                <span class="close-btn" onclick="removeRecentSearch('${s.term.replace(/'/g, "\\'")}')">×</span>
             </span>
         `).join("")}
     `;
 }
 
 function removeRecentSearch(term) {
-    let searches = getRecentSearches();
-    searches = searches.filter(s => s.term !== term);
+    let searches = getRecentSearches().filter(s => s.term !== term);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(searches));
     renderRecentSearches();
 }
 
 function applyRecentSearch(term) {
-    const input = document.getElementById("inventorySearch");
-    input.value = term;
+    document.getElementById("inventorySearch").value = term;
     performSearch();
 }
 
-// Attach debounced search
 document.getElementById('inventorySearch').addEventListener('input', debounce(() => {
-    const value = document.getElementById('inventorySearch').value.trim();
-
     performSearch();
-
-    // Only save if:
-    // 1. Term is long enough
-    // 2. We actually found results (don't save typos that result in 0 items)
+    const value = document.getElementById('inventorySearch').value.trim();
     const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])').length;
-    
-    if (value.length >= 3 && visibleRows > 0) {
-        saveRecentSearch(value);
-    }
+    if (value.length >= 3 && visibleRows > 0) saveRecentSearch(value);
 }, 500));
 
 renderRecentSearches();

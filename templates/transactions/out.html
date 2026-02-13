@@ -2,207 +2,516 @@
 
 {% block styles %}
 <style>
-    /* Make the suggestions float above the table rows */
-    .search-suggestions {
-        border: 1px solid #444 !important;
-        border-top: none !important;
-        z-index: 9999 !important; /* Higher than everything else */
-        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    /* =====================
+       PAGE HEADER
+    ===================== */
+    .page-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+        margin-bottom: 24px;
     }
 
-    /* Style the buttons so they aren't bulky */
+    .page-title i {
+        color: var(--accent);
+        margin-right: 10px;
+    }
+
+    /* =====================
+       MAIN FORM CARD
+    ===================== */
+    .form-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        padding: 28px 32px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    /* =====================
+       SECTION DIVIDERS
+    ===================== */
+    .form-section-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 28px 0 20px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--text-muted);
+    }
+
+    .form-section-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-soft);
+    }
+
+    .form-section-divider.accent { color: var(--accent); }
+    .form-section-divider.info   { color: #67c2e4; }
+
+    /* =====================
+       FORM LABELS
+    ===================== */
+    .form-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+
+    .form-label.accent { color: var(--accent); }
+    .form-label.info   { color: #67c2e4; }
+    .form-label .req   { color: var(--accent); margin-left: 2px; }
+
+    /* =====================
+       FORM CONTROLS — inherit base.html vars
+    ===================== */
+    .form-control, .form-select {
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 10px;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(193,18,31,0.25);
+        background: #141720;
+        color: var(--text-primary);
+    }
+
+    .form-control:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Warning border variant */
+    .border-warn {
+        border-color: #f4c430 !important;
+    }
+    .border-warn:focus {
+        border-color: #f4c430 !important;
+        box-shadow: 0 0 0 2px rgba(244,196,48,0.2) !important;
+    }
+
+    /* Info border variant */
+    .border-info-soft {
+        border-color: #67c2e4 !important;
+    }
+    .border-info-soft:focus {
+        border-color: #67c2e4 !important;
+        box-shadow: 0 0 0 2px rgba(103,194,228,0.2) !important;
+    }
+
+    /* =====================
+       ITEMS TABLE
+    ===================== */
+    .table-responsive {
+        overflow: visible !important;
+    }
+
+    #items-table,
+    #services-table {
+        background: transparent;
+    }
+
+    #items-table thead th,
+    #services-table thead th {
+        background: #13161e;
+        color: var(--accent);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 700;
+        border-color: var(--border-soft);
+        padding: 10px 12px;
+        white-space: nowrap;
+    }
+
+    #services-table thead th {
+        color: #67c2e4;
+    }
+
+    #items-table tbody td,
+    #services-table tbody td {
+        border-color: var(--border-soft);
+        vertical-align: middle;
+        padding: 8px 10px;
+        background: transparent;
+    }
+
+    #items-table tbody tr,
+    #services-table tbody tr {
+        transition: background 0.15s;
+    }
+
+    #items-table tbody tr:hover,
+    #services-table tbody tr:hover {
+        background: #1a1d26 !important;
+    }
+
+    .subtotal-display {
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        color: #f4c430 !important;
+        font-size: 0.9rem;
+    }
+
+    .service-subtotal-display {
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+        color: #67c2e4 !important;
+        font-size: 0.9rem;
+        vertical-align: middle;
+        padding: 8px 10px;
+    }
+
+    .original-price {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        text-decoration: line-through;
+    }
+
+    .stock-warning-text {
+        font-size: 0.65rem;
+        color: #f87171;
+        margin-top: 3px;
+    }
+
+    .remove-row-btn {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 2px 8px;
+        background: transparent;
+        border: none;
+        transition: color 0.15s;
+    }
+
+    .remove-row-btn:hover {
+        color: var(--accent);
+    }
+
+    /* =====================
+       SEARCH SUGGESTIONS DROPDOWN
+    ===================== */
+    .search-suggestions {
+        background: #1a1d26;
+        border: 1px solid var(--border-soft) !important;
+        border-top: none !important;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.55);
+        z-index: 9999 !important;
+        overflow: hidden;
+    }
+
     .search-suggestions .list-group-item {
-        padding: 8px 12px;
-        border-bottom: 1px solid #333;
+        background: #1a1d26;
+        color: var(--text-primary);
+        border-color: var(--border-soft);
+        padding: 9px 14px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.12s;
+    }
+
+    .search-suggestions .list-group-item:hover,
+    .search-suggestions .list-group-item:focus {
+        background: rgba(193,18,31,0.1);
+        color: var(--text-primary);
     }
 
     .search-suggestions .list-group-item:last-child {
         border-bottom: none;
     }
 
-    /* Remove the parent table's scroll-hiding if it exists */
-    .table-responsive {
-        overflow: visible !important;
+    .suggestion-price-badge {
+        background: rgba(193,18,31,0.18);
+        color: #f87171;
+        border: 1px solid rgba(193,18,31,0.35);
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
     }
 
-    .service-price-input {
-    border: 1px solid #0dcaf0 !important;
+    .suggestion-stock {
+        font-size: 0.68rem;
+        color: var(--text-muted);
+        margin-top: 2px;
     }
-    .service-price-input:focus {
-        box-shadow: 0 0 8px rgba(13, 202, 240, 0.5) !important;
+
+    /* =====================
+       TOTAL + SUBMIT AREA
+    ===================== */
+    .total-area {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: flex-end;
+        height: 100%;
+    }
+
+    .total-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+
+    #grand-total {
+        font-size: 2.4rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+        color: var(--accent);
+        margin-bottom: 20px;
+        line-height: 1;
+    }
+
+    #submit-btn {
+        min-width: 220px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        font-size: 0.9rem;
+        padding: 12px 28px;
+        border-radius: 12px;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    #submit-btn:not(:disabled):hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 22px rgba(193,18,31,0.4);
+    }
+
+    #submit-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1 class="text-white mb-4"><i class="bi bi-cart-dash text-danger"></i> New OUT Transaction</h1>
 
-    <div class="card bg-dark text-white border-secondary shadow">
-        <div class="card-body">
+<div class="page-title">
+    <i class="bi bi-cart-dash"></i> New Sale
+</div>
+
+<div class="form-card">
+    <div class="row g-3">
+
+        <!-- DATE -->
+        <div class="col-md-4">
+            <label class="form-label">Date / Time</label>
+            <input type="datetime-local" class="form-control" id="trans-date">
+        </div>
+
+        <!-- HANDLED BY -->
+        <div class="col-md-4">
+            <label class="form-label">Handled By</label>
+            <input type="text" class="form-control" value="{{ session.get('username') }}" readonly>
+        </div>
+
+        <!-- RECEIPT # -->
+        <div class="col-md-4">
+            <label class="form-label accent">
+                Paper Receipt # <span class="req">*</span>
+            </label>
+            <input type="text" class="form-control border-warn" id="sales-number" placeholder="e.g. 4052">
+        </div>
+
+        <!-- CUSTOMER -->
+        <div class="col-md-4">
+            <label class="form-label">Customer <span class="req">*</span></label>
+            <input type="text" id="customer-name" class="form-control" placeholder="Customer Name / Loyalty ID">
+        </div>
+    </div>
+
+    <!-- SECTION: ITEMS -->
+    <div class="form-section-divider accent">
+        <i class="bi bi-box"></i> Items
+    </div>
+
+    <div class="table-responsive">
+        <table class="table align-middle mb-2" id="items-table">
+            <thead>
+                <tr>
+                    <th style="width:38%;">Item</th>
+                    <th style="width:10%;">Stock</th>
+                    <th style="width:13%;">Qty Out</th>
+                    <th style="width:10%;">Disc %</th>
+                    <th style="width:14%;">Price</th>
+                    <th style="width:13%;">Subtotal</th>
+                    <th style="width:5%;"></th>
+                </tr>
+            </thead>
+            <tbody id="transaction-body">
+                <tr class="item-row">
+                    <td>
+                        <div class="position-relative">
+                            <input type="text"
+                                class="form-control form-control-sm item-input"
+                                placeholder="Search item..."
+                                autocomplete="off">
+                            <div class="search-suggestions list-group position-absolute w-100"
+                                style="display: none; max-height: 200px; overflow-y: auto;">
+                            </div>
+                            <input type="hidden" class="item-id-input">
+                        </div>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm stock-input" value="--" readonly>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm qty-input" min="1" step="1" value="1">
+                        <div class="stock-warning-text" style="display:none;">Insufficient stock</div>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm discount-input" min="0" max="50" step="1" value="0">
+                    </td>
+                    <td>
+                        <div class="d-flex flex-column">
+                            <small class="original-price" style="display:none;">₱0.00</small>
+                            <input type="number" class="form-control form-control-sm price-input" readonly>
+                        </div>
+                    </td>
+                    <td class="subtotal-display">₱0.00</td>
+                    <td>
+                        <button type="button" class="remove-row-btn" tabindex="-1">×</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <button class="btn btn-outline-danger btn-sm" id="add-row-btn">
+            <i class="bi bi-plus-circle me-1"></i> Add Item
+        </button>
+    </div>
+
+    <!-- SECTION: MECHANIC & SERVICES -->
+    <div class="form-section-divider info">
+        <i class="bi bi-wrench-adjustable"></i> Mechanic & Services
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label info">Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
+            <select class="form-select border-info-soft" id="mechanic-id">
+                <option value="">-- No Mechanic --</option>
+                {% for mech in mechanics %}
+                    <option value="{{ mech.id }}">{{ mech.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div id="services-section" style="display:none; margin-top:18px;">
+        <label class="form-label info">
+            Performed Services <span style="color:var(--accent); font-weight:400; text-transform:none; letter-spacing:0;">* required if mechanic chosen</span>
+        </label>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2" id="services-table">
+                <thead>
+                    <tr>
+                        <th style="width:55%;">Service Description</th>
+                        <th style="width:20%;">Price</th>
+                        <th style="width:13%;">Subtotal</th>
+                        <th style="width:5%;"></th>
+                    </tr>
+                </thead>
+                <tbody id="services-body">
+                    <tr class="service-row">
+                        <td>
+                            <div class="position-relative">
+                                <input type="text" class="form-control form-control-sm border-info-soft service-input" placeholder="Search service..." autocomplete="off">
+                                <div class="search-suggestions list-group position-absolute w-100" style="display:none; z-index:1000;"></div>
+                                <input type="hidden" class="service-id-input">
+                            </div>
+                        </td>
+                        <td>
+                            <input type="number" class="form-control form-control-sm border-info-soft service-price-input">
+                        </td>
+                        <td class="service-subtotal-display">₱0.00</td>
+                        <td>
+                            <button type="button" class="remove-row-btn remove-service-btn">×</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="btn btn-outline-info btn-sm" id="add-service-btn">
+                <i class="bi bi-plus-circle me-1"></i> Add Service
+            </button>
+        </div>
+    </div>
+
+    <!-- SECTION: PAYMENT & TOTAL -->
+    <div class="form-section-divider accent">
+        <i class="bi bi-credit-card"></i> Payment
+    </div>
+
+    <div class="row g-3 align-items-end">
+        <div class="col-md-6">
             <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label small text-white-50">Date / Time</label>
-                    <input type="datetime-local" class="form-control bg-dark text-white border-secondary" id="trans-date">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small text-white-50">Handled By</label>
-                    <input type="text" class="form-control bg-dark text-white border-secondary" value="{{ session.get('username') }}" disabled>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small text-warning">Paper Receipt # <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control bg-dark text-white border-warning" id="sales-number" placeholder="e.g. 4052">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label small text-white-50">Customer <span class="text-danger">*</span></label>
-                    <input type="text" id="customer-name" class="form-control bg-dark text-white border-secondary" placeholder="Customer Name / Loyalty ID">
-                </div>
-
-                <hr class="my-4 border-secondary opacity-25">                
-
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle" id="items-table">
-                        <thead>
-                            <tr class="small text-danger">
-                                <th style="width: 40%;">Item</th>
-                                <th style="width: 15%;">Stock</th>
-                                <th style="width: 15%;">Qty OUT</th>
-                                <th style="width: 10%;">Discount %</th>
-                                <th style="width: 15%;">Price</th>
-                                <th style="width: 20%;">Subtotal</th>
-                                <th style="width: 5%;"></th> </tr>
-                            </tr>
-                        </thead>
-                        <tbody id="transaction-body">
-                            <tr class="item-row">
-                                <td>
-                                    <div class="position-relative">
-                                        <input type="text" 
-                                            class="form-control form-control-sm bg-dark text-white border-secondary item-input" 
-                                            placeholder="Search item..." 
-                                            autocomplete="off">
-                                        <div class="search-suggestions list-group position-absolute w-100 shadow-lg" 
-                                            style="z-index: 1000; display: none; max-height: 200px; overflow-y: auto;">
-                                        </div>
-                                        <input type="hidden" class="item-id-input">
-                                    </div>
-                                </td>
-                                <td><input type="text" class="form-control form-control-sm bg-dark text-white-50 border-secondary stock-input" value="--" disabled></td>
-                                <td>
-                                    <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary qty-input" min="1" step="1" value="1">
-                                    <div class="stock-warning-text text-danger" style="font-size: 0.65rem; display: none;">Insufficient stock</div>
-                                </td>
-                                <td>
-                                <input type="number"
-                                    class="form-control form-control-sm bg-dark text-white border-secondary discount-input" min="0" max="50" step="1" value="0">
-                                </td>
-                                <td>
-                                    <div class="d-flex flex-column">
-                                        <small class="text-white-50 text-decoration-line-through original-price"
-                                            style="display:none;">
-                                            ₱0.00
-                                        </small>
-                                        <input type="number"
-                                            class="form-control form-control-sm bg-dark text-white border-secondary price-input"
-                                            readonly>
-                                    </div>
-                                </td>
-                                <td class="text-warning fw-bold subtotal-display">₱0.00</td>
-                                <td>
-                                    <button type="button" class="btn btn-sm text-secondary remove-row-btn" tabindex="-1">×</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <button class="btn btn-outline-danger btn-sm mt-2" id="add-row-btn">
-                        <i class="bi bi-plus-circle"></i> Add Another Item
-                    </button>
-                </div>
-
                 <div class="col-12">
-                    <hr class="my-4 border-secondary opacity-25">
-                </div>
-
-                <div class="col-md-4">
-                        <label class="form-label small text-info">Assigned Mechanic (Optional)</label>
-                        <select class="form-select bg-dark text-white border-info" id="mechanic-id">
-                            <option value="">-- No Mechanic --</option>
-                            {% for mech in mechanics %}
-                                <option value="{{ mech.id }}">{{ mech.name }}</option>
-                            {% endfor %}
-                        </select>
-                </div>
-
-                <div id="services-section" class="mt-3" style="display: none;">
-                    <label class="form-label small text-info">Performed Services <span class="text-danger">* if mechanic chosen</span></label>
-                    <div class="table-responsive">
-                        <table class="table table-dark table-sm align-middle" id="services-table">
-                            <thead>
-                                <tr class="small text-info">
-                                    <th style="width: 60%;">Service Description</th>
-                                    <th style="width: 35%;">Price</th>
-                                    <th style="width: 25%;">Subtotal</th>
-                                    <th style="width: 5%;"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="services-body">
-                                <tr class="service-row">
-                                    <td>
-                                        <div class="position-relative">
-                                            <input type="text" class="form-control form-control-sm bg-dark text-white border-info service-input" placeholder="Search service..." autocomplete="off">
-                                            <div class="search-suggestions list-group position-absolute w-100 shadow-lg" style="display: none; z-index: 1000;"></div>
-                                            <input type="hidden" class="service-id-input">
-                                        </div>
-                                    </td>
-                                    <td><input type="number" class="form-control form-control-sm bg-dark text-white border-info service-price-input"></td>
-                                    <td class="text-info fw-bold service-subtotal-display">₱0.00</td>
-                                    <td><button type="button" class="btn btn-sm text-secondary remove-service-btn">×</button></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <button class="btn btn-outline-info btn-sm" id="add-service-btn"><i class="bi bi-plus-circle"></i> Add Service</button>
-                    </div>
-                </div>
-
-                <div class="col-12">
-                    <hr class="my-4 border-secondary opacity-25">
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label small text-white-50">Payment Category</label>
-                    <select class="form-select bg-dark text-white border-secondary" id="payment-category">
+                    <label class="form-label">Payment Category</label>
+                    <select class="form-select" id="payment-category">
                         <option value="1" data-status="Paid">Cash</option>
                         <option value="Online" data-status="Paid">Online Payment (Wallet)</option>
-                        <option value="Bank" data-status="Paid">Bank Transfer</option> <option value="5" data-status="Unresolved">Utang (Pay Later)</option>
+                        <option value="Bank" data-status="Paid">Bank Transfer</option>
+                        <option value="5" data-status="Unresolved">Utang (Pay Later)</option>
                     </select>
-
-                    <div id="method-options" class="mt-3" style="display: none;">
-                        <label class="form-label small text-info" id="provider-label">Select Provider</label>
-                        <select class="form-select bg-dark text-white border-info" id="payment-method">
-                            {% for method in payment_methods %}
-                                {# We hide/show these based on the category via JS #}
-                                <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
-                            {% endfor %}
-                        </select>
-                        
-                        <label class="form-label small text-info mt-2">Reference Number <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control bg-dark text-white border-info" placeholder="Ref No. / Trace ID" id="ref-no">
-                    </div>
-
-                    <label class="form-label small text-white-50 mt-3">Notes</label>
-                    <textarea class="form-control bg-dark text-white border-secondary" rows="2" id="trans-notes"></textarea>
                 </div>
 
-                <div class="col-md-6 d-flex flex-column justify-content-end align-items-end">
-                    <h3 class="text-white-50 mb-0">TOTAL DUE</h3>
-                    <h1 class="text-danger mb-4" id="grand-total">₱0.00</h1>
-                    <button id="submit-btn" class="btn btn-danger btn-lg px-5 shadow" disabled>SUBMIT TRANSACTION</button>
+                <div id="method-options" style="display:none;" class="col-12">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label info" id="provider-label">Select Provider</label>
+                            <select class="form-select border-info-soft" id="payment-method">
+                                {% for method in payment_methods %}
+                                    <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label info">Reference Number <span class="req">*</span></label>
+                            <input type="text" class="form-control border-info-soft" placeholder="Ref No. / Trace ID" id="ref-no">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="2" id="trans-notes"></textarea>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
+        <div class="col-md-6">
+            <div class="total-area">
+                <div class="total-label">Total Due</div>
+                <div id="grand-total">₱0.00</div>
+                <button id="submit-btn" class="btn btn-danger" disabled>
+                    SUBMIT TRANSACTION
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /form-card -->
+
+{% endblock %}
+
+{% block scripts %}
 <script>
 /* =========================================================
    UTILITIES
@@ -257,7 +566,6 @@ function validateForm() {
 
         if (id) {
             hasValidItem = true;
-            // Check for both insufficient stock AND invalid quantity
             if ((stockValue !== '--' && qty > stock) || qty <= 0) {
                 hasInputError = true;
             }
@@ -275,49 +583,38 @@ function validateForm() {
 ========================================================= */
 function calculateRow(row) {
     if (!row.querySelector('.item-id-input').value) {
-    row.querySelector('.price-input').value = '';
-    row.querySelector('.subtotal-display').innerText = '₱0.00';
-    row.querySelector('.original-price').style.display = 'none';
-    return;
+        row.querySelector('.price-input').value = '';
+        row.querySelector('.subtotal-display').innerText = '₱0.00';
+        row.querySelector('.original-price').style.display = 'none';
+        return;
     }
 
     const qtyInput = row.querySelector('.qty-input');
     const stockInput = row.querySelector('.stock-input');
     const warningLabel = row.querySelector('.stock-warning-text');
-
     const qty = parseFloat(qtyInput.value) || 0;
     const stock = parseFloat(stockInput.value) || 0;
-
     const basePrice = parseFloat(row.dataset.basePrice) || 0;
     const priceInput = row.querySelector('.price-input');
     const discountInput = row.querySelector('.discount-input');
 
-    // Clamp discount (0–50)
     let discount = parseFloat(discountInput.value) || 0;
     if (discount < 0) discount = 0;
     if (discount > 50) discount = 50;
     discountInput.value = discount;
 
-    // Apply discount
     const discountedPrice = basePrice * (1 - discount / 100);
     priceInput.value = discountedPrice.toFixed(2);
 
-    // Strikethrough UI
     const originalPriceEl = row.querySelector('.original-price');
-
     if (discount > 0) {
         originalPriceEl.style.display = 'block';
-        originalPriceEl.innerText =
-            `₱${basePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        originalPriceEl.innerText = `₱${basePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
     } else {
         originalPriceEl.style.display = 'none';
     }
 
-    /* ==========================
-    VALIDATION
-    ========================== */
     let errorMessage = "";
-
     if (qty <= 0) {
         errorMessage = "Qty must be at least 1";
     } else if (stockInput.value !== '--' && qty > stock) {
@@ -325,21 +622,17 @@ function calculateRow(row) {
     }
 
     if (errorMessage) {
-        qtyInput.classList.add('border-danger', 'text-danger');
-        qtyInput.style.boxShadow = "0 0 5px rgba(220, 53, 69, 0.5)";
-        if (warningLabel) {
-            warningLabel.innerText = errorMessage;
-            warningLabel.style.display = 'block';
-        }
+        qtyInput.classList.add('border-danger');
+        qtyInput.style.color = '#f87171';
+        qtyInput.style.boxShadow = "0 0 0 2px rgba(193,18,31,0.3)";
+        if (warningLabel) { warningLabel.innerText = errorMessage; warningLabel.style.display = 'block'; }
     } else {
-        qtyInput.classList.remove('border-danger', 'text-danger');
+        qtyInput.classList.remove('border-danger');
+        qtyInput.style.color = '';
         qtyInput.style.boxShadow = "none";
         if (warningLabel) warningLabel.style.display = 'none';
     }
 
-    /* ==========================
-    SUBTOTAL
-    ========================== */
     const subtotal = qty * discountedPrice;
     row.querySelector('.subtotal-display').innerText =
         `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -347,32 +640,23 @@ function calculateRow(row) {
     calculateGrandTotal();
 }
 
-
 function calculateServiceRow(row) {
     const price = parseFloat(row.querySelector('.service-price-input').value) || 0;
-    // Services are usually 1x, so subtotal = price
-    const subtotal = price; 
-    
-    row.querySelector('.service-subtotal-display').innerText = 
-        `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    
+    row.querySelector('.service-subtotal-display').innerText =
+        `₱${price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
     calculateGrandTotal();
 }
 
 function calculateGrandTotal() {
     let total = 0;
-
-    document.querySelectorAll('.subtotal-display').forEach(display => {
-        total += parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
+    document.querySelectorAll('.subtotal-display').forEach(d => {
+        total += parseFloat(d.innerText.replace(/[₱,]/g, '')) || 0;
     });
-
-    document.querySelectorAll('.service-subtotal-display').forEach(display => {
-        total += parseFloat(display.innerText.replace(/[₱,]/g, '')) || 0;
+    document.querySelectorAll('.service-subtotal-display').forEach(d => {
+        total += parseFloat(d.innerText.replace(/[₱,]/g, '')) || 0;
     });
-
     document.getElementById('grand-total').innerText =
         `₱${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-
     validateForm();
 }
 
@@ -392,38 +676,26 @@ const handleTableSearch = async (input) => {
         calculateRow(row);
     }
 
-    if (query.length < 2) {
-        suggestions.style.display = 'none';
-        return;
-    }
+    if (query.length < 2) { suggestions.style.display = 'none'; return; }
 
     try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-
         suggestions.innerHTML = '';
 
-        if (!data.items?.length) {
-            suggestions.style.display = 'none';
-            return;
-        }
+        if (!data.items?.length) { suggestions.style.display = 'none'; return; }
 
         data.items.slice(0, 5).forEach(item => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className =
-                'list-group-item list-group-item-action bg-dark text-white border-secondary small';
-
+            btn.className = 'list-group-item list-group-item-action';
             btn.innerHTML = `
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <strong>${item.name}</strong>
-                    <span class="badge bg-danger">₱${item.a4s_selling_price}</span>
+                    <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
                 </div>
-                <small class="text-white-50" style="font-size:0.7rem">
-                    Stock: ${item.current_stock}
-                </small>
+                <div class="suggestion-stock"><i class="bi bi-box me-1"></i>Stock: ${item.current_stock}</div>
             `;
-
             btn.onclick = () => {
                 input.value = item.name;
                 input.dataset.confirmedName = item.name;
@@ -434,7 +706,6 @@ const handleTableSearch = async (input) => {
                 suggestions.style.display = 'none';
                 calculateRow(row);
             };
-
             suggestions.appendChild(btn);
         });
 
@@ -453,41 +724,29 @@ const handleServiceSearch = async (input) => {
     const suggestions = row.querySelector('.search-suggestions');
     const idInput = row.querySelector('.service-id-input');
 
-    // Clear ID if the user changes the text
-    if (query.length < 2) {
-        idInput.value = '';
-        suggestions.style.display = 'none';
-        return;
-    }
+    if (query.length < 2) { idInput.value = ''; suggestions.style.display = 'none'; return; }
 
     try {
         const res = await fetch(`/api/search/services?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-
         suggestions.innerHTML = '';
 
-        if (!data.services?.length) {
-            suggestions.style.display = 'none';
-            return;
-        }
+        if (!data.services?.length) { suggestions.style.display = 'none'; return; }
 
         data.services.forEach(service => {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'list-group-item list-group-item-action bg-dark text-white border-secondary small';
-
+            btn.className = 'list-group-item list-group-item-action';
             btn.innerHTML = `
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <strong>${service.name}</strong>
-                    <span class="text-info-50 small">${service.category}</span>
+                    <span style="font-size:0.72rem; color:#67c2e4;">${service.category}</span>
                 </div>
             `;
-
             btn.onclick = () => {
                 input.value = service.name;
                 idInput.value = service.id;
-                // Leave price empty for manual input (Jake's price)
-                row.querySelector('.service-price-input').focus(); 
+                row.querySelector('.service-price-input').focus();
                 suggestions.style.display = 'none';
                 calculateServiceRow(row);
             };
@@ -501,16 +760,14 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
-EVENT LISTENERS
+   EVENT LISTENERS
 ========================================================= */
-
-// Header inputs
 ['sales-number', 'customer-name', 'ref-no'].forEach(id => {
     document.getElementById(id).addEventListener('input', validateForm);
 });
 document.getElementById('payment-category').addEventListener('change', validateForm);
 
-// Payment category UI behavior
+// Payment category UI
 document.getElementById('payment-category').addEventListener('change', function () {
     const methodDiv = document.getElementById('method-options');
     const methodSelect = document.getElementById('payment-method');
@@ -518,18 +775,13 @@ document.getElementById('payment-category').addEventListener('change', function 
     const submitBtn = document.getElementById('submit-btn');
     const selectedCat = this.value;
 
-    // Filter the provider list
     let visibleCount = 0;
     Array.from(methodSelect.options).forEach(opt => {
         const isCategoryMatch = opt.getAttribute('data-category') === selectedCat;
-        
-        // Check if this option is the 'Trigger' itself (Bank Transfer)
-        // We want to hide the trigger from its own sub-menu
         const isTrigger = opt.text.trim() === "Bank Transfer";
-
         if (isCategoryMatch && !isTrigger) {
             opt.style.display = 'block';
-            if (visibleCount === 0) opt.selected = true; // Auto-select the first valid bank (e.g., General / Other)
+            if (visibleCount === 0) opt.selected = true;
             visibleCount++;
         } else {
             opt.style.display = 'none';
@@ -539,51 +791,44 @@ document.getElementById('payment-category').addEventListener('change', function 
     if (selectedCat === 'Online' || selectedCat === 'Bank') {
         methodDiv.style.display = 'block';
         providerLabel.innerText = selectedCat === 'Bank' ? 'Select Bank' : 'Select Online Provider';
-        submitBtn.className = 'btn btn-info btn-lg px-5 shadow';
+        submitBtn.className = 'btn btn-info';
+        submitBtn.style.minWidth = '220px';
     } else if (selectedCat === '5') {
         methodDiv.style.display = 'none';
-        submitBtn.className = 'btn btn-warning btn-lg px-5 shadow';
+        submitBtn.className = 'btn btn-warning';
+        submitBtn.style.minWidth = '220px';
     } else {
         methodDiv.style.display = 'none';
-        submitBtn.className = 'btn btn-danger btn-lg px-5 shadow';
+        submitBtn.className = 'btn btn-danger';
+        submitBtn.style.minWidth = '220px';
     }
     validateForm();
 });
 
-/* =========================================================
-MECHANIC / SERVICES TOGGLE
-========================================================= */
-document.getElementById('mechanic-id').addEventListener('change', function() {
+// Mechanic toggle
+document.getElementById('mechanic-id').addEventListener('change', function () {
     const servicesSection = document.getElementById('services-section');
-    
     if (this.value !== "") {
-        // Mechanic is selected - Show section
         servicesSection.style.display = 'block';
     } else {
-        // No mechanic - Hide section and clear any services added
         servicesSection.style.display = 'none';
-        clearServices(); 
+        clearServices();
     }
 });
 
-// Helper to clear services if the user unselects a mechanic
 function clearServices() {
     const tbody = document.getElementById('services-body');
     const rows = tbody.querySelectorAll('.service-row');
-    
     rows.forEach((row, index) => {
         if (index === 0) {
-            // Reset the first row instead of deleting it
             row.querySelector('.service-input').value = '';
             row.querySelector('.service-id-input').value = '';
             row.querySelector('.service-price-input').value = '';
-            // ADD THIS LINE:
             row.querySelector('.service-subtotal-display').innerText = '₱0.00';
         } else {
             row.remove();
         }
     });
-    // ADD THIS LINE to refresh the bottom total:
     calculateGrandTotal();
 }
 
@@ -595,23 +840,18 @@ document.addEventListener('input', (e) => {
     if (e.target.classList.contains('service-input')) {
         debounce(() => handleServiceSearch(e.target), 300)();
     }
-
-    if (
-        e.target.classList.contains('qty-input') ||
-        e.target.classList.contains('discount-input')
-    ) {
+    if (e.target.classList.contains('qty-input') || e.target.classList.contains('discount-input')) {
         calculateRow(e.target.closest('tr'));
     }
     if (e.target.classList.contains('service-price-input')) {
-        calculateServiceRow(e.target.closest('tr')); // Changed from calculateGrandTotal
+        calculateServiceRow(e.target.closest('tr'));
     }
 });
 
 // Hide suggestions on outside click
 document.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('item-input')) {
-        document.querySelectorAll('.search-suggestions')
-            .forEach(box => box.style.display = 'none');
+    if (!e.target.classList.contains('item-input') && !e.target.classList.contains('service-input')) {
+        document.querySelectorAll('.search-suggestions').forEach(box => box.style.display = 'none');
     }
 });
 
@@ -624,46 +864,48 @@ document.addEventListener('click', (e) => {
 
     if (rows.length > 1) {
         row.remove();
-        // The fix: calculate total AND validate form immediately
-        calculateGrandTotal(); 
+        calculateGrandTotal();
     } else {
-        // Reset single remaining row (FULL RESET)
         row.querySelector('.item-id-input').value = '';
         row.querySelector('.item-input').value = '';
         row.querySelector('.item-input').dataset.confirmedName = '';
-
         row.querySelector('.price-input').value = '';
         row.querySelector('.stock-input').value = '--';
-
-        // Reset discount
-        const discountInput = row.querySelector('.discount-input');
-        discountInput.value = 0;
-
-        // Clear base price
+        row.querySelector('.discount-input').value = 0;
         delete row.dataset.basePrice;
-
-        // Hide strikethrough
         const originalPriceEl = row.querySelector('.original-price');
         originalPriceEl.style.display = 'none';
         originalPriceEl.innerText = '₱0.00';
-
-        // Reset subtotal
         row.querySelector('.subtotal-display').innerText = '₱0.00';
-
-        // Reset qty styles
         const qtyInp = row.querySelector('.qty-input');
         qtyInp.value = 1;
-        qtyInp.classList.remove('border-danger', 'text-danger');
+        qtyInp.classList.remove('border-danger');
+        qtyInp.style.color = '';
         qtyInp.style.boxShadow = "none";
-
         row.querySelector('.stock-warning-text').style.display = 'none';
-
         calculateGrandTotal();
         validateForm();
     }
 });
 
-// Force Qty to 1 if user leaves it empty or invalid
+// Remove service row
+document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('remove-service-btn')) return;
+    const row = e.target.closest('tr');
+    const rows = document.querySelectorAll('.service-row');
+    if (rows.length > 1) {
+        row.remove();
+        calculateGrandTotal();
+    } else {
+        row.querySelector('.service-input').value = '';
+        row.querySelector('.service-id-input').value = '';
+        row.querySelector('.service-price-input').value = '';
+        row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+        calculateGrandTotal();
+    }
+});
+
+// Force qty >= 1
 document.addEventListener('change', (e) => {
     if (e.target.classList.contains('qty-input')) {
         const val = parseFloat(e.target.value);
@@ -674,79 +916,64 @@ document.addEventListener('change', (e) => {
     }
 });
 
-// Prevent typing decimals, minus signs, or 'e'
+// Block decimals/minus/e in qty
 document.addEventListener('keydown', (e) => {
     if (e.target.classList.contains('qty-input')) {
-        if (['.', '-', 'e', 'E'].includes(e.key)) {
-            e.preventDefault();
-        }
+        if (['.', '-', 'e', 'E'].includes(e.key)) e.preventDefault();
     }
 });
 
-// Clean up pasted values in Qty
+// Clean pasted values in qty
 document.addEventListener('paste', (e) => {
     if (e.target.classList.contains('qty-input')) {
         const pasteData = (e.clipboardData || window.clipboardData).getData('text');
         if (pasteData.includes('.') || pasteData.includes('-') || isNaN(pasteData)) {
             e.preventDefault();
-            const cleanValue = parseInt(pasteData.replace(/[^0-9]/g, '')) || 1;
-            e.target.value = cleanValue;
+            e.target.value = parseInt(pasteData.replace(/[^0-9]/g, '')) || 1;
             calculateRow(e.target.closest('tr'));
         }
     }
 });
 
-// Add row
+// Add item row
 document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
-
     const tbody = document.getElementById('transaction-body');
     const newRow = tbody.querySelector('.item-row').cloneNode(true);
 
-    // 1. Reset values
     newRow.querySelector('.item-id-input').value = '';
     newRow.querySelector('.item-input').value = '';
-    newRow.querySelector('.item-input').dataset.confirmedName = ''; 
+    newRow.querySelector('.item-input').dataset.confirmedName = '';
     newRow.querySelector('.price-input').value = '';
     newRow.querySelector('.qty-input').value = 1;
     newRow.querySelector('.stock-input').value = '--';
     newRow.querySelector('.subtotal-display').innerText = '₱0.00';
-
-    // --- NEW FIXES START HERE ---
-    // 2. Reset Discount
     newRow.querySelector('.discount-input').value = 0;
-
-    // 3. Clear the hidden base price data attribute
     delete newRow.dataset.basePrice;
 
-    // 4. Hide/Reset the strikethrough original price
     const originalPriceEl = newRow.querySelector('.original-price');
-    if (originalPriceEl) {
-        originalPriceEl.style.display = 'none';
-        originalPriceEl.innerText = '₱0.00';
-    }
-    // --- NEW FIXES END HERE ---
+    if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
 
-    // 5. Reset Styles (The Fix for the "Glow")
     const qtyInput = newRow.querySelector('.qty-input');
-    qtyInput.classList.remove('border-danger', 'text-danger');
-    qtyInput.style.boxShadow = "none"; 
+    qtyInput.classList.remove('border-danger');
+    qtyInput.style.color = '';
+    qtyInput.style.boxShadow = "none";
 
-    // 6. Hide Warning Text
     const newWarning = newRow.querySelector('.stock-warning-text');
     if (newWarning) newWarning.style.display = 'none';
 
+    newRow.querySelector('.search-suggestions').style.display = 'none';
+
     tbody.appendChild(newRow);
-    validateForm(); 
+    validateForm();
 });
 
-// Add Service Row
+// Add service row
 document.getElementById('add-service-btn').addEventListener('click', (e) => {
     e.preventDefault();
     const tbody = document.getElementById('services-body');
     const newRow = tbody.querySelector('.service-row').cloneNode(true);
 
-    // Reset values in the new row
     newRow.querySelector('.service-input').value = '';
     newRow.querySelector('.service-id-input').value = '';
     newRow.querySelector('.service-price-input').value = '';
@@ -756,35 +983,14 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
     tbody.appendChild(newRow);
 });
 
-// Remove Service Row
-document.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('remove-service-btn')) return;
-    const row = e.target.closest('tr');
-    const rows = document.querySelectorAll('.service-row');
-    
-    if (rows.length > 1) {
-        row.remove();
-        calculateGrandTotal();
-    } else {
-        // Just clear it if it's the last row
-        row.querySelector('.service-input').value = '';
-        row.querySelector('.service-id-input').value = '';
-        row.querySelector('.service-price-input').value = '';
-        // ADD THIS LINE:
-        row.querySelector('.service-subtotal-display').innerText = '₱0.00';
-        calculateGrandTotal();
-    }
-});
-
 /* =========================================================
    SUBMISSION
 ========================================================= */
 document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
-
     const btn = e.target;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
 
     const rows = document.querySelectorAll('.item-row');
     const validItems = [];
@@ -797,57 +1003,38 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
         if (name.trim() && !id) isClean = false;
         if (id && qty > 0) {
-            // Extract discount information from the row
             const discountPercent = parseFloat(row.querySelector('.discount-input').value) || 0;
             const originalPrice = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
             const finalPrice = parseFloat(row.querySelector('.price-input').value);
-            
-            validItems.push({
-                item_id: id,
-                quantity: qty,
-                original_price: originalPrice,
-                discount_percent: discountPercent,
-                final_price: finalPrice
-            });
+            validItems.push({ item_id: id, quantity: qty, original_price: originalPrice, discount_percent: discountPercent, final_price: finalPrice });
         }
     });
 
     if (!isClean || !validItems.length) {
         alert('Invalid items detected or cart is empty.');
         btn.disabled = false;
-        btn.innerHTML = 'SAVE';
+        btn.innerHTML = 'SUBMIT TRANSACTION';
         return;
     }
 
     await saveTransaction(validItems);
 });
 
-/* =========================================================
-   SAVE TRANSACTION
-========================================================= */
 async function saveTransaction(items) {
     let paymentId = document.getElementById('payment-category').value;
     let refNo = null;
 
     let finalDate;
-
     const services = [];
     document.querySelectorAll('.service-row').forEach(row => {
         const sId = row.querySelector('.service-id-input').value;
         const sPrice = parseFloat(row.querySelector('.service-price-input').value) || 0;
-        if (sId) {
-            services.push({
-                service_id: sId,
-                price: sPrice
-            });
-        }
+        if (sId) services.push({ service_id: sId, price: sPrice });
     });
 
     if (dateWasManuallyChanged) {
-        // User picked a specific time, use that (minutes only is fine)
         finalDate = document.getElementById('trans-date').value;
     } else {
-        // User didn't touch it, generate "Now" with seconds
         const now = new Date();
         const offset = now.getTimezoneOffset() * 60000;
         finalDate = new Date(now - offset).toISOString().slice(0, 19);
@@ -864,13 +1051,11 @@ async function saveTransaction(items) {
         mechanic_id: document.getElementById('mechanic-id').value || null,
         payment_method_id: paymentId,
         reference_no: refNo,
-        total_amount: parseFloat(
-            document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')
-        ),
+        total_amount: parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
         notes: document.getElementById('trans-notes').value,
         transaction_date: finalDate,
         items,
-        services: services
+        services
     };
 
     try {
@@ -885,11 +1070,14 @@ async function saveTransaction(items) {
         } else {
             const result = await res.json();
             alert(result.message);
+            document.getElementById('submit-btn').disabled = false;
+            document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
         }
     } catch (err) {
         console.error('Submission failed:', err);
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
     }
 }
 </script>
-
 {% endblock %}
