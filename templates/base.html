@@ -14,7 +14,7 @@
             --bg-sidebar: #151821;
             --bg-card: #1c1f26;
 
-            --accent: #c1121f;          /* Refined brand red */
+            --accent: #c1121f;
             --accent-hover: #a10f1a;
 
             --text-primary: #f5f5f5;
@@ -29,17 +29,11 @@
             font-family: Inter, system-ui, -apple-system, sans-serif;
         }
 
-        /* =========================
-           LAYOUT
-        ========================== */
         .wrapper {
             display: flex;
             min-height: 100vh;
         }
 
-        /* =========================
-           SIDEBAR
-        ========================== */
         .sidebar {
             flex: 0 0 250px;
             background: var(--bg-sidebar);
@@ -52,18 +46,12 @@
         .sidebar .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: center;
             margin-bottom: 45px;
         }
 
         .sidebar img {
-            height: 42px;
-        }
-
-        .sidebar h5 {
-            margin: 0;
-            font-weight: 600;
-            letter-spacing: 0.5px;
+            height: 90px;
         }
 
         .sidebar a {
@@ -96,25 +84,36 @@
             border-top: 1px solid var(--border-soft);
         }
 
-        /* =========================
-           CONTENT
-        ========================== */
         .content {
             flex: 1;
             display: flex;
             flex-direction: column;
         }
 
-        /* =========================
-           TOPBAR
-        ========================== */
         .topbar {
             background: var(--bg-sidebar);
             padding: 16px 28px;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border-soft);
+        }
+
+        .topbar-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            color: var(--text-primary);
+        }
+
+        .topbar-title span {
+            color: var(--accent); /* This makes "System" red */
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
         }
 
         .user-badge {
@@ -143,16 +142,10 @@
             background: rgba(255,255,255,0.05);
         }
 
-        /* =========================
-           MAIN
-        ========================== */
         main {
             padding: 35px;
         }
 
-        /* =========================
-           CARDS
-        ========================== */
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border-soft);
@@ -160,9 +153,6 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.35);
         }
 
-        /* =========================
-           FORMS
-        ========================== */
         .form-control, .form-select {
             background: #141720;
             border: 1px solid var(--border-soft);
@@ -175,9 +165,6 @@
             box-shadow: 0 0 0 2px rgba(193,18,31,0.25);
         }
 
-        /* =========================
-           BUTTONS
-        ========================== */
         .btn-primary {
             background: var(--accent);
             border: none;
@@ -194,9 +181,6 @@
             border-radius: 10px;
         }
 
-        /* =========================
-           TABLES
-        ========================== */
         .table {
             color: #fff;
         }
@@ -209,9 +193,6 @@
             background: rgba(193,18,31,0.05);
         }
 
-        /* =========================
-           FLASH
-        ========================== */
         #flash-container {
             position: fixed;
             top: 20px;
@@ -250,12 +231,10 @@
 
 <div class="wrapper">
 
-    <!-- SIDEBAR -->
     <div class="sidebar">
 
         <div class="logo">
-            <img src="{{ url_for('static', filename='media/logo.png') }}">
-            <h5>Inventory</h5>
+            <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4 Logo">
         </div>
 
         {% if session.get('user_id') %}
@@ -264,23 +243,32 @@
             </a>
 
             <a href="{{ url_for('transaction.list_orders') }}"
-               class="{% if 'orders' in request.path %}active-link{% endif %}">
+            class="{% if 'orders' in request.path %}active-link{% endif %}">
                 <i class="bi bi-box-arrow-in-down"></i> Stock In
             </a>
 
             <a href="{{ url_for('transaction.transaction_out') }}"
-               class="{% if 'transaction_out' in request.path %}active-link{% endif %}">
+            class="{% if '/out' in request.path %}active-link{% endif %}">
                 <i class="bi bi-cart-plus"></i> New Sale
             </a>
 
-            <a href="/analytics"><i class="bi bi-fire"></i> Hot Items</a>
-            <a href="/dead-stock"><i class="bi bi-emoji-frown"></i> Dead Stock</a>
-            <a href="/low-stock"><i class="bi bi-exclamation-triangle"></i> Low Stock</a>
+            <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">
+                <i class="bi bi-fire"></i> Hot Items
+            </a>
+            <a href="/dead-stock" class="{% if 'dead-stock' in request.path %}active-link{% endif %}">
+                <i class="bi bi-emoji-frown"></i> Dead Stock
+            </a>
+            <a href="/low-stock" class="{% if 'low-stock' in request.path %}active-link{% endif %}">
+                <i class="bi bi-exclamation-triangle"></i> Low Stock
+            </a>
 
             {% if session.get('role') == 'admin' %}
             <div class="admin-section">
-                <a href="/dashboard"><i class="bi bi-speedometer2"></i> Dashboard</a>
-                <a href="{{ url_for('auth.manage_users') }}">
+                <a href="/dashboard" class="{% if 'dashboard' in request.path %}active-link{% endif %}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a href="{{ url_for('auth.manage_users') }}"
+                class="{% if 'users' in request.path %}active-link{% endif %}">
                     <i class="bi bi-shield-lock"></i> Manage Users
                 </a>
             </div>
@@ -288,29 +276,33 @@
         {% endif %}
     </div>
 
-    <!-- CONTENT -->
     <div class="content">
 
         <div class="topbar">
-            {% if session.get('user_id') %}
-                <div class="user-badge">
-                    <i class="bi bi-person-circle"></i>
-                    {{ session.get('username') }}
+            <h5 class="topbar-title">
+                <i class="bi-bar-chart-line me-2" style="color: var(--accent);"></i>A4 Analytics <span>System</span>
+            </h5>
 
-                    {% if session.get('role') == 'admin' %}
-                        <span class="badge-role">ADMIN</span>
-                    {% else %}
-                        <span class="badge-role bg-secondary">STAFF</span>
-                    {% endif %}
-                </div>
+            <div class="topbar-right">
+                {% if session.get('user_id') %}
+                    <div class="user-badge">
+                        <i class="bi bi-person-circle"></i>
+                        {{ session.get('username') }}
 
-                <a href="/logout" class="btn btn-outline-light btn-sm logout-btn">
-                    Logout
-                </a>
-            {% endif %}
+                        {% if session.get('role') == 'admin' %}
+                            <span class="badge-role">ADMIN</span>
+                        {% else %}
+                            <span class="badge-role bg-secondary">STAFF</span>
+                        {% endif %}
+                    </div>
+
+                    <a href="/logout" class="btn btn-outline-light btn-sm logout-btn">
+                        Logout
+                    </a>
+                {% endif %}
+            </div>
         </div>
 
-        <!-- FLASH -->
         <div id="flash-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
