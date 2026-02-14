@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.6;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: white;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 22px;
+        }
+        .header-logo {
+            height: 60px; /* Adjust height as needed */
+            width: auto;
+            margin-right: 20px;
+        }
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 80px; /* Counter-balance the logo width to keep text centered */
+        }
+        .report-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+        .report-date {
+            font-size: 16px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        /* ── Main table ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 10px 10px;
+            border: 1px solid #999;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td {
+            padding: 11px 10px;
+            border: 1px solid #bbb;
+            font-size: 13px;
+            vertical-align: top;
+            line-height: 1.5;
+        }
+
+        /* Item rows inside cell */
+        .line-item { margin-bottom: 7px; }
+        .line-item strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .line-meta {
+            font-size: 12px;
+            color: #444;
+            padding-left: 4px;
+            margin-top: 2px;
+        }
+        .discount-tag {
+            color: #c1121f;
+            font-weight: 700;
+        }
+        .strikethrough {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        /* Services sub-row */
+        .services-cell {
+            margin-top: 9px;
+            padding-top: 7px;
+            border-top: 1px dashed #bbb;
+            font-size: 12px;
+            color: #333;
+        }
+        .services-cell .svc-label {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.4px;
+            color: #555;
+        }
+
+        /* Notes */
+        .notes-cell {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #777;
+            font-style: italic;
+        }
+
+        /* Status badge */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .badge-paid       { background: #d4edda; color: #155724; border: 1px solid #a3cfbb; }
+        .badge-unresolved { background: #f8d7da; color: #721c24; border: 1px solid #f1aeb5; }
+
+        /* Mechanic cut */
+        .cut-amount {
+            color: #c1121f;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .cut-detail {
+            font-size: 11px;
+            color: #777;
+            margin-top: 3px;
+        }
+
+        /* Mechanic column sub-text */
+        .svc-subtotal {
+            font-size: 11px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        /* ── Totals ── */
+        .total-section {
+            margin-top: 30px;
+            margin-left: auto;
+            width: 360px;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 9px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #ddd;
+        }
+        .total-row:last-child { border-bottom: none; }
+        .total-row .label { color: #444; }
+        .total-row .value { font-weight: 600; }
+        .total-row.mech-row .value { color: #c1121f; font-weight: 700; }
+        .total-row.grand {
+            background: #111;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color: #fff;
+            font-size: 17px;
+            font-weight: 800;
+        }
+        .total-row.grand .label { color: #eee; }
+        .total-row.grand .value { color: #fff; }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #888;
+            font-size: 15px;
+        }
+
+        /* ── Deliverables section ── */
+        .deliverables-header {
+            margin-top: 45px;
+            border-top: 3px solid #c1121f;
+            padding-top: 18px;
+        }
+        .deliverables-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #c1121f;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        .deliverables-subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 14px;
+        }
+        .deliverables-total {
+            margin-top: 16px;
+            text-align: right;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .deliverables-total span {
+            color: #c1121f;
+            font-weight: 800;
+            font-size: 17px;
+            margin-left: 14px;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <b>REPORT PREVIEW</b> &nbsp;—&nbsp; Press <b>Ctrl+P</b> or
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <div class="report-title">DAILY SALES REPORT</div>
+            <div class="report-date">Date: <strong>{{ report_date }}</strong></div>
+        </div>
+    </div>
+
+    {% if data.sales %}
+    <table>
+        <thead>
+            <tr>
+                <th width="11%">Sales No.</th>
+                <th width="13%">Customer</th>
+                <th width="30%">Items & Services</th>
+                <th width="15%">Mechanic</th>
+                <th width="12%">Mech. Cut</th>
+                <th width="9%">Payment</th>
+                <th width="10%">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in data.sales %}
+            <tr>
+                <td style="font-weight: 700;">{{ sale.sales_number }}</td>
+
+                <td>{{ sale.customer_name }}</td>
+
+                <td>
+                    {% for item in sale.products %}
+                    <div class="line-item">
+                        <strong>{{ item.quantity }}x {{ item.item_name }}</strong>
+                        <div class="line-meta">
+                            {% if item.discount_percent and item.discount_percent > 0 %}
+                                <span class="strikethrough">₱ {{ "%.2f"|format(item.original_unit_price) }}</span>
+                                ₱ {{ "%.2f"|format(item.final_unit_price) }}
+                                <span class="discount-tag">
+                                    -{{ (item.discount_percent * 100) | int }}% (−₱ {{ "%.2f"|format(item.discount_amount) }})
+                                </span>
+                            {% else %}
+                                ₱ {{ "%.2f"|format(item.final_unit_price) }} each
+                            {% endif %}
+                            &nbsp;|&nbsp; Line: <strong>₱ {{ "%.2f"|format(item.line_total) }}</strong>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    {% if sale.services %}
+                    <div class="services-cell">
+                        <div class="svc-label">Services</div>
+                        {% for svc in sale.services %}
+                            {{ svc.service_name }} — ₱ {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if sale.notes %}
+                    <div class="notes-cell">Note: {{ sale.notes }}</div>
+                    {% endif %}
+                </td>
+
+                <td>
+                    <strong>{{ sale.mechanic_name }}</strong>
+                    {% if sale.services_total > 0 %}
+                    <div class="svc-subtotal">Svcs: ₱ {{ "%.2f"|format(sale.services_total) }}</div>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if sale.mechanic_cut > 0 %}
+                        <span class="cut-amount">₱ {{ "%.2f"|format(sale.mechanic_cut) }}</span>
+                        <div class="cut-detail">
+                            {{ (sale.commission_rate * 100) | int }}% of ₱ {{ "%.2f"|format(sale.effective_base) }}
+                        </div>
+                        {% if sale.shop_topup > 0 %}
+                        <div class="cut-detail" style="color: #c1121f; margin-top: 2px;">
+                            Quota top-up: +₱ {{ "%.2f"|format(sale.shop_topup) }}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #aaa;">—</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {{ sale.payment_method }}
+                    <div style="margin-top: 5px;">
+                        <span class="badge {% if sale.status == 'Paid' %}badge-paid{% else %}badge-unresolved{% endif %}">
+                            {{ sale.status }}
+                        </span>
+                    </div>
+                </td>
+
+                <td style="font-weight: 700; font-size: 14px;">
+                    ₱ {{ "%.2f"|format(sale.total_amount) }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        <div class="total-row">
+            <span class="label">Total Gross Sales</span>
+            <span class="value">₱ {{ "%.2f"|format(data.total_gross) }}</span>
+        </div>
+        <div class="total-row mech-row">
+            <span class="label">Total Mechanic Payout</span>
+            <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
+        </div>
+        {% if data.total_shop_topup > 0 %}
+        <div class="total-row" style="background: #fff8f0;">
+            <span class="label" style="color: #b45309;">Quota Top-up (Shop Expense)</span>
+            <span class="value" style="color: #b45309;">₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+        </div>
+        {% endif %}
+        <div class="total-row grand">
+            <span class="label">NET REVENUE</span>
+            <span class="value">₱ {{ "%.2f"|format(data.net_revenue) }}</span>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="empty-state">
+        <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
+    </div>
+    {% endif %}
+
+    {% if data.unresolved %}
+    <div class="deliverables-header">
+        <div class="deliverables-title">⚠ Deliverables</div>
+        <div class="deliverables-subtitle">
+            The following transactions are unresolved and have been excluded from the totals above.
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="12%">Sales No.</th>
+                    <th width="14%">Customer</th>
+                    <th width="35%">Items & Services</th>
+                    <th width="14%">Mechanic</th>
+                    <th width="11%">Payment</th>
+                    <th width="14%">Amount Due</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in data.unresolved %}
+                <tr style="background: #fff5f5;">
+                    <td style="font-weight: 700;">{{ sale.sales_number }}</td>
+                    <td>{{ sale.customer_name }}</td>
+                    <td>
+                        {% for item in sale.products %}
+                        <div class="line-item">
+                            <strong>{{ item.quantity }}x {{ item.item_name }}</strong>
+                            <div class="line-meta">
+                                {% if item.discount_percent and item.discount_percent > 0 %}
+                                    <span class="strikethrough">₱ {{ "%.2f"|format(item.original_unit_price) }}</span>
+                                    ₱ {{ "%.2f"|format(item.final_unit_price) }}
+                                    <span class="discount-tag">
+                                        -{{ (item.discount_percent * 100) | int }}% (−₱ {{ "%.2f"|format(item.discount_amount) }})
+                                    </span>
+                                {% else %}
+                                    ₱ {{ "%.2f"|format(item.final_unit_price) }} each
+                                {% endif %}
+                                &nbsp;|&nbsp; Line: <strong>₱ {{ "%.2f"|format(item.line_total) }}</strong>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% if sale.services %}
+                        <div class="services-cell">
+                            <div class="svc-label">Services</div>
+                            {% for svc in sale.services %}
+                                {{ svc.service_name }} — ₱ {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        {% if sale.notes %}
+                        <div class="notes-cell">Note: {{ sale.notes }}</div>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ sale.mechanic_name }}</strong></td>
+                    <td>{{ sale.payment_method }}</td>
+                    <td style="font-weight: 700; font-size: 14px; color: #c1121f;">
+                        ₱ {{ "%.2f"|format(sale.total_amount) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="deliverables-total">
+            Total Deliverables Outstanding:
+            <span>₱ {{ "%.2f"|format(data.unresolved | sum(attribute='total_amount')) }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+</body>
+</html>

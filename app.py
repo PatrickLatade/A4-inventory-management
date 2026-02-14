@@ -21,7 +21,6 @@ from db.schema import init_db
 # Services (business logic)
 # ------------------------
 from routes.login_route import auth_bp
-from routes.login_route import auth_bp
 from services.inventory_service import get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
@@ -43,6 +42,7 @@ from importers.inventory_importer import import_inventory_csv
 # ------------------------
 from routes.routes_api import dashboard_api
 from routes.transaction_route import transaction_bp
+from routes.reports_route import reports_bp
 
 
 # ============================================================
@@ -84,6 +84,7 @@ init_db()  # Safe to call on startup (creates tables if missing)
 app.register_blueprint(dashboard_api)
 app.register_blueprint(auth_bp)
 app.register_blueprint(transaction_bp)
+app.register_blueprint(reports_bp)
 
 
 # ============================================================
