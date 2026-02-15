@@ -59,15 +59,7 @@ def add_item_to_db(data):
     conn.close()
     return new_id
 
-def format_date(dt_str):
-    """Format datetime string for display with date + time. Returns '-' if None/empty."""
-    if not dt_str or dt_str.strip() == '':
-        return "-"
-    try:
-        return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").strftime("%b %d, %Y %I:%M %p")
-    except:
-        return dt_str  # fallback if parsing fails
-    
+
 def get_status_class(status):
     """Return bootstrap class for status badge."""
     status = (status or "Pending").upper()

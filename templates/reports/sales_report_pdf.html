@@ -40,38 +40,17 @@
             padding-bottom: 14px;
             margin-bottom: 22px;
         }
-        .header-logo {
-            height: 60px; /* Adjust height as needed */
-            width: auto;
-            margin-right: 20px;
-        }
-        .header-text {
-            flex-grow: 1;
-            text-align: center;
-            margin-right: 80px; /* Counter-balance the logo width to keep text centered */
-        }
-        .report-title {
-            font-size: 26px;
-            font-weight: 800;
-            letter-spacing: -0.3px;
-            margin: 0;
-        }
-        .report-date {
-            font-size: 16px;
-            color: #333;
-            margin-top: 5px;
-        }
+        .header-logo { height: 60px; width: auto; margin-right: 20px; }
+        .header-text { flex-grow: 1; text-align: center; margin-right: 80px; }
+        .report-title { font-size: 26px; font-weight: 800; letter-spacing: -0.3px; margin: 0; }
+        .report-date  { font-size: 16px; color: #333; margin-top: 5px; }
 
-        /* ── Main table ── */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-        }
+        /* ── Main transaction table ── */
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
         th {
             background: #e8e8e8;
             text-align: left;
-            padding: 10px 10px;
+            padding: 10px;
             border: 1px solid #999;
             font-size: 12px;
             font-weight: 700;
@@ -86,29 +65,16 @@
             line-height: 1.5;
         }
 
-        /* Item rows inside cell */
-        .line-item { margin-bottom: 7px; }
-        .line-item strong {
-            display: block;
-            font-size: 13px;
-            font-weight: 700;
-        }
-        .line-meta {
-            font-size: 12px;
-            color: #444;
-            padding-left: 4px;
-            margin-top: 2px;
-        }
-        .discount-tag {
-            color: #c1121f;
-            font-weight: 700;
-        }
-        .strikethrough {
-            text-decoration: line-through;
-            color: #999;
-        }
+        /* Prevent rows from splitting across pages */
+        tr { page-break-inside: avoid; }
+        thead { display: table-header-group; } /* repeat header on each page */
 
-        /* Services sub-row */
+        .line-item { margin-bottom: 7px; }
+        .line-item strong { display: block; font-size: 13px; font-weight: 700; }
+        .line-meta { font-size: 12px; color: #444; padding-left: 4px; margin-top: 2px; }
+        .discount-tag { color: #c1121f; font-weight: 700; }
+        .strikethrough { text-decoration: line-through; color: #999; }
+
         .services-cell {
             margin-top: 9px;
             padding-top: 7px;
@@ -123,16 +89,8 @@
             letter-spacing: 0.4px;
             color: #555;
         }
+        .notes-cell { margin-top: 6px; font-size: 11px; color: #777; font-style: italic; }
 
-        /* Notes */
-        .notes-cell {
-            margin-top: 6px;
-            font-size: 11px;
-            color: #777;
-            font-style: italic;
-        }
-
-        /* Status badge */
         .badge {
             display: inline-block;
             padding: 3px 10px;
@@ -145,69 +103,124 @@
         .badge-paid       { background: #d4edda; color: #155724; border: 1px solid #a3cfbb; }
         .badge-unresolved { background: #f8d7da; color: #721c24; border: 1px solid #f1aeb5; }
 
-        /* Mechanic cut */
-        .cut-amount {
-            color: #c1121f;
-            font-weight: 700;
-            font-size: 14px;
-        }
-        .cut-detail {
-            font-size: 11px;
-            color: #777;
-            margin-top: 3px;
-        }
-
-        /* Mechanic column sub-text */
-        .svc-subtotal {
-            font-size: 11px;
-            color: #666;
-            margin-top: 3px;
-        }
-
-        /* ── Totals ── */
-        .total-section {
+        /* ── Three summary boxes ── */
+        /* Force onto a new page so the grid never splits mid-print */
+        .summary-grid {
+            display: flex;
+            gap: 14px;
             margin-top: 30px;
-            margin-left: auto;
-            width: 360px;
+            page-break-before: always;
+            break-before: always;
+        }
+        .summary-box {
+            flex: 1;
             border: 1px solid #bbb;
             border-radius: 6px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
-        .total-row {
+        .summary-box-title {
+            background: #e8e8e8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .summary-box-body {
+            padding: 10px 12px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .summary-box-body.fin-body { padding: 0; }
+
+        /* Items box */
+        .summary-item-row {
             display: flex;
             justify-content: space-between;
-            padding: 9px 16px;
-            font-size: 14px;
-            border-bottom: 1px solid #ddd;
+            font-size: 12px;
+            padding: 4px 0;
+            border-bottom: 1px solid #eee;
         }
-        .total-row:last-child { border-bottom: none; }
-        .total-row .label { color: #444; }
-        .total-row .value { font-weight: 600; }
-        .total-row.mech-row .value { color: #c1121f; font-weight: 700; }
-        .total-row.grand {
+        .summary-item-row:last-child { border-bottom: none; }
+        .summary-item-row .qty { color: #666; font-size: 11px; margin-left: 6px; }
+
+        /* Services / mechanic box */
+        .mechanic-block { margin-bottom: 12px; }
+        .mechanic-block:last-child { margin-bottom: 0; }
+        .mechanic-block-name { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
+        .mechanic-block-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #444;
+            padding: 1px 0;
+        }
+        .mechanic-block-cut {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 700;
+            color: #c1121f;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid #eee;
+        }
+
+        /* Financials box */
+        .fin-rows {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            /* Spread rows evenly — top rows sit naturally, NET fills the bottom */
+            justify-content: space-between;
+        }
+        .fin-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .fin-row .label { color: #444; }
+        .fin-row .value { font-weight: 600; }
+        .fin-row.mech .label { color: #c1121f; }
+        .fin-row.mech .value { color: #c1121f; font-weight: 700; }
+        .fin-row.topup .label { color: #b45309; }
+        .fin-row.topup .value { color: #b45309; font-weight: 700; }
+        .fin-row.net {
             background: #111;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
             color: #fff;
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 800;
+            padding: 10px 12px;
+            border-bottom: none;
+            border-radius: 0 0 6px 6px;
+            margin-top: auto; /* always snaps to bottom regardless of row count */
         }
-        .total-row.grand .label { color: #eee; }
-        .total-row.grand .value { color: #fff; }
+        .fin-row.net .label { color: #eee; }
+        .fin-row.net .value { color: #fff; }
 
         /* ── Empty state ── */
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: #888;
-            font-size: 15px;
-        }
+        .empty-state { text-align: center; padding: 50px; color: #888; font-size: 15px; }
 
         /* ── Deliverables section ── */
+        /* Also force onto a new page */
         .deliverables-header {
             margin-top: 45px;
             border-top: 3px solid #c1121f;
             padding-top: 18px;
+            page-break-before: always;
+            break-before: always;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         .deliverables-title {
             font-size: 20px;
@@ -217,11 +230,7 @@
             letter-spacing: 0.5px;
             margin-bottom: 6px;
         }
-        .deliverables-subtitle {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 14px;
-        }
+        .deliverables-subtitle { font-size: 12px; color: #666; margin-bottom: 14px; }
         .deliverables-total {
             margin-top: 16px;
             text-align: right;
@@ -257,15 +266,16 @@
     </div>
 
     {% if data.sales %}
+
+    {# ── Transaction table — Page 1 ── #}
     <table>
         <thead>
             <tr>
-                <th width="11%">Sales No.</th>
-                <th width="13%">Customer</th>
-                <th width="30%">Items & Services</th>
-                <th width="15%">Mechanic</th>
-                <th width="12%">Mech. Cut</th>
-                <th width="9%">Payment</th>
+                <th width="12%">OR No.</th>
+                <th width="14%">Customer</th>
+                <th width="38%">Items & Services</th>
+                <th width="16%">Mechanic</th>
+                <th width="10%">Payment</th>
                 <th width="10%">Total</th>
             </tr>
         </thead>
@@ -273,9 +283,7 @@
             {% for sale in data.sales %}
             <tr>
                 <td style="font-weight: 700;">{{ sale.sales_number }}</td>
-
                 <td>{{ sale.customer_name }}</td>
-
                 <td>
                     {% for item in sale.products %}
                     <div class="line-item">
@@ -308,39 +316,20 @@
                     <div class="notes-cell">Note: {{ sale.notes }}</div>
                     {% endif %}
                 </td>
-
                 <td>
-                    <strong>{{ sale.mechanic_name }}</strong>
+                    {{ sale.mechanic_name }}
                     {% if sale.services_total > 0 %}
-                    <div class="svc-subtotal">Svcs: ₱ {{ "%.2f"|format(sale.services_total) }}</div>
+                    <div style="font-size: 11px; color: #666; margin-top: 3px;">
+                        Svcs: ₱ {{ "%.2f"|format(sale.services_total) }}
+                    </div>
                     {% endif %}
                 </td>
-
-                <td>
-                    {% if sale.mechanic_cut > 0 %}
-                        <span class="cut-amount">₱ {{ "%.2f"|format(sale.mechanic_cut) }}</span>
-                        <div class="cut-detail">
-                            {{ (sale.commission_rate * 100) | int }}% of ₱ {{ "%.2f"|format(sale.effective_base) }}
-                        </div>
-                        {% if sale.shop_topup > 0 %}
-                        <div class="cut-detail" style="color: #c1121f; margin-top: 2px;">
-                            Quota top-up: +₱ {{ "%.2f"|format(sale.shop_topup) }}
-                        </div>
-                        {% endif %}
-                    {% else %}
-                        <span style="color: #aaa;">—</span>
-                    {% endif %}
-                </td>
-
                 <td>
                     {{ sale.payment_method }}
                     <div style="margin-top: 5px;">
-                        <span class="badge {% if sale.status == 'Paid' %}badge-paid{% else %}badge-unresolved{% endif %}">
-                            {{ sale.status }}
-                        </span>
+                        <span class="badge badge-paid">Paid</span>
                     </div>
                 </td>
-
                 <td style="font-weight: 700; font-size: 14px;">
                     ₱ {{ "%.2f"|format(sale.total_amount) }}
                 </td>
@@ -349,25 +338,87 @@
         </tbody>
     </table>
 
-    <div class="total-section">
-        <div class="total-row">
-            <span class="label">Total Gross Sales</span>
-            <span class="value">₱ {{ "%.2f"|format(data.total_gross) }}</span>
+    {# ── Three summary boxes — always starts on a new page ── #}
+    <div class="summary-grid">
+
+        {# Box 1: Items sold #}
+        <div class="summary-box">
+            <div class="summary-box-title">Items Sold</div>
+            <div class="summary-box-body">
+                {% if data.items_summary %}
+                    {% for item in data.items_summary %}
+                    <div class="summary-item-row">
+                        <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
+                        <span>₱ {{ "%.2f"|format(item.total) }}</span>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="color: #aaa; font-size: 12px;">No items sold.</div>
+                {% endif %}
+            </div>
         </div>
-        <div class="total-row mech-row">
-            <span class="label">Total Mechanic Payout</span>
-            <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
+
+        {# Box 2: Services & mechanic payouts (quota applied per mechanic per day) #}
+        <div class="summary-box">
+            <div class="summary-box-title">Services & Mechanic Payouts</div>
+            <div class="summary-box-body">
+                {% if data.mechanic_summary %}
+                    {% for mech in data.mechanic_summary %}
+                    <div class="mechanic-block">
+                        <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
+                        <div class="mechanic-block-row">
+                            <span>Services rendered</span>
+                            <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
+                        </div>
+                        {% if mech.shop_topup > 0 %}
+                        <div class="mechanic-block-row">
+                            <span style="color: #b45309;">Quota top-up (shop expense)</span>
+                            <span style="color: #b45309;">+₱ {{ "%.2f"|format(mech.shop_topup) }}</span>
+                        </div>
+                        <div class="mechanic-block-row">
+                            <span>Effective base</span>
+                            <span>₱ {{ "%.2f"|format(mech.effective_base) }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="mechanic-block-cut">
+                            <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
+                            <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="color: #aaa; font-size: 12px;">No services recorded.</div>
+                {% endif %}
+            </div>
         </div>
-        {% if data.total_shop_topup > 0 %}
-        <div class="total-row" style="background: #fff8f0;">
-            <span class="label" style="color: #b45309;">Quota Top-up (Shop Expense)</span>
-            <span class="value" style="color: #b45309;">₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+
+        {# Box 3: Financials #}
+        <div class="summary-box">
+            <div class="summary-box-title">Financials</div>
+            <div class="summary-box-body fin-body">
+                <div class="fin-rows">
+                    <div class="fin-row">
+                        <span class="label">Total Gross Sales</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_gross) }}</span>
+                    </div>
+                    <div class="fin-row mech">
+                        <span class="label">Total Mechanic Payout</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
+                    </div>
+                    {% if data.total_shop_topup > 0 %}
+                    <div class="fin-row topup">
+                        <span class="label">Quota Top-up (Expense)</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="fin-row net">
+                        <span class="label">NET REVENUE</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.net_revenue) }}</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        {% endif %}
-        <div class="total-row grand">
-            <span class="label">NET REVENUE</span>
-            <span class="value">₱ {{ "%.2f"|format(data.net_revenue) }}</span>
-        </div>
+
     </div>
 
     {% else %}
@@ -376,26 +427,28 @@
     </div>
     {% endif %}
 
+    {# ── Deliverables — always starts on a new page ── #}
     {% if data.unresolved %}
     <div class="deliverables-header">
-        <div class="deliverables-title">⚠ Deliverables</div>
+        <div class="deliverables-title">⚠ Payables</div>
         <div class="deliverables-subtitle">
-            The following transactions are unresolved and have been excluded from the totals above.
+            All unresolved transactions across all dates. These have been excluded from the daily totals above.
         </div>
         <table>
             <thead>
                 <tr>
-                    <th width="12%">Sales No.</th>
-                    <th width="14%">Customer</th>
-                    <th width="35%">Items & Services</th>
-                    <th width="14%">Mechanic</th>
-                    <th width="11%">Payment</th>
-                    <th width="14%">Amount Due</th>
+                    <th width="10%">Date</th>
+                    <th width="10%">OR No.</th>
+                    <th width="12%">Customer</th>
+                    <th width="36%">Items & Services</th>
+                    <th width="12%">Mechanic</th>
+                    <th width="10%">Amount Due</th>
                 </tr>
             </thead>
             <tbody>
                 {% for sale in data.unresolved %}
                 <tr style="background: #fff5f5;">
+                    <td style="font-size: 11px; color: #555;">{{ sale.transaction_date }}</td>
                     <td style="font-weight: 700;">{{ sale.sales_number }}</td>
                     <td>{{ sale.customer_name }}</td>
                     <td>
@@ -431,7 +484,6 @@
                         {% endif %}
                     </td>
                     <td><strong>{{ sale.mechanic_name }}</strong></td>
-                    <td>{{ sale.payment_method }}</td>
                     <td style="font-weight: 700; font-size: 14px; color: #c1121f;">
                         ₱ {{ "%.2f"|format(sale.total_amount) }}
                     </td>

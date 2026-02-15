@@ -24,34 +24,79 @@
     }
 
     /* =====================
-       SECTION DIVIDER
+       TABS
     ===================== */
-    .section-divider {
+    .po-tabs {
+        display: flex;
+        gap: 4px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        padding: 6px;
+        margin-bottom: 28px;
+        width: fit-content;
+    }
+
+    .po-tab {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin: 2.2rem 0 1.1rem 0;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 2px;
+        gap: 8px;
+        padding: 9px 20px;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
         color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        letter-spacing: 0.2px;
+        position: relative;
     }
 
-    .section-divider::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: var(--border-soft);
+    .po-tab:hover {
+        color: var(--text-primary);
+        background: rgba(255,255,255,0.04);
     }
 
-    .section-divider.pending i { color: var(--accent); }
-    .section-divider.partial i { color: #f4c430; }
-    .section-divider.completed i { color: #4ade80; }
+    .po-tab.active {
+        background: var(--bg-sidebar);
+        color: var(--text-primary);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
 
-    .section-divider.pending { color: var(--accent); }
-    .section-divider.partial { color: #f4c430; }
-    .section-divider.completed { color: #4ade80; }
+    .po-tab.active.tab-pending  { color: #f87171; }
+    .po-tab.active.tab-partial  { color: #fcd34d; }
+    .po-tab.active.tab-completed { color: #86efac; }
+
+    .tab-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .tab-pending  .tab-dot { background: var(--accent); }
+    .tab-partial  .tab-dot { background: #f4c430; }
+    .tab-completed .tab-dot { background: #4ade80; }
+
+    .tab-count {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 20px;
+        line-height: 1.6;
+    }
+
+    .tab-pending  .tab-count { background: rgba(193,18,31,0.2);  color: #f87171; }
+    .tab-partial  .tab-count { background: rgba(244,196,48,0.15); color: #fcd34d; }
+    .tab-completed .tab-count { background: rgba(74,222,128,0.1);  color: #86efac; }
+
+    /* =====================
+       TAB PANELS
+    ===================== */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
 
     /* =====================
        PO CARDS
@@ -64,47 +109,34 @@
         height: 100%;
         padding: 18px 20px;
         transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        backface-visibility: hidden;
-        -webkit-font-smoothing: subpixel-antialiased;
         position: relative;
         overflow: hidden;
     }
 
-    /* Left accent bar */
     .po-box::before {
         content: '';
         position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
+        left: 0; top: 0; bottom: 0;
         width: 4px;
         border-radius: 14px 0 0 14px;
     }
 
-    .status-pending::before  { background: var(--accent); }
-    .status-partial::before  { background: #f4c430; }
+    .status-pending::before   { background: var(--accent); }
+    .status-partial::before   { background: #f4c430; }
     .status-completed::before { background: #4ade80; }
 
     .po-box:hover {
         transform: translateY(-4px);
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 14px 36px rgba(0,0,0,0.45);
     }
 
-    .status-pending:hover  { border-color: rgba(193, 18, 31, 0.45); }
-    .status-partial:hover  { border-color: rgba(244, 196, 48, 0.45); }
-    .status-completed:hover { border-color: rgba(74, 222, 128, 0.3); }
+    .status-pending:hover   { border-color: rgba(193,18,31,0.45); }
+    .status-partial:hover   { border-color: rgba(244,196,48,0.45); }
+    .status-completed:hover { border-color: rgba(74,222,128,0.3); }
 
-    /* Completed cards slightly dimmed */
-    .status-completed {
-        opacity: 0.75;
-    }
-    .status-completed:hover {
-        opacity: 1;
-    }
+    .status-completed { opacity: 0.75; }
+    .status-completed:hover { opacity: 1; }
 
-    /* =====================
-       PO CARD INTERNALS
-    ===================== */
     .po-number {
         font-weight: 700;
         font-size: 0.95rem;
@@ -141,9 +173,9 @@
        STATUS BADGES
     ===================== */
     .badge-pending {
-        background: rgba(193, 18, 31, 0.18);
+        background: rgba(193,18,31,0.18);
         color: #f87171;
-        border: 1px solid rgba(193, 18, 31, 0.4);
+        border: 1px solid rgba(193,18,31,0.4);
         font-size: 0.65rem;
         padding: 3px 9px;
         border-radius: 20px;
@@ -153,9 +185,9 @@
     }
 
     .badge-partial {
-        background: rgba(244, 196, 48, 0.12);
+        background: rgba(244,196,48,0.12);
         color: #fcd34d;
-        border: 1px solid rgba(244, 196, 48, 0.35);
+        border: 1px solid rgba(244,196,48,0.35);
         font-size: 0.65rem;
         padding: 3px 9px;
         border-radius: 20px;
@@ -165,9 +197,9 @@
     }
 
     .badge-completed {
-        background: rgba(74, 222, 128, 0.1);
+        background: rgba(74,222,128,0.1);
         color: #86efac;
-        border: 1px solid rgba(74, 222, 128, 0.3);
+        border: 1px solid rgba(74,222,128,0.3);
         font-size: 0.65rem;
         padding: 3px 9px;
         border-radius: 20px;
@@ -182,10 +214,14 @@
     .empty-state {
         color: var(--text-muted);
         font-size: 0.82rem;
-        padding: 10px 4px;
+        padding: 40px;
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 8px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
     }
 
     /* =====================
@@ -196,7 +232,7 @@
         border: 1px solid var(--border-soft);
         border-radius: 16px;
         color: var(--text-primary);
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 24px 60px rgba(0,0,0,0.6);
     }
 
     .modal-header {
@@ -215,9 +251,7 @@
         padding: 16px 24px;
     }
 
-    .modal-body {
-        padding: 24px;
-    }
+    .modal-body { padding: 24px; }
 
     .modal-meta-label {
         font-size: 0.7rem;
@@ -235,9 +269,8 @@
         color: var(--text-primary);
     }
 
-    /* Modal table */
     .table-po-items {
-        --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+        --bs-table-hover-bg: rgba(255,255,255,0.03);
         --bs-table-hover-color: var(--text-primary);
     }
 
@@ -266,9 +299,7 @@
         border-color: var(--border-soft);
     }
 
-    .table-po-items tbody tr:hover {
-        background: #1a1d26  !important;
-    }
+    .table-po-items tbody tr:hover { background: #1a1d26 !important; }
 
     .qty-badge {
         display: inline-block;
@@ -284,12 +315,11 @@
     }
 
     .qty-badge.received {
-        border-color: rgba(74, 222, 128, 0.3);
+        border-color: rgba(74,222,128,0.3);
         color: #86efac;
-        background: rgba(74, 222, 128, 0.08);
+        background: rgba(74,222,128,0.08);
     }
 
-    /* Close button override */
     .btn-close-white {
         filter: invert(1) grayscale(100%) brightness(200%);
     }
@@ -308,20 +338,46 @@
     </a>
 </div>
 
-<!-- PENDING SECTION -->
-<div class="section-divider pending">
-    <i class="bi bi-clock-fill"></i> Pending
-    <span style="font-size:0.68rem; font-weight:400; color: var(--text-muted); text-transform:none; letter-spacing:0;">— not yet received</span>
+<!-- COUNT HELPERS FOR TAB BADGES -->
+{% set pending_orders   = orders | selectattr("status", "equalto", "PENDING")   | list %}
+{% set partial_orders   = orders | selectattr("status", "equalto", "PARTIAL")   | list %}
+{% set completed_orders = orders | selectattr("status", "equalto", "COMPLETED") | list %}
+
+<!-- TABS -->
+<div class="po-tabs">
+    <button class="po-tab tab-pending active" onclick="switchTab('pending', this)">
+        <span class="tab-dot"></span>
+        Pending
+        {% if pending_orders %}
+        <span class="tab-count">{{ pending_orders | length }}</span>
+        {% endif %}
+    </button>
+    <button class="po-tab tab-partial" onclick="switchTab('partial', this)">
+        <span class="tab-dot"></span>
+        Partial
+        {% if partial_orders %}
+        <span class="tab-count">{{ partial_orders | length }}</span>
+        {% endif %}
+    </button>
+    <button class="po-tab tab-completed" onclick="switchTab('completed', this)">
+        <span class="tab-dot"></span>
+        Completed
+        {% if completed_orders %}
+        <span class="tab-count">{{ completed_orders | length }}</span>
+        {% endif %}
+    </button>
 </div>
-<div class="row g-3">
-    {% set pending_count = namespace(value=0) %}
-    {% for order in orders if order.status == 'PENDING' %}
-        {% set pending_count.value = pending_count.value + 1 %}
+
+<!-- PENDING PANEL -->
+<div class="tab-panel active" id="panel-pending">
+    {% if pending_orders %}
+    <div class="row g-3">
+        {% for order in pending_orders %}
         <div class="col-md-4">
             <div class="po-box status-pending" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-pending">{{ order.status }}</span>
+                    <span class="badge-pending">Pending</span>
                 </div>
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
@@ -330,28 +386,25 @@
                 </div>
             </div>
         </div>
-    {% endfor %}
-    {% if pending_count.value == 0 %}
-        <div class="col-12">
-            <div class="empty-state"><i class="bi bi-inbox"></i> No pending orders.</div>
-        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i> No pending orders.
+    </div>
     {% endif %}
 </div>
 
-<!-- PARTIAL SECTION -->
-<div class="section-divider partial">
-    <i class="bi bi-truck"></i> Partial
-    <span style="font-size:0.68rem; font-weight:400; color: var(--text-muted); text-transform:none; letter-spacing:0;">— delivery in progress</span>
-</div>
-<div class="row g-3">
-    {% set partial_count = namespace(value=0) %}
-    {% for order in orders if order.status == 'PARTIAL' %}
-        {% set partial_count.value = partial_count.value + 1 %}
+<!-- PARTIAL PANEL -->
+<div class="tab-panel" id="panel-partial">
+    {% if partial_orders %}
+    <div class="row g-3">
+        {% for order in partial_orders %}
         <div class="col-md-4">
             <div class="po-box status-partial" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-partial">{{ order.status }}</span>
+                    <span class="badge-partial">Partial</span>
                 </div>
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
@@ -360,22 +413,20 @@
                 </div>
             </div>
         </div>
-    {% endfor %}
-    {% if partial_count.value == 0 %}
-        <div class="col-12">
-            <div class="empty-state"><i class="bi bi-inbox"></i> No partial orders.</div>
-        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i> No partial orders.
+    </div>
     {% endif %}
 </div>
 
-<!-- COMPLETED SECTION -->
-<div class="section-divider completed">
-    <i class="bi bi-check-circle-fill"></i> Completed
-</div>
-<div class="row g-3">
-    {% set comp_count = namespace(value=0) %}
-    {% for order in orders if order.status == 'COMPLETED' %}
-        {% set comp_count.value = comp_count.value + 1 %}
+<!-- COMPLETED PANEL -->
+<div class="tab-panel" id="panel-completed">
+    {% if completed_orders %}
+    <div class="row g-3">
+        {% for order in completed_orders %}
         <div class="col-md-3">
             <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
@@ -388,11 +439,12 @@
                 </div>
             </div>
         </div>
-    {% endfor %}
-    {% if comp_count.value == 0 %}
-        <div class="col-12">
-            <div class="empty-state"><i class="bi bi-inbox"></i> No history yet.</div>
-        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i> No completed orders yet.
+    </div>
     {% endif %}
 </div>
 
@@ -449,6 +501,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const modalEl = document.getElementById('orderModal');
     if (modalEl) orderModal = new bootstrap.Modal(modalEl);
 });
+
+function switchTab(name, btn) {
+    // Deactivate all tabs and panels
+    document.querySelectorAll('.po-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+    // Activate clicked tab and matching panel
+    btn.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+}
 
 async function openOrderDetails(poId) {
     if (!orderModal) {

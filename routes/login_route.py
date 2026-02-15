@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, session, flash,
 from werkzeug.security import check_password_hash, generate_password_hash
 from db.database import get_db
 from datetime import datetime
+from utils.formatters import format_date
 
 # 1. Initialize the Blueprint
 auth_bp = Blueprint('auth', __name__)
@@ -119,8 +120,21 @@ def manage_users():
 
     conn.close()
 
-    # --- 4. SERVE THE PAGE ---
-    # Add sales_history=sales_history to the list of variables sent to the template
+    # --- 4. FORMAT DATES before passing to template ---
+    users = [
+        {**dict(u), "created_at": format_date(u["created_at"], show_time=True)}
+        for u in users
+    ]
+    sales_history = [
+        {**dict(s), "transaction_date": format_date(s["transaction_date"], show_time=True)}
+        for s in sales_history
+    ]
+    history = [
+        {**dict(h), "transaction_date": format_date(h["transaction_date"], show_time=True)}
+        for h in history
+    ]
+
+    # --- 5. SERVE THE PAGE ---
     return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics, services_list=services_list, categories=categories)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])

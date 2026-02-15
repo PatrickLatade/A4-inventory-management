@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify
 from services.transactions_service import add_transaction
 from services.inventory_service import get_unique_categories
-from services.transactions_service import add_item_to_db, format_date, get_status_class
+from services.transactions_service import add_item_to_db, get_status_class
+from utils.formatters import format_date
 from db.database import get_db
 from datetime import datetime
 
@@ -415,8 +416,8 @@ def get_po_details(po_id):
         return jsonify({"error": "Order not found"}), 404
 
     mode = 'IN' if po['received_at'] else 'ORDER'
-    display_created_at = format_date(po['created_at'])
-    display_received_at = format_date(po['received_at'])
+    display_created_at = format_date(po['created_at'], show_time=True)
+    display_received_at = format_date(po['received_at'], show_time=True)
 
     items = conn.execute("""
         SELECT i.name, 
