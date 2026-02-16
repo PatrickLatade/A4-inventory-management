@@ -453,6 +453,9 @@
     <!-- AUDIT TAB -->
     <div class="tab-pane fade" id="audit-tab">
         <div class="table-responsive">
+            <h6 class="text-info fw-semibold fs-5 mt-4 mb-3">
+            <i class="bi bi-truck me-2"></i> Item Movement
+            </h6>
             <table class="table table-dark table-hover align-middle">
                 <thead>
                     <tr class="border-bottom border-secondary">
@@ -527,6 +530,27 @@
                         <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
                     </tr>
                     {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <h6 class="text-warning fw-semibold fs-5 mt-4 mb-3">
+            <i class="bi bi-cash-coin me-2"></i> Debt Payment History
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th>Paid At</th>
+                        <th>Customer</th>
+                        <th>Receipt #</th>
+                        <th class="text-center">Amount Paid</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th>Staff</th>
+                    </tr>
+                </thead>
+                <tbody id="debt-audit-body">
+                    <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -811,5 +835,28 @@ function viewOrder(poId) {
             alert("Failed to load order details. Please try again.");
         });
 }
+
+document.querySelector('[data-bs-target="#audit-tab"]').addEventListener('shown.bs.tab', function () {
+    fetch('/api/debt/audit')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('debt-audit-body');
+            if (!data.payments || data.payments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No debt payments recorded yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.payments.map(p => `
+                <tr>
+                    <td class="text-white-50 small">${p.paid_at}</td>
+                    <td class="fw-bold">${p.customer_name || 'Walk-in'}</td>
+                    <td class="text-warning">${p.sales_number || p.sale_id}</td>
+                    <td class="text-center fw-bold text-success">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info">${p.payment_method || '—'}</span></td>
+                    <td class="text-white-50 small">${p.reference_no || '—'}</td>
+                    <td class="text-white-50 small"><i class="bi bi-person"></i> ${p.paid_by || 'Staff'}</td>
+                </tr>
+            `).join('');
+        });
+});
 </script>
 {% endblock %}

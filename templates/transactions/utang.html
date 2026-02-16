@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .page-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+        margin-bottom: 24px;
+    }
+    .page-title i { color: var(--accent); margin-right: 10px; }
+
+    /* ── SUMMARY CARDS ── */
+    .summary-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+    }
+    .summary-card .label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+    .summary-card .value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+    }
+    .summary-card .value.danger  { color: var(--accent); }
+    .summary-card .value.warning { color: #f4c430; }
+    .summary-card .value.muted   { color: var(--text-muted); }
+
+    /* ── DEBT CARDS ── */
+    .debt-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        padding: 20px 24px;
+        margin-bottom: 14px;
+        transition: border-color 0.2s;
+        cursor: pointer;
+    }
+    .debt-card:hover { border-color: var(--accent); }
+    .debt-card.partial { border-left: 4px solid #f4c430; }
+    .debt-card.unresolved { border-left: 4px solid var(--accent); }
+
+    .debt-customer {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    .debt-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+    .debt-amount {
+        font-family: 'Courier New', monospace;
+        font-weight: 800;
+        font-size: 1.3rem;
+        color: var(--accent);
+    }
+    .debt-paid {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: #4ade80;
+    }
+    .debt-remaining {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: #f4c430;
+    }
+
+    .progress-bar-track {
+        height: 6px;
+        background: var(--border-soft);
+        border-radius: 99px;
+        margin-top: 10px;
+        overflow: hidden;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #4ade80, #22c55e);
+        transition: width 0.4s ease;
+    }
+
+    .status-badge {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 1px;
+        padding: 3px 10px;
+        border-radius: 99px;
+        text-transform: uppercase;
+    }
+    .badge-unresolved { background: rgba(193,18,31,0.15); color: #f87171; border: 1px solid rgba(193,18,31,0.35); }
+    .badge-partial    { background: rgba(244,196,48,0.15); color: #f4c430; border: 1px solid rgba(244,196,48,0.35); }
+    .badge-paid       { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.35); }
+
+    /* ── MODAL ── */
+    .modal-content {
+        background: #1a1d26;
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        color: var(--text-primary);
+    }
+    .modal-header { border-color: var(--border-soft); }
+    .modal-footer { border-color: var(--border-soft); }
+
+    .detail-section-title {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--text-muted);
+        margin: 18px 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .detail-section-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-soft);
+    }
+
+    .payment-history-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #13161e;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        font-size: 0.82rem;
+    }
+    .payment-history-row .ph-amount {
+        font-family: 'Courier New', monospace;
+        font-weight: 700;
+        color: #4ade80;
+    }
+    .payment-history-row .ph-meta {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+    }
+
+    .form-control, .form-select {
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 10px;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(193,18,31,0.25);
+        background: #141720;
+        color: var(--text-primary);
+    }
+    .form-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-muted);
+        margin-bottom: 5px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+    .empty-state i { font-size: 3rem; margin-bottom: 12px; display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-title">
+    <i class="bi bi-hourglass-split"></i> Utang Tracker
+</div>
+
+<!-- SUMMARY ROW -->
+{% set total_outstanding = debts | sum(attribute='remaining') %}
+{% set total_debts = debts | length %}
+{% set partial_count = debts | selectattr('status', 'equalto', 'Partial') | list | length %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="summary-card">
+            <div class="label">Total Outstanding</div>
+            <div class="value danger">₱{{ "{:,.2f}".format(total_outstanding) }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <div class="label">Open Debts</div>
+            <div class="value warning">{{ total_debts }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="summary-card">
+            <div class="label">Partially Paid</div>
+            <div class="value muted">{{ partial_count }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- DEBT LIST -->
+{% if debts %}
+    {% for debt in debts %}
+    {% set pct = ((debt.total_paid / debt.total_amount) * 100) | round(1) if debt.total_amount > 0 else 0 %}
+    <div class="debt-card {{ debt.status | lower }}" onclick="openDebtModal({{ debt.id }})">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="debt-customer">
+                    {{ debt.customer_name or 'Walk-in' }}
+                    <span class="status-badge badge-{{ debt.status | lower }} ms-2">{{ debt.status }}</span>
+                </div>
+                <div class="debt-meta">
+                    Receipt #{{ debt.sales_number or debt.id }}
+                    &nbsp;·&nbsp;
+                    {{ debt.transaction_date }}
+                    {% if debt.mechanic_name %}
+                        &nbsp;·&nbsp; <i class="bi bi-wrench-adjustable"></i> {{ debt.mechanic_name }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="text-end">
+                <div class="debt-amount">₱{{ "{:,.2f}".format(debt.total_amount) }}</div>
+                <div class="debt-paid">Paid: ₱{{ "{:,.2f}".format(debt.total_paid) }}</div>
+                <div class="debt-remaining">Balance: ₱{{ "{:,.2f}".format(debt.remaining) }}</div>
+            </div>
+        </div>
+        <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width: {{ pct }}%;"></div>
+        </div>
+        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:4px;">
+            {{ pct }}% paid
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty-state">
+        <i class="bi bi-check-circle"></i>
+        <div style="font-size:1.1rem; font-weight:600; margin-bottom:6px;">All Clear!</div>
+        <div>No outstanding debts. You're all caught up.</div>
+    </div>
+{% endif %}
+
+
+<!-- ── DEBT DETAIL MODAL ── -->
+<div class="modal fade" id="debtModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-hourglass-split me-2"></i>
+                    Debt Detail — <span id="modal-sale-number"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body" id="modal-body-content">
+                <div class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm me-2"></div> Loading...
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger btn-sm" id="open-payment-btn" style="display:none;" onclick="openPaymentPanel()">
+                    <i class="bi bi-cash-coin me-1"></i> Record Payment
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── PAYMENT PANEL MODAL ── -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-warning">
+                    <i class="bi bi-cash-coin me-2"></i> Record Payment
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span style="font-size:0.8rem; color:var(--text-muted);">Customer</span>
+                        <strong id="pay-customer-name"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span style="font-size:0.8rem; color:var(--text-muted);">Total Amount</span>
+                        <strong id="pay-total-amount" style="font-family:monospace;"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span style="font-size:0.8rem; color:var(--text-muted);">Total Paid So Far</span>
+                        <strong id="pay-total-paid" style="font-family:monospace; color:#4ade80;"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span style="font-size:0.8rem; color:var(--text-muted);">Remaining Balance</span>
+                        <strong id="pay-remaining" style="font-family:monospace; color:#f4c430;"></strong>
+                    </div>
+                </div>
+
+                <hr style="border-color:var(--border-soft);">
+
+                <div class="mb-3">
+                    <label class="form-label">Amount Paying Now <span style="color:var(--accent);">*</span></label>
+                    <input type="number" id="pay-amount" class="form-control" min="1" step="0.01" placeholder="0.00">
+                    <div id="pay-amount-error" style="color:#f87171; font-size:0.75rem; margin-top:4px; display:none;"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Payment Method <span style="color:var(--accent);">*</span></label>
+                    <select id="pay-method" class="form-select">
+                        {% for pm in payment_methods %}
+                            <option value="{{ pm.id }}">{{ pm.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3" id="pay-ref-group" style="display:none;">
+                    <label class="form-label">Reference Number</label>
+                    <input type="text" id="pay-ref" class="form-control" placeholder="GCash / Bank ref no.">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <input type="text" id="pay-notes" class="form-control" placeholder="Optional">
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToDetail()">Back</button>
+                <button type="button" class="btn btn-warning btn-sm fw-bold" id="confirm-pay-btn" onclick="submitPayment()">
+                    CONFIRM PAYMENT
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let activeSaleId   = null;
+let activeDebtData = null;
+
+/* ── OPEN DETAIL MODAL ── */
+async function openDebtModal(saleId) {
+    activeSaleId = saleId;
+    const modal = new bootstrap.Modal(document.getElementById('debtModal'));
+
+    document.getElementById('modal-body-content').innerHTML = `
+        <div class="text-center py-4 text-muted">
+            <div class="spinner-border spinner-border-sm me-2"></div> Loading...
+        </div>`;
+    document.getElementById('open-payment-btn').style.display = 'none';
+    modal.show();
+
+    try {
+        const res  = await fetch(`/api/debt/${saleId}`);
+        const data = await res.json();
+        activeDebtData = data;
+
+        renderDebtModal(data);
+    } catch (err) {
+        document.getElementById('modal-body-content').innerHTML =
+            `<div class="text-danger text-center py-4">Failed to load. Please try again.</div>`;
+    }
+}
+
+function renderDebtModal(data) {
+    const sale     = data.sale;
+    const items    = data.items;
+    const services = data.services;
+    const payments = data.payments;
+
+    const remaining = sale.remaining;
+    const pct       = sale.total_amount > 0
+        ? Math.min(100, ((sale.total_paid / sale.total_amount) * 100)).toFixed(1)
+        : 0;
+
+    document.getElementById('modal-sale-number').innerText =
+        sale.sales_number || `#${sale.id}`;
+
+    let html = `
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col-6">
+                <div style="font-size:0.7rem;color:var(--text-muted);">CUSTOMER</div>
+                <strong>${sale.customer_name || 'Walk-in'}</strong>
+            </div>
+            <div class="col-6 text-end">
+                <div style="font-size:0.7rem;color:var(--text-muted);">SALE DATE</div>
+                <strong>${sale.transaction_date}</strong>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-4">
+                <div style="font-size:0.7rem;color:var(--text-muted);">TOTAL</div>
+                <strong style="font-family:monospace; color:var(--accent);">₱${parseFloat(sale.total_amount).toLocaleString(undefined,{minimumFractionDigits:2})}</strong>
+            </div>
+            <div class="col-4 text-center">
+                <div style="font-size:0.7rem;color:var(--text-muted);">PAID</div>
+                <strong style="font-family:monospace; color:#4ade80;">₱${parseFloat(sale.total_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</strong>
+            </div>
+            <div class="col-4 text-end">
+                <div style="font-size:0.7rem;color:var(--text-muted);">BALANCE</div>
+                <strong style="font-family:monospace; color:#f4c430;">₱${parseFloat(remaining).toLocaleString(undefined,{minimumFractionDigits:2})}</strong>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress-bar-track mb-3">
+            <div class="progress-bar-fill" style="width:${pct}%;"></div>
+        </div>
+        <div style="font-size:0.65rem; color:var(--text-muted); margin-top:-8px; margin-bottom:12px;">${pct}% paid</div>
+    `;
+
+    // Items
+    if (items.length > 0) {
+        html += `<div class="detail-section-title"><i class="bi bi-box"></i> Items Purchased</div>`;
+        html += `<table class="table table-sm" style="background:transparent; color:var(--text-primary);">
+            <thead><tr style="font-size:0.7rem; color:var(--text-muted);">
+                <th>Item</th><th class="text-center">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th>
+            </tr></thead><tbody>`;
+        items.forEach(item => {
+            html += `<tr style="border-color:var(--border-soft);">
+                <td>${item.item_name}</td>
+                <td class="text-center">${item.quantity}</td>
+                <td class="text-end">₱${parseFloat(item.final_unit_price).toFixed(2)}</td>
+                <td class="text-end">₱${parseFloat(item.line_total).toFixed(2)}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
+    // Services
+    if (services.length > 0) {
+        html += `<div class="detail-section-title"><i class="bi bi-wrench"></i> Services</div>`;
+        services.forEach(svc => {
+            html += `<div class="payment-history-row">
+                <span>${svc.service_name}</span>
+                <span class="ph-amount">₱${parseFloat(svc.price).toFixed(2)}</span>
+            </div>`;
+        });
+    }
+
+    // Payment History
+    html += `<div class="detail-section-title"><i class="bi bi-clock-history"></i> Payment History</div>`;
+    if (payments.length === 0) {
+        html += `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px 0;">No payments recorded yet.</div>`;
+    } else {
+        payments.forEach((p, idx) => {
+            html += `<div class="payment-history-row">
+                <div>
+                    <div class="ph-amount">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+                    <div class="ph-meta">${p.payment_method || 'Cash'} ${p.reference_no ? '· Ref: '+p.reference_no : ''}</div>
+                    ${p.notes ? `<div class="ph-meta fst-italic">"${p.notes}"</div>` : ''}
+                </div>
+                <div class="text-end">
+                    <div style="font-size:0.78rem; color:var(--text-primary);">${p.paid_at}</div>
+                    <div class="ph-meta">by ${p.paid_by || 'Staff'}</div>
+                </div>
+            </div>`;
+        });
+    }
+
+    document.getElementById('modal-body-content').innerHTML = html;
+
+    // Show pay button only if still has balance
+    if (remaining > 0) {
+        document.getElementById('open-payment-btn').style.display = 'inline-block';
+    } else {
+        document.getElementById('open-payment-btn').style.display = 'none';
+    }
+}
+
+/* ── PAYMENT PANEL ── */
+function openPaymentPanel() {
+    if (!activeDebtData) return;
+    const sale = activeDebtData.sale;
+
+    // Hide detail modal, show payment modal
+    bootstrap.Modal.getInstance(document.getElementById('debtModal')).hide();
+
+    document.getElementById('pay-customer-name').innerText = sale.customer_name || 'Walk-in';
+    document.getElementById('pay-total-amount').innerText  = `₱${parseFloat(sale.total_amount).toLocaleString(undefined,{minimumFractionDigits:2})}`;
+    document.getElementById('pay-total-paid').innerText    = `₱${parseFloat(sale.total_paid).toLocaleString(undefined,{minimumFractionDigits:2})}`;
+    document.getElementById('pay-remaining').innerText     = `₱${parseFloat(sale.remaining).toLocaleString(undefined,{minimumFractionDigits:2})}`;
+    document.getElementById('pay-amount').value            = '';
+    document.getElementById('pay-amount-error').style.display = 'none';
+    document.getElementById('pay-notes').value             = '';
+    document.getElementById('pay-ref').value               = '';
+
+    new bootstrap.Modal(document.getElementById('paymentModal')).show();
+}
+
+function backToDetail() {
+    bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+    openDebtModal(activeSaleId);
+}
+
+// Show/hide reference number field based on payment method
+document.getElementById('pay-method').addEventListener('change', function () {
+    const selected = this.options[this.selectedIndex].text;
+    const needsRef = ['GCash', 'PayMaya', 'Bank Transfer', 'BPI', 'BDO', 'General / Other'].includes(selected);
+    document.getElementById('pay-ref-group').style.display = needsRef ? 'block' : 'none';
+});
+
+/* ── SUBMIT PAYMENT ── */
+async function submitPayment() {
+    const amountInput = document.getElementById('pay-amount');
+    const errorDiv    = document.getElementById('pay-amount-error');
+    const amount      = parseFloat(amountInput.value);
+
+    errorDiv.style.display = 'none';
+
+    if (!amount || amount <= 0) {
+        errorDiv.innerText = 'Please enter a valid amount.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('confirm-pay-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+    const payload = {
+        amount_paid:       amount,
+        payment_method_id: document.getElementById('pay-method').value,
+        reference_no:      document.getElementById('pay-ref').value,
+        notes:             document.getElementById('pay-notes').value,
+    };
+
+    try {
+        const res  = await fetch(`/api/debt/${activeSaleId}/pay`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+            window.location.reload();
+        } else {
+            errorDiv.innerText = data.message || 'Something went wrong.';
+            errorDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = 'CONFIRM PAYMENT';
+        }
+    } catch (err) {
+        errorDiv.innerText = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = 'CONFIRM PAYMENT';
+    }
+}
+</script>
+{% endblock %}

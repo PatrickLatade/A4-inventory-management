@@ -25,11 +25,11 @@
             <div class="order-card mb-3">
                 <h5>Order Header</h5>
                 <div class="mb-3">
-                    <label class="form-label text-muted">Vendor / Supplier</label>
+                    <label class="form-label text">Vendor / Supplier</label>
                     <input type="text" id="vendor_name" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Parts Master Inc.">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label text-muted">Notes</label>
+                    <label class="form-label text">Notes</label>
                     <textarea id="po_notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
                 </div>
             </div>
@@ -135,11 +135,11 @@ function renderTable() {
                 <td>${item.name}</td>
                 <td>
                     <input type="number" class="form-control form-control-sm bg-dark text-white" 
-                           value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
+                        value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
                 </td>
                 <td>
                     <input type="number" class="form-control form-control-sm bg-dark text-white" 
-                           value="${item.cost}" step="0.01" onchange="updateCost(${index}, this.value)">
+                        value="${item.cost}" step="0.01" onchange="updateCost(${index}, this.value)">
                 </td>
                 <td>
                     <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})">&times;</button>

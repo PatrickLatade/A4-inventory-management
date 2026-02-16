@@ -64,7 +64,7 @@ def init_db():
         total_amount REAL NOT NULL,
         payment_method_id INTEGER,
         reference_no TEXT,
-        status TEXT CHECK(status IN ('Paid', 'Unresolved')) NOT NULL,
+        status TEXT CHECK(status IN ('Paid', 'Unresolved', 'Partial')) NOT NULL,
         notes TEXT,
         user_id INTEGER,
         transaction_date DATETIME DEFAULT (DATETIME('now', 'localtime')),
@@ -164,6 +164,23 @@ def init_db():
     )
     """)
 
+    # 12. Debt Table
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS debt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id INTEGER NOT NULL,
+        amount_paid REAL NOT NULL,
+        payment_method_id INTEGER,
+        reference_no TEXT,
+        notes TEXT,
+        paid_by INTEGER,
+        paid_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        FOREIGN KEY (sale_id) REFERENCES sales(id),
+        FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id),
+        FOREIGN KEY (paid_by) REFERENCES users(id)
+    )
+    """)
+
     # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
     # Add mechanic_id to sales
@@ -179,9 +196,6 @@ def init_db():
         pass
 
     # Existing migrations...
-    try:
-        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN sale_id INTEGER REFERENCES sales(id)")
-    except: pass
     try:
         conn.execute("ALTER TABLE inventory_transactions ADD COLUMN unit_price REAL")
     except: pass
@@ -216,6 +230,11 @@ def init_db():
     # 3. Add the "Reason" (Change Reason) - This tells us the 'Why' (Return, Recall, etc.)
     try:
         conn.execute("ALTER TABLE inventory_transactions ADD COLUMN change_reason TEXT")
+    except:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN paid_at DATETIME")
     except:
         pass
 

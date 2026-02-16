@@ -43,6 +43,7 @@ from importers.inventory_importer import import_inventory_csv
 from routes.routes_api import dashboard_api
 from routes.transaction_route import transaction_bp
 from routes.reports_route import reports_bp
+from routes.debt_route import debt_bp
 
 
 # ============================================================
@@ -85,6 +86,7 @@ app.register_blueprint(dashboard_api)
 app.register_blueprint(auth_bp)
 app.register_blueprint(transaction_bp)
 app.register_blueprint(reports_bp)
+app.register_blueprint(debt_bp)
 
 
 # ============================================================

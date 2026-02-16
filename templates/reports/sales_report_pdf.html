@@ -436,15 +436,16 @@
         </div>
         <table>
             <thead>
-                <tr>
-                    <th width="10%">Date</th>
-                    <th width="10%">OR No.</th>
-                    <th width="12%">Customer</th>
-                    <th width="36%">Items & Services</th>
-                    <th width="12%">Mechanic</th>
-                    <th width="10%">Amount Due</th>
-                </tr>
-            </thead>
+                    <tr>
+                        <th width="10%">Date</th>
+                        <th width="10%">OR No.</th>
+                        <th width="12%">Customer</th>
+                        <th width="33%">Items & Services</th>
+                        <th width="10%">Mechanic</th>
+                        <th width="8%">Status</th>
+                        <th width="17%">Balance</th>
+                    </tr>
+                </thead>
             <tbody>
                 {% for sale in data.unresolved %}
                 <tr style="background: #fff5f5;">
@@ -484,8 +485,21 @@
                         {% endif %}
                     </td>
                     <td><strong>{{ sale.mechanic_name }}</strong></td>
-                    <td style="font-weight: 700; font-size: 14px; color: #c1121f;">
-                        ₱ {{ "%.2f"|format(sale.total_amount) }}
+                    <td>
+                        {% if sale.status == 'Partial' %}
+                            <span class="badge" style="background:#fff3cd; color:#856404; border:1px solid #ffc107;">PARTIAL</span>
+                        {% else %}
+                            <span class="badge badge-unresolved">UNPAID</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-weight: 700; font-size: 13px;">
+                        <div style="color: #c1121f;">₱ {{ "%.2f"|format(sale.remaining) }}</div>
+                        {% if sale.total_paid > 0 %}
+                        <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                            of ₱ {{ "%.2f"|format(sale.total_amount) }}
+                            <span style="color: #2d6a4f;">(pd: ₱ {{ "%.2f"|format(sale.total_paid) }})</span>
+                        </div>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -493,8 +507,8 @@
         </table>
 
         <div class="deliverables-total">
-            Total Deliverables Outstanding:
-            <span>₱ {{ "%.2f"|format(data.unresolved | sum(attribute='total_amount')) }}</span>
+            Total Outstanding Balance:
+            <span>₱ {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}</span>
         </div>
     </div>
     {% endif %}

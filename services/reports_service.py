@@ -42,10 +42,8 @@ def get_sales_by_range(start_date, end_date):
 
 def get_all_unresolved_sales(conn):
     """
-    Pulls ALL sales with status='Unresolved' across every date.
-    Called separately from the daily report so the Payables section
-    is not limited to the chosen report_date.
-    Receives an open connection so the caller can batch queries.
+    Pulls ALL sales with status Unresolved or Partial across every date.
+    Includes payment progress so the PDF can show accurate remaining balances.
     """
     unresolved_rows = conn.execute("""
         SELECT
@@ -57,11 +55,14 @@ def get_all_unresolved_sales(conn):
             s.notes,
             s.transaction_date,
             m.name  AS mechanic_name,
-            pm.name AS payment_method
+            pm.name AS payment_method,
+            COALESCE(SUM(dp.amount_paid), 0) AS total_paid
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
-        WHERE s.status = 'Unresolved'
+        LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
+        WHERE s.status IN ('Unresolved', 'Partial')
+        GROUP BY s.id
         ORDER BY s.transaction_date ASC
     """).fetchall()
 
@@ -108,18 +109,23 @@ def get_all_unresolved_sales(conn):
 
     result = []
     for sale in unresolved_rows:
-        sale_id = sale["id"]
+        sale_id    = sale["id"]
+        total_paid = round(sale["total_paid"], 2)
+        remaining  = round(sale["total_amount"] - total_paid, 2)
+
         result.append({
-            "sales_number":       sale["sales_number"] or f"#{sale_id}",
-            "customer_name":      sale["customer_name"] or "Walk-in",
-            "mechanic_name":      sale["mechanic_name"] or "—",
-            "total_amount":       sale["total_amount"] or 0.0,
-            "status":             sale["status"],
-            "payment_method":     sale["payment_method"] or "—",
-            "notes":              sale["notes"] or "",
-            "transaction_date":   format_date(sale["transaction_date"]),
-            "products":           items_by_sale.get(sale_id, []),
-            "services":           services_by_sale.get(sale_id, []),
+            "sales_number":   sale["sales_number"] or f"#{sale_id}",
+            "customer_name":  sale["customer_name"] or "Walk-in",
+            "mechanic_name":  sale["mechanic_name"] or "—",
+            "total_amount":   sale["total_amount"] or 0.0,
+            "total_paid":     total_paid,
+            "remaining":      remaining,
+            "status":         sale["status"],
+            "payment_method": sale["payment_method"] or "—",
+            "notes":          sale["notes"] or "",
+            "transaction_date": format_date(sale["transaction_date"]),
+            "products":       items_by_sale.get(sale_id, []),
+            "services":       services_by_sale.get(sale_id, []),
         })
 
     return result
@@ -129,11 +135,11 @@ def get_sales_report_by_date(report_date):
     """
     Pulls all completed sales for a given date for the End-of-Day PDF report.
 
-    Mechanic cut logic (applied per mechanic across the WHOLE day, not per transaction):
-    - Sum all services for a mechanic across all their paid sales that day
-    - If total < MECHANIC_QUOTA, shop tops up the difference as an expense
-    - Commission rate is then applied to max(total, quota)
-    - This prevents the quota from triggering unfairly on a mechanic who had one small transaction but a large day overall
+    Mechanic cut logic (applied per mechanic across the WHOLE day):
+    - Services from ALL sales that day (Paid, Partial, Unresolved) count toward mechanic payout
+    - This is because the mechanic did the work regardless of customer payment status
+    - Revenue numbers (gross, net) are still Paid-only
+    - If total services < MECHANIC_QUOTA, shop tops up the difference as an expense
 
     NOTE: When adding multi-branch support later, add a branch_id column to the
     sales table and filter by branch_id here.
@@ -142,7 +148,7 @@ def get_sales_report_by_date(report_date):
 
     MECHANIC_QUOTA = 500.0
 
-    # --- Main sales rows for the day ---
+    # --- All sales rows for the day (ALL statuses) ---
     sales_rows = conn.execute("""
         SELECT
             s.id,
@@ -170,12 +176,14 @@ def get_sales_report_by_date(report_date):
         conn.close()
         return []
 
-    # Build placeholders only if there are paid sales to query
+    # --- Split into paid vs unpaid for separate queries ---
     paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
+    all_sale_ids  = [row["id"] for row in sales_rows]  # for mechanic calc
 
     items_by_sale    = {}
     services_by_sale = {}
 
+    # Fetch items for Paid sales only (revenue display)
     if paid_sale_ids:
         placeholders = ",".join("?" * len(paid_sale_ids))
 
@@ -195,6 +203,13 @@ def get_sales_report_by_date(report_date):
             ORDER BY si.sale_id, i.name
         """, paid_sale_ids).fetchall()
 
+        for row in items_rows:
+            items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+
+    # Fetch services for ALL sales that day (mechanic payout needs all of them)
+    if all_sale_ids:
+        placeholders = ",".join("?" * len(all_sale_ids))
+
         services_rows = conn.execute(f"""
             SELECT
                 ss.sale_id,
@@ -204,51 +219,46 @@ def get_sales_report_by_date(report_date):
             JOIN services sv ON sv.id = ss.service_id
             WHERE ss.sale_id IN ({placeholders})
             ORDER BY ss.sale_id, sv.name
-        """, paid_sale_ids).fetchall()
-
-        for row in items_rows:
-            items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+        """, all_sale_ids).fetchall()
 
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     conn.close()
 
-    # --- Build paid transaction rows ---
+    # --- Build paid transaction rows (revenue display only) ---
     paid_sales  = []
     total_gross = 0.0
     mechanic_map = {}
 
     for sale in sales_rows:
-        if sale["status"] != "Paid":
-            continue
-
         sale_id         = sale["id"]
-        total_amount    = sale["total_amount"] or 0.0
         mechanic_id     = sale["mechanic_id"]
         mechanic_name   = sale["mechanic_name"] or "—"
         commission_rate = sale["commission_rate"] or 0.0
-
-        services_total = sum(
+        services_total  = sum(
             svc["price"] for svc in services_by_sale.get(sale_id, [])
         )
 
-        paid_sales.append({
-            "sales_number":   sale["sales_number"] or f"#{sale_id}",
-            "customer_name":  sale["customer_name"] or "Walk-in",
-            "mechanic_name":  mechanic_name,
-            "services_total": round(services_total, 2),
-            "total_amount":   total_amount,
-            "status":         sale["status"],
-            "payment_method": sale["payment_method"] or "—",
-            "notes":          sale["notes"] or "",
-            "products":       items_by_sale.get(sale_id, []),
-            "services":       services_by_sale.get(sale_id, []),
-        })
+        # Revenue rows: Paid only
+        if sale["status"] == "Paid":
+            total_amount = sale["total_amount"] or 0.0
+            paid_sales.append({
+                "sales_number":   sale["sales_number"] or f"#{sale_id}",
+                "customer_name":  sale["customer_name"] or "Walk-in",
+                "mechanic_name":  mechanic_name,
+                "services_total": round(services_total, 2),
+                "total_amount":   total_amount,
+                "status":         sale["status"],
+                "payment_method": sale["payment_method"] or "—",
+                "notes":          sale["notes"] or "",
+                "products":       items_by_sale.get(sale_id, []),
+                "services":       services_by_sale.get(sale_id, []),
+            })
+            total_gross += total_amount
 
-        total_gross += total_amount
-
-        if mechanic_id:
+        # Mechanic map: ALL statuses — mechanic did the work regardless
+        if mechanic_id and services_total > 0:
             if mechanic_id not in mechanic_map:
                 mechanic_map[mechanic_id] = {
                     "mechanic_name":   mechanic_name,
@@ -289,7 +299,7 @@ def get_sales_report_by_date(report_date):
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
 
-    # --- Items summary ---
+    # --- Items summary (Paid only) ---
     items_summary = {}
     for sale in paid_sales:
         for item in sale["products"]:
@@ -306,7 +316,7 @@ def get_sales_report_by_date(report_date):
 
     return {
         "sales":            paid_sales,
-        "unresolved":       all_unresolved,   # ALL unresolved, not just today's
+        "unresolved":       all_unresolved,
         "mechanic_summary": mechanic_summary,
         "items_summary":    items_summary_list,
         "total_gross":      round(total_gross, 2),
