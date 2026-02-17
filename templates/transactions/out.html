@@ -465,10 +465,11 @@
                 <div class="col-12">
                     <label class="form-label">Payment Category</label>
                     <select class="form-select" id="payment-category">
-                        <option value="1" data-status="Paid">Cash</option>
-                        <option value="Online" data-status="Paid">Online Payment (Wallet)</option>
+                        <option value="{{ cash_pm_id }}" data-status="Paid">Cash</option>
                         <option value="Bank" data-status="Paid">Bank Transfer</option>
-                        <option value="5" data-status="Unresolved">Utang (Pay Later)</option>
+                        <option value="Online" data-status="Paid">Online Payment (Wallet)</option>
+                        <option value="{{ debt_pm_id }}" data-status="Unresolved">Utang (Pay Later)</option>
+                        <option value="{{ others_pm_id }}" data-status="Paid">Others</option>
                     </select>
                 </div>
 
@@ -477,8 +478,11 @@
                         <div class="col-12">
                             <label class="form-label info" id="provider-label">Select Provider</label>
                             <select class="form-select border-info-soft" id="payment-method">
+                                <option value="">-- Select Provider --</option>
                                 {% for method in payment_methods %}
-                                    <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                    {% if method.category in ['Online', 'Bank', 'Others'] %}
+                                        <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                    {% endif %}
                                 {% endfor %}
                             </select>
                         </div>
@@ -573,7 +577,13 @@ function validateForm() {
     });
 
     const headerValid = salesNum !== "" && customer !== "";
-    const paymentValid = (paymentCat === 'Online' || paymentCat === 'Bank') ? (refNo !== "") : true;
+    const providerRequired = (paymentCat === 'Online' || paymentCat === 'Bank');
+    const selectedProvider = document.getElementById('payment-method').value;
+
+    const refRequired = (paymentCat === 'Online' || paymentCat === 'Bank');
+    const paymentValid = providerRequired
+        ? (selectedProvider !== "" && (refRequired ? refNo !== "" : true))
+        : true;
 
     submitBtn.disabled = !(headerValid && paymentValid && hasValidItem && !hasInputError);
 }
@@ -760,7 +770,7 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
-   EVENT LISTENERS
+EVENT LISTENERS
 ========================================================= */
 ['sales-number', 'customer-name', 'ref-no'].forEach(id => {
     document.getElementById(id).addEventListener('input', validateForm);
@@ -773,35 +783,49 @@ document.getElementById('payment-category').addEventListener('change', function 
     const methodSelect = document.getElementById('payment-method');
     const providerLabel = document.getElementById('provider-label');
     const submitBtn = document.getElementById('submit-btn');
-    const selectedCat = this.value;
 
-    let visibleCount = 0;
-    Array.from(methodSelect.options).forEach(opt => {
-        const isCategoryMatch = opt.getAttribute('data-category') === selectedCat;
-        const isTrigger = opt.text.trim() === "Bank Transfer";
-        if (isCategoryMatch && !isTrigger) {
-            opt.style.display = 'block';
-            if (visibleCount === 0) opt.selected = true;
-            visibleCount++;
-        } else {
-            opt.style.display = 'none';
-        }
-    });
+    const selectedCat = this.value; // can be 'Online'/'Bank'/'Others' OR numeric ID for Cash/Debt
 
-    if (selectedCat === 'Online' || selectedCat === 'Bank') {
+    // Helper: show/hide provider select based on category string
+    const needsProvider = (selectedCat === 'Online' || selectedCat === 'Bank');
+
+    // Filter options (only relevant for provider categories)
+    if (needsProvider) {
+        let visibleCount = 0;
+
+        Array.from(methodSelect.options).forEach((opt, idx) => {
+            // keep placeholder always visible
+            if (idx === 0) {
+                opt.style.display = 'block';
+                opt.selected = true;
+                return;
+            }
+
+            const isCategoryMatch = opt.getAttribute('data-category') === selectedCat;
+            opt.style.display = isCategoryMatch ? 'block' : 'none';
+            if (isCategoryMatch) visibleCount++;
+        });
+
         methodDiv.style.display = 'block';
-        providerLabel.innerText = selectedCat === 'Bank' ? 'Select Bank' : 'Select Online Provider';
-        submitBtn.className = 'btn btn-info';
-        submitBtn.style.minWidth = '220px';
-    } else if (selectedCat === '5') {
-        methodDiv.style.display = 'none';
-        submitBtn.className = 'btn btn-warning';
+
+        if (selectedCat === 'Bank') providerLabel.innerText = 'Select Bank';
+        else if (selectedCat === 'Online') providerLabel.innerText = 'Select Online Provider';
+        else providerLabel.innerText = 'Select Provider';
+
+        submitBtn.className = (selectedCat === 'Online' || selectedCat === 'Bank') ? 'btn btn-info' : 'btn btn-danger';
         submitBtn.style.minWidth = '220px';
     } else {
+        // Cash or Debt (numeric IDs)
         methodDiv.style.display = 'none';
-        submitBtn.className = 'btn btn-danger';
+
+        if (document.querySelector(`#payment-category option[value="${selectedCat}"]`)?.textContent.includes('Utang')) {
+            submitBtn.className = 'btn btn-warning';
+        } else {
+            submitBtn.className = 'btn btn-danger';
+        }
         submitBtn.style.minWidth = '220px';
     }
+
     validateForm();
 });
 
@@ -1042,7 +1066,9 @@ async function saveTransaction(items) {
 
     if (paymentId === 'Online' || paymentId === 'Bank') {
         paymentId = document.getElementById('payment-method').value;
-        refNo = document.getElementById('ref-no').value;
+        refNo = (paymentId === 'Online' || paymentId === 'Bank')
+            ? document.getElementById('ref-no').value
+            : (document.getElementById('ref-no').value || null);
     }
 
     const payload = {

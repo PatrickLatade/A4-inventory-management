@@ -2,12 +2,7 @@ from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date
 
-
 def get_all_debts():
-    """
-    Returns all Unresolved and Partial sales with their payment progress.
-    Each row includes: sale info + total_paid + remaining_balance.
-    """
     conn = get_db()
 
     rows = conn.execute("""
@@ -44,11 +39,7 @@ def get_all_debts():
 
     return result
 
-
 def get_debt_detail(sale_id):
-    """
-    Returns full detail of one sale: header + items + services + payment history.
-    """
     conn = get_db()
 
     sale = conn.execute("""
@@ -132,22 +123,33 @@ def get_debt_detail(sale_id):
         'payments': formatted_payments,
     }
 
-
 def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes, paid_by):
-    """
-    Records one payment event against a sale.
-    Updates sale status to Partial or Paid depending on remaining balance.
-    Stamps paid_at on the sales row when fully resolved.
-    Returns: dict with new status and remaining balance.
-    Raises: ValueError if amount exceeds remaining balance.
-    """
     conn = get_db()
 
     try:
-        # 1. Get current state
+        # 0) Validate payment method (must exist, active, and NOT Debt-category)
+        try:
+            pm_id = int(payment_method_id)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid payment method.")
+
+        # NOTE (future branches): add branch_id filter here later.
+        pm = conn.execute("""
+            SELECT id, category, is_active
+            FROM payment_methods
+            WHERE id = ?
+        """, (pm_id,)).fetchone()
+
+        if not pm or pm["is_active"] != 1:
+            raise ValueError("Invalid or inactive payment method.")
+
+        if (pm["category"] or "").strip() == "Debt":
+            raise ValueError("Debt payment cannot use a Debt-category payment method.")
+
+        # 1) Current state
         sale = conn.execute("""
             SELECT s.total_amount,
-                   COALESCE(SUM(dp.amount_paid), 0) AS total_paid
+            COALESCE(SUM(dp.amount_paid), 0) AS total_paid
             FROM sales s
             LEFT JOIN debt_payments dp ON dp.sale_id = s.id
             WHERE s.id = ?
@@ -161,23 +163,25 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         total_paid   = sale['total_paid']
         remaining    = round(total_amount - total_paid, 2)
 
-        # 2. Guard: overpayment check
+        # 2) Guard: overpayment check
         amount_paid = round(float(amount_paid), 2)
         if amount_paid <= 0:
             raise ValueError("Payment amount must be greater than zero.")
         if amount_paid > remaining:
-            raise ValueError(f"Payment of ₱{amount_paid:,.2f} exceeds remaining balance of ₱{remaining:,.2f}.")
+            raise ValueError(
+                f"Payment of ₱{amount_paid:,.2f} exceeds remaining balance of ₱{remaining:,.2f}."
+            )
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 3. Insert the payment row
+        # 3) Insert payment row
         conn.execute("""
             INSERT INTO debt_payments
                 (sale_id, amount_paid, payment_method_id, reference_no, notes, paid_by, paid_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (sale_id, amount_paid, payment_method_id, reference_no, notes, paid_by, now))
+        """, (sale_id, amount_paid, pm_id, reference_no, notes, paid_by, now))
 
-        # 4. Determine new status
+        # 4) Determine new status
         new_total_paid = round(total_paid + amount_paid, 2)
         new_remaining  = round(total_amount - new_total_paid, 2)
 

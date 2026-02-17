@@ -51,7 +51,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS payment_methods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        category TEXT NOT NULL
+        category TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
     )
     """)
 
@@ -238,6 +239,11 @@ def init_db():
     except:
         pass
 
+    try:
+        conn.execute("ALTER TABLE payment_methods ADD COLUMN is_active INTEGER DEFAULT 1")
+    except:
+        pass
+
     # 4. Clean up legacy data: If it has a reference_id but no type, it was a Sale.
     conn.execute("""
         UPDATE inventory_transactions 
@@ -268,7 +274,7 @@ def init_db():
         ('GCash', 'Online'),
         ('PayMaya', 'Online'),
         ('Bank Transfer', 'Bank'),
-        ('General / Other', 'Bank'),
+        ('Others', 'Others'),
         ('BPI', 'Bank'),
         ('BDO', 'Bank'),
         ('Utang', 'Debt')

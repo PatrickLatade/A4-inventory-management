@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, session, flash,
 from werkzeug.security import check_password_hash, generate_password_hash
 from db.database import get_db
 from datetime import datetime
-from utils.formatters import format_date
+from utils.formatters import format_date, norm_text
 
 # 1. Initialize the Blueprint
 auth_bp = Blueprint('auth', __name__)
@@ -47,6 +47,7 @@ def logout():
 @auth_bp.route("/users", methods=["GET", "POST"])
 def manage_users():
     conn = get_db()
+    active_tab = request.args.get("tab", "users-tab")
 
     # --- 1. HANDLE FORM SUBMISSION ---
     if request.method == "POST":
@@ -117,6 +118,7 @@ def manage_users():
 
     services_list = conn.execute("SELECT * FROM services ORDER BY category ASC, name ASC LIMIT 20").fetchall()
     categories = conn.execute("SELECT DISTINCT category FROM services WHERE category IS NOT NULL").fetchall()
+    payment_methods = conn.execute("SELECT * FROM payment_methods ORDER BY category ASC, name ASC").fetchall()
 
     conn.close()
 
@@ -135,7 +137,7 @@ def manage_users():
     ]
 
     # --- 5. SERVE THE PAGE ---
-    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics, services_list=services_list, categories=categories)
+    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics, services_list=services_list, categories=categories, payment_methods=payment_methods, active_tab=active_tab)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
 def toggle_user(user_id):
@@ -174,7 +176,7 @@ def toggle_user(user_id):
         flash(f"User {user['username']} has been activated.", "success")
 
     conn.close()
-    return redirect(url_for('auth.manage_users'))
+    return redirect(url_for('auth.manage_users', tab='users-tab'))
 
 
 @auth_bp.route("/mechanics/add", methods=["POST"])
@@ -196,7 +198,7 @@ def add_mechanic():
     finally:
         conn.close()
     
-    return redirect(url_for('auth.manage_users'))
+    return redirect(url_for('auth.manage_users', tab='mechanics-tab'))
 
 @auth_bp.route("/mechanics/toggle/<int:mechanic_id>", methods=["POST"])
 def toggle_mechanic(mechanic_id):
@@ -210,7 +212,7 @@ def toggle_mechanic(mechanic_id):
     if not mechanic:
         flash("Mechanic not found.", "danger")
         conn.close()
-        return redirect(url_for('auth.manage_users'))
+        return redirect(url_for('auth.manage_users', tab='mechanics-tab'))
 
     was_active = mechanic['is_active']
 
@@ -231,7 +233,7 @@ def toggle_mechanic(mechanic_id):
         flash(f"Mechanic {mechanic['name']} has been activated.", "success")
 
     conn.close()
-    return redirect(url_for('auth.manage_users'))
+    return redirect(url_for('auth.manage_users', tab='mechanics-tab'))
 
 # --- NEW ROUTE: Get Sale Details for the Modal ---
 @auth_bp.route("/sales/details/<reference_id>")
@@ -314,7 +316,7 @@ def add_service():
     if existing_service:
         flash(f"Service '{name}' already exists!", "warning")
         conn.close()
-        return redirect(url_for('auth.manage_users'))
+        return redirect(url_for('auth.manage_users', tab='manage-services-tab'))
 
     # --- SAVE ---
     try:
@@ -329,7 +331,7 @@ def add_service():
     finally:
         conn.close()
 
-    return redirect(url_for('auth.manage_users'))
+    return redirect(url_for('auth.manage_users', tab='manage-services-tab'))
 
 # NEW ROUTE: Toggle Service Status
 @auth_bp.route("/services/toggle/<int:service_id>", methods=["POST"])
@@ -342,4 +344,83 @@ def toggle_service(service_id):
         conn.commit()
         flash(f"Service '{service['name']}' status updated.", "info")
     conn.close()
-    return redirect(url_for('auth.manage_users'))
+    return redirect(url_for('auth.manage_users', tab='manage-services-tab'))
+
+@auth_bp.route("/payment-methods/add", methods=["POST"])
+def add_payment_method():
+    name = norm_text(request.form.get("name"))
+    category = norm_text(request.form.get("category"))
+
+    # If you removed Others from the UI, keep it out here too.
+    ALLOWED_PM_CATEGORIES = {"Bank", "Cash", "Debt", "Online"}
+
+    if not name or not category:
+        flash("Payment method name and category are required.", "danger")
+        return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+    if category not in ALLOWED_PM_CATEGORIES:
+        flash("Invalid payment method category.", "danger")
+        return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+    conn = get_db()
+
+    existing = conn.execute(
+        "SELECT id FROM payment_methods WHERE LOWER(TRIM(name)) = ?",
+        (name.lower(),)
+    ).fetchone()
+
+    if existing:
+        flash(f"Payment method '{name}' already exists.", "warning")
+        conn.close()
+        return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+    try:
+        conn.execute(
+            "INSERT INTO payment_methods (name, category, is_active) VALUES (?, ?, 1)",
+            (name, category)
+        )
+        conn.commit()
+
+        # ⚠ FUTURE NOTE:
+        # When we add multi-branch support,
+        # add branch_id INTEGER to payment_methods and filter by it.
+        # No structural rewrite needed.
+
+        flash(f"Payment method '{name}' added successfully.", "success")
+
+    except Exception as e:
+        flash(f"Error adding payment method: {str(e)}", "danger")
+    finally:
+        conn.close()
+
+    return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+@auth_bp.route("/payment-methods/toggle/<int:pm_id>", methods=["POST"])
+def toggle_payment_method(pm_id):
+    conn = get_db()
+
+    pm = conn.execute(
+        "SELECT name, is_active FROM payment_methods WHERE id = ?",
+        (pm_id,)
+    ).fetchone()
+
+    if not pm:
+        flash("Payment method not found.", "danger")
+        conn.close()
+        return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+    new_status = 0 if pm['is_active'] == 1 else 1
+
+    conn.execute(
+        "UPDATE payment_methods SET is_active = ? WHERE id = ?",
+        (new_status, pm_id)
+    )
+    conn.commit()
+
+    if new_status == 0:
+        flash(f"Payment method '{pm['name']}' disabled.", "warning")
+    else:
+        flash(f"Payment method '{pm['name']}' activated.", "success")
+
+    conn.close()
+    return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))

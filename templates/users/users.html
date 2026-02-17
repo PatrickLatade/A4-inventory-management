@@ -140,27 +140,32 @@
 <!-- TABS -->
 <ul class="nav nav-tabs mb-0" role="tablist">
     <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
+        <button class="nav-link {% if active_tab == 'users-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
             <i class="bi bi-people-fill"></i> Users
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
+        <button class="nav-link {% if active_tab == 'mechanics-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
             <i class="bi bi-tools"></i> Mechanics
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#manage-services-tab" type="button">
+        <button class="nav-link {% if active_tab == 'manage-services-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#manage-services-tab" type="button">
             <i class="bi bi-gear-wide-connected"></i> Services
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
+        <button class="nav-link {% if active_tab == 'payment-methods-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#payment-methods-tab" type="button">
+            <i class="bi bi-credit-card-2-front"></i> Payment Methods
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'sales-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
             <i class="bi bi-cash-stack"></i> Sales
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
+        <button class="nav-link {% if active_tab == 'audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
             <i class="bi bi-clock-history"></i> Audit Trail
         </button>
     </li>
@@ -169,7 +174,7 @@
 <div class="tab-content">
 
     <!-- USERS TAB -->
-    <div class="tab-pane fade show active" id="users-tab">
+    <div class="tab-pane fade {% if active_tab == 'users-tab' %}show active{% endif %}" id="users-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
             <form method="post" class="row g-3">
@@ -246,7 +251,7 @@
     </div>
 
     <!-- MECHANICS TAB -->
-    <div class="tab-pane fade" id="mechanics-tab">
+    <div class="tab-pane fade {% if active_tab == 'mechanics-tab' %}show active{% endif %}" id="mechanics-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Mechanic</h5>
             <form action="{{ url_for('auth.add_mechanic') }}" method="POST" class="row g-3">
@@ -320,7 +325,7 @@
     </div>
 
     <!-- SERVICES TAB -->
-    <div class="tab-pane fade" id="manage-services-tab">
+    <div class="tab-pane fade {% if active_tab == 'manage-services-tab' %}show active{% endif %}" id="manage-services-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
             <form action="{{ url_for('auth.add_service') }}" method="POST" class="row g-3">
@@ -402,8 +407,79 @@
         </div>
     </div>
 
+    <!-- PAYMENT METHODS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'payment-methods-tab' %}show active{% endif %}" id="payment-methods-tab">
+
+    <div class="admin-card shadow-sm">
+        <h5 class="mb-3 text-white-50">Add New Payment Method</h5>
+        <form action="{{ url_for('auth.add_payment_method') }}" method="POST" class="row g-3">
+            <div class="col-md-6">
+                <input name="name" class="form-control" placeholder="Payment Method Name (e.g. Metrobank)" required>
+            </div>
+            <div class="col-md-4">
+                <select name="category" class="form-select bg-dark text-white border-secondary" required>
+                    <option value="Bank">Bank</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Debt">Debt</option>
+                    <option value="Online">Online</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-danger w-100">
+                    <i class="bi bi-plus-circle"></i> Add
+                </button>
+            </div>
+        </form>
+    </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pm in payment_methods %}
+                    <tr>
+                        <td class="fw-bold">{{ pm.name }}</td>
+                        <td>
+                            <span class="badge bg-dark border border-secondary text-info">
+                                {{ pm.category }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <form action="{{ url_for('auth.toggle_payment_method', pm_id=pm.id) }}" method="POST">
+                                {% if pm.is_active == 1 %}
+                                    <button type="submit" class="toggle-btn text-success">
+                                        <i class="bi bi-toggle-on fs-3"></i>
+                                        <small class="d-block">ACTIVE</small>
+                                    </button>
+                                {% else %}
+                                    <button type="submit" class="toggle-btn text-muted">
+                                        <i class="bi bi-toggle-off fs-3"></i>
+                                        <small class="d-block">DISABLED</small>
+                                    </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">
+                            No payment methods configured yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- SALES TAB -->
-    <div class="tab-pane fade" id="sales-tab">
+    <div class="tab-pane fade {% if active_tab == 'sales-tab' %}show active{% endif %}" id="sales-tab">
         <div class="table-responsive">
             <table class="table table-dark table-hover align-middle">
                 <thead class="table-danger text-dark">
@@ -451,7 +527,7 @@
     </div>
 
     <!-- AUDIT TAB -->
-    <div class="tab-pane fade" id="audit-tab">
+    <div class="tab-pane fade {% if active_tab == 'audit-tab' %}show active{% endif %}" id="audit-tab">
         <div class="table-responsive">
             <h6 class="text-info fw-semibold fs-5 mt-4 mb-3">
             <i class="bi bi-truck me-2"></i> Item Movement

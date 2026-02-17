@@ -20,3 +20,7 @@ def format_date(dt_str, show_time=False):
         return dt.strftime("%b %d, %Y")
     except ValueError:
         return str(dt_str)  # fallback if format is unexpected
+    
+def norm_text(s: str) -> str:
+    # trims + collapses internal whitespace
+    return " ".join((s or "").strip().split())
