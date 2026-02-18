@@ -541,6 +541,7 @@
                         <th>Reason</th>
                         <th class="text-center">Qty</th>
                         <th>Reference</th>
+                        <th>Notes</th>
                         <th>Staff</th>
                     </tr>
                 </thead>
@@ -601,6 +602,15 @@
                                 {% endif %}
                             {% else %}
                                 <span class="text-muted">---</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50 small">
+                            {% if log.notes %}
+                                <span class="text-info" title="{{ log.notes }}">
+                                    <i class="bi bi-chat-left-text me-1"></i>{{ log.notes[:40] }}{% if log.notes|length > 40 %}...{% endif %}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
                             {% endif %}
                         </td>
                         <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>

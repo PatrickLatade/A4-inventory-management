@@ -420,8 +420,79 @@ def confirm_reception():
         for entry in received_items:
             item_id = entry['item_id']
             qty_in = int(entry['qty_received'])
+            item_notes = entry.get('notes', '').strip()
 
-            if qty_in > 0:
+            if qty_in <= 0:
+                continue
+
+            # Fetch ordered/received counts and unit cost from the PO
+            po_item = conn.execute("""
+                SELECT quantity_ordered, quantity_received, unit_cost
+                FROM po_items
+                WHERE po_id = ? AND item_id = ?
+            """, (po_id, item_id)).fetchone()
+
+            if not po_item:
+                conn.rollback()
+                return jsonify({"status": "error", "message": f"Item ID {item_id} not found in this PO."}), 400
+
+            already_received = po_item['quantity_received']
+            qty_ordered = po_item['quantity_ordered']
+            remaining = qty_ordered - already_received
+            unit_cost = po_item['unit_cost']
+
+            is_over_receive = qty_in > remaining
+
+            # Server-side enforcement: notes mandatory for over-receives
+            # Cannot be bypassed even via direct API calls
+            if is_over_receive and not item_notes:
+                conn.rollback()
+                return jsonify({
+                    "status": "error",
+                    "message": f"A reason note is required for over-receiving item ID {item_id}."
+                }), 400
+
+            if is_over_receive:
+                # Split into two ledger entries for clean audit trail:
+                # 1. Normal PO_ARRIVAL for the expected quantity
+                # 2. BONUS_STOCK for the excess units
+
+                if remaining > 0:
+                    add_transaction(
+                        item_id=item_id,
+                        quantity=remaining,
+                        transaction_type='IN',
+                        user_id=session.get('user_id'),
+                        user_name=session.get('username'),
+                        reference_id=po_id,
+                        reference_type='PURCHASE_ORDER',
+                        change_reason='PO_ARRIVAL',
+                        unit_price=unit_cost,
+                        transaction_date=clean_time,
+                        external_conn=conn
+                    )
+
+                excess = qty_in - remaining
+                add_transaction(
+                    item_id=item_id,
+                    quantity=excess,
+                    transaction_type='IN',
+                    user_id=session.get('user_id'),
+                    user_name=session.get('username'),
+                    reference_id=po_id,
+                    reference_type='PURCHASE_ORDER',
+                    change_reason='BONUS_STOCK',
+                    unit_price=unit_cost,  # Inherits original PO unit cost
+                    transaction_date=clean_time,
+                    external_conn=conn,
+                    notes=item_notes
+                )
+
+            else:
+                # PO_ARRIVAL = full receive for this item
+                # PARTIAL_ARRIVAL = this item still has outstanding quantity after this receive
+                will_still_have_remaining = (already_received + qty_in) < qty_ordered
+                arrival_reason = 'PARTIAL_ARRIVAL' if will_still_have_remaining else 'PO_ARRIVAL'
                 add_transaction(
                     item_id=item_id,
                     quantity=qty_in,
@@ -430,24 +501,26 @@ def confirm_reception():
                     user_name=session.get('username'),
                     reference_id=po_id,
                     reference_type='PURCHASE_ORDER',
-                    change_reason='PO_ARRIVAL',
+                    change_reason=arrival_reason,
+                    unit_price=unit_cost,
                     transaction_date=clean_time,
                     external_conn=conn
                 )
 
-                conn.execute("""
-                    UPDATE po_items
-                    SET quantity_received = quantity_received + ?
-                    WHERE po_id = ? AND item_id = ?
-                """, (qty_in, po_id, item_id))
+            conn.execute("""
+                UPDATE po_items
+                SET quantity_received = quantity_received + ?
+                WHERE po_id = ? AND item_id = ?
+            """, (qty_in, po_id, item_id))
 
-            check = conn.execute("""
+            # Re-check after update — over-receives count as completed
+            updated = conn.execute("""
                 SELECT quantity_ordered, quantity_received
                 FROM po_items
                 WHERE po_id = ? AND item_id = ?
             """, (po_id, item_id)).fetchone()
 
-            if check['quantity_received'] < check['quantity_ordered']:
+            if updated['quantity_received'] < updated['quantity_ordered']:
                 all_completed = False
 
         new_status = 'COMPLETED' if all_completed else 'PARTIAL'
@@ -458,7 +531,11 @@ def confirm_reception():
         """, (new_status, clean_time, po_id))
 
         conn.commit()
+        flash("Stock received and added successfully!", "success")
         return jsonify({"status": "success"})
+    except ValueError as e:
+        conn.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         conn.rollback()
         return jsonify({"status": "error", "message": str(e)})

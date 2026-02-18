@@ -3,12 +3,23 @@ from datetime import datetime
 
 def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name=None, 
                     reference_id=None, reference_type=None, change_reason=None, 
-                    unit_price=None, transaction_date=None, external_conn=None):
+                    unit_price=None, transaction_date=None, external_conn=None, notes=None):
     """
     The Universal Ledger Entry. 
     Handles Logging and Stock Updates.
+
+    ENFORCEMENT: BONUS_STOCK transactions require a notes value.
+    Enforced here at service level — cannot be bypassed via API.
+
+    NOTE (future branches): when branch_id is added, pass it here.
+    Do not hardcode branch assumptions.
     """
-    # 1. Use existing connection or get a new one
+    # 1. Server-side enforcement for over-receives
+    if change_reason == 'BONUS_STOCK':
+        if not notes or not str(notes).strip():
+            raise ValueError("A reason note is required for over-receive (BONUS_STOCK) transactions.")
+
+    # 2. Use existing connection or get a new one
     conn = external_conn if external_conn else get_db()
     
     # 2. UNIFORM TIME LOGIC
@@ -23,11 +34,11 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
     conn.execute("""
         INSERT INTO inventory_transactions 
         (item_id, quantity, transaction_type, transaction_date, user_id, user_name, 
-        reference_id, reference_type, change_reason, unit_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        reference_id, reference_type, change_reason, unit_price, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         item_id, quantity, transaction_type, final_time, user_id, user_name, 
-        reference_id, reference_type, change_reason, unit_price
+        reference_id, reference_type, change_reason, unit_price, notes
     ))
     
     # 5. Only commit/close if we opened the connection ourselves

@@ -104,14 +104,15 @@ def manage_users():
             t.change_reason,
             t.reference_type,
             t.reference_id,
+            t.notes,
             s.sales_number,
-            po.po_number,  -- Added this
+            po.po_number,
             GROUP_CONCAT(i.name, ', ') as items_summary
         FROM inventory_transactions t
         JOIN items i ON t.item_id = i.id
         LEFT JOIN sales s ON t.reference_id = s.id AND t.reference_type = 'SALE'
-        LEFT JOIN purchase_orders po ON t.reference_id = po.id AND t.reference_type = 'PURCHASE_ORDER' -- Added this
-        GROUP BY t.reference_id, t.transaction_date, t.transaction_type
+        LEFT JOIN purchase_orders po ON t.reference_id = po.id AND t.reference_type = 'PURCHASE_ORDER'
+        GROUP BY t.reference_id, t.transaction_date, t.transaction_type, t.change_reason
         ORDER BY t.transaction_date DESC
         LIMIT 50
     """).fetchall()

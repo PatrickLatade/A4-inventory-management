@@ -244,6 +244,14 @@ def init_db():
     except:
         pass
 
+    # 5. Add notes to inventory_transactions (human-readable reason, e.g. for over-receives)
+    # change_reason stays as machine-readable code (BONUS_STOCK, PO_ARRIVAL, etc.)
+    # notes is the free-text field staff fills in to explain why
+    try:
+        conn.execute("ALTER TABLE inventory_transactions ADD COLUMN notes TEXT")
+    except:
+        pass
+
     # 4. Clean up legacy data: If it has a reference_id but no type, it was a Sale.
     conn.execute("""
         UPDATE inventory_transactions 

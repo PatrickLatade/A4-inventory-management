@@ -18,25 +18,37 @@
                         <th>Item Description</th>
                         <th class="text-center">Ordered</th>
                         <th class="text-center">Already Received</th>
-                        <th class="text-center" width="200">Arrived Today</th>
+                        <th class="text-center" width="220">Arrived Today</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
                     {% set remaining = item.quantity_ordered - item.quantity_received %}
-                    <tr class="item-row" data-item-id="{{ item.item_id }}">
+                    <tr class="item-row"
+                        data-item-id="{{ item.item_id }}"
+                        data-remaining="{{ remaining }}">
                         <td>
                             <div class="fw-bold">{{ item.name }}</div>
                             <small class="text-muted">{{ item.pack_size }}</small>
+                            <!-- Notes field: hidden by default, appears only on over-receive -->
+                            <div class="over-receive-note mt-2" style="display:none;">
+                                <input type="text"
+                                    class="form-control form-control-sm bg-black text-white border-warning note-input"
+                                    placeholder="Required: reason for over-receive (e.g. vendor promo)"
+                                    maxlength="255">
+                                <small class="text-warning mt-1 d-block">
+                                    <i class="fas fa-exclamation-triangle"></i> Over-receive detected — reason is required.
+                                </small>
+                            </div>
                         </td>
                         <td class="text-center fs-5">{{ item.quantity_ordered }}</td>
                         <td class="text-center text-info">{{ item.quantity_received }}</td>
                         <td>
-                            <input type="number" 
-                                   class="form-control form-control-lg bg-black text-white border-danger text-center qty-input" 
-                                   value="{{ remaining }}" 
-                                   min="0" 
-                                   max="{{ remaining }}">
+                            <input type="number"
+                                class="form-control form-control-lg bg-black text-white border-danger text-center qty-input"
+                                value="{{ remaining }}"
+                                min="0"
+                                oninput="checkOverReceive(this)">
                             {% if remaining > 0 %}
                             <small class="text-center d-block text-warning mt-1">Pending: {{ remaining }}</small>
                             {% else %}
@@ -58,18 +70,58 @@
 </div>
 
 <script>
+function checkOverReceive(input) {
+    const row = input.closest('.item-row');
+    const remaining = parseInt(row.dataset.remaining);
+    const qty = parseInt(input.value) || 0;
+    const noteDiv = row.querySelector('.over-receive-note');
+    const noteInput = row.querySelector('.note-input');
+
+    if (qty > remaining) {
+        noteDiv.style.display = 'block';
+        noteInput.required = true;
+        input.classList.remove('border-danger');
+        input.classList.add('border-warning');
+    } else {
+        noteDiv.style.display = 'none';
+        noteInput.required = false;
+        noteInput.value = '';
+        input.classList.remove('border-warning');
+        input.classList.add('border-danger');
+    }
+}
+
 async function submitReception() {
     const rows = document.querySelectorAll('.item-row');
     const items = [];
+    let hasError = false;
 
     rows.forEach(row => {
         const itemId = row.getAttribute('data-item-id');
-        const qtyReceived = row.querySelector('.qty-input').value;
+        const remaining = parseInt(row.dataset.remaining);
+        const qtyReceived = parseInt(row.querySelector('.qty-input').value) || 0;
+        const noteInput = row.querySelector('.note-input');
+        const notes = noteInput ? noteInput.value.trim() : '';
+
+        // Client-side guard: over-receive without notes
+        if (qtyReceived > remaining && !notes) {
+            noteInput.classList.add('border-danger');
+            noteInput.focus();
+            hasError = true;
+            return;
+        }
+
         items.push({
             item_id: itemId,
-            qty_received: qtyReceived
+            qty_received: qtyReceived,
+            notes: notes
         });
     });
+
+    if (hasError) {
+        alert("Please fill in the reason for all over-received items.");
+        return;
+    }
 
     const response = await fetch('/transaction/receive/confirm', {
         method: 'POST',
