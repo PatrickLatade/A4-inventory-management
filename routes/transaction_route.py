@@ -98,30 +98,98 @@ def add_item():
 def process_transaction_in():
     item_id = request.form.get("item_id")
     quantity = request.form.get("quantity")
+    unit_price_raw = request.form.get("unit_price")
+    notes = (request.form.get("notes") or "").strip()
 
     current_user_id = session.get("user_id")
     current_username = session.get("username")
 
-    if item_id and quantity:
+    # Mandatory audit note for manual IN
+    if not notes:
+        flash("Notes are required for manual stock inserts (audit trail).", "danger")
+        return redirect(url_for('transaction.transaction_in'))
+
+    if not (item_id and quantity and unit_price_raw is not None):
+        flash("Missing item selection, quantity, unit cost, or notes.", "danger")
+        return redirect(url_for('transaction.list_orders'))  # keep your deliberate redirect
+
+    try:
+        qty_int = int(quantity)
+        unit_price = float(unit_price_raw)
+
+        if qty_int <= 0:
+            flash("Invalid quantity. Must be at least 1.", "danger")
+            return redirect(url_for('transaction.list_orders'))
+
+        if unit_price < 0:
+            flash("Invalid unit cost. Must be 0 or higher.", "danger")
+            return redirect(url_for('transaction.list_orders'))
+
+        conn = get_db()
         try:
-            qty_int = int(quantity)
+            conn.execute("BEGIN")
+            clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 1) Normal manual IN ledger entry
             add_transaction(
                 item_id=item_id,
                 quantity=qty_int,
                 transaction_type='IN',
                 user_id=current_user_id,
-                user_name=current_username
+                user_name=current_username,
+                reference_id=None,
+                reference_type='MANUAL_ADJUSTMENT',
+                change_reason='WALKIN_PURCHASE',
+                unit_price=unit_price,
+                notes=notes,
+                transaction_date=clean_time,
+                external_conn=conn
             )
-            flash(f"Stock updated! Received {qty_int} unit(s).", "success")
 
-        except ValueError:
-            flash("Invalid quantity. Please enter a number.", "danger")
-        except Exception as e:
-            flash(f"System Error: {str(e)}", "danger")
-    else:
-        flash("Missing item selection or quantity.", "danger")
+            # 2) Cost self-correction + audit (0 qty)
+            item_row = conn.execute(
+                "SELECT cost_per_piece FROM items WHERE id = ?",
+                (item_id,)
+            ).fetchone()
 
-    return redirect(url_for('transaction.transaction_in'))
+            current_master_cost = float(item_row["cost_per_piece"] or 0) if item_row else 0.0
+
+            if float(unit_price) != current_master_cost:
+                conn.execute(
+                    "UPDATE items SET cost_per_piece = ? WHERE id = ?",
+                    (unit_price, item_id)
+                )
+
+                add_transaction(
+                    item_id=item_id,
+                    quantity=0,
+                    transaction_type='IN',
+                    user_id=current_user_id,
+                    user_name=current_username,
+                    reference_id=None,
+                    reference_type='MANUAL_ADJUSTMENT',
+                    change_reason='COST_PER_PIECE_UPDATED',
+                    unit_price=unit_price,
+                    notes=f"Cost updated from {current_master_cost:.2f} to {float(unit_price):.2f}. Reason: {notes}",
+                    transaction_date=clean_time,
+                    external_conn=conn
+                )
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        flash(f"Stock updated! Received {qty_int} unit(s).", "success")
+
+    except ValueError:
+        flash("Invalid quantity or unit cost. Please enter valid numbers.", "danger")
+    except Exception as e:
+        flash(f"System Error: {str(e)}", "danger")
+
+    return redirect(url_for('transaction.list_orders'))
 
 @transaction_bp.route("/transaction/out/save", methods=["POST"])
 def save_transaction_out():
@@ -181,6 +249,45 @@ def save_transaction_out():
             clean_time += ":00"
     else:
         clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
+
+    # -----------------------------
+    # 1.5) Guard: no duplicate item_id in payload
+    # -----------------------------
+    raw_items = data.get("items", []) or []
+    seen = set()
+    dupes = set()
+
+    for it in raw_items:
+        iid = it.get("item_id")
+        if iid is None:
+            continue  # skip empty rows safely
+
+        iid = str(iid).strip()
+        if not iid:
+            continue
+
+        if iid in seen:
+            dupes.add(iid)
+        seen.add(iid)
+
+    if dupes:
+        # Fetch item names for better UX
+        placeholders = ",".join(["?"] * len(dupes))
+        items_data = conn.execute(
+            f"SELECT id, name FROM items WHERE id IN ({placeholders})",
+            tuple(dupes)
+        ).fetchall()
+
+        duplicate_labels = [
+            f"{row['name']} (ID {row['id']})"
+            for row in items_data
+        ]
+
+        conn.close()
+        return jsonify({
+            "status": "error",
+            "message": f"Duplicate item(s) detected: {', '.join(duplicate_labels)}. Please adjust Qty Out instead."
+        }), 400
 
     try:
         conn.execute("BEGIN")
@@ -440,6 +547,43 @@ def confirm_reception():
             qty_ordered = po_item['quantity_ordered']
             remaining = qty_ordered - already_received
             unit_cost = po_item['unit_cost']
+
+            # -------------------------------------------------
+            # COST SELF-CORRECTION LOGIC (Option A)
+            # If PO unit cost differs from master item cost,
+            # update items.cost_per_piece and log audit entry.
+            # -------------------------------------------------
+
+            # Fetch current master cost
+            item_row = conn.execute(
+                "SELECT cost_per_piece FROM items WHERE id = ?",
+                (item_id,)
+            ).fetchone()
+
+            current_master_cost = float(item_row["cost_per_piece"] or 0)
+
+            if float(unit_cost) != current_master_cost:
+                # Update master item cost
+                conn.execute(
+                    "UPDATE items SET cost_per_piece = ? WHERE id = ?",
+                    (unit_cost, item_id)
+                )
+
+                # Log 0-qty audit entry (does NOT affect stock)
+                add_transaction(
+                    item_id=item_id,
+                    quantity=0,
+                    transaction_type='IN',
+                    user_id=session.get('user_id'),
+                    user_name=session.get('username'),
+                    reference_id=po_id,
+                    reference_type='PURCHASE_ORDER',
+                    change_reason='COST_PER_PIECE_UPDATED',
+                    unit_price=unit_cost,
+                    transaction_date=clean_time,
+                    external_conn=conn,
+                    notes=f"Cost updated from {current_master_cost:.2f} to {float(unit_cost):.2f} via PO receive"
+                )
 
             is_over_receive = qty_in > remaining
 
