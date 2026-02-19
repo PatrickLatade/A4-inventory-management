@@ -696,27 +696,49 @@ const handleTableSearch = async (input) => {
         if (!data.items?.length) { suggestions.style.display = 'none'; return; }
 
         data.items.slice(0, 5).forEach(item => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'list-group-item list-group-item-action';
-            btn.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong>${item.name}</strong>
-                    <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
-                </div>
-                <div class="suggestion-stock"><i class="bi bi-box me-1"></i>Stock: ${item.current_stock}</div>
-            `;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'list-group-item list-group-item-action';
+
+        const itemIdStr = String(item.id);
+        const currentRowSelectedId = String(idInput.value || '');
+        const alreadySelectedElsewhere =
+            selectedItemIds.has(itemIdStr) && itemIdStr !== currentRowSelectedId;
+
+        btn.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+            <strong>${item.name}</strong>
+            <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
+            </div>
+            <div class="suggestion-stock">
+            <i class="bi bi-box me-1"></i>Stock: ${item.current_stock}
+            ${alreadySelectedElsewhere ? `<span style="margin-left:8px; color:#f4c430;">(already in cart)</span>` : ``}
+            </div>
+        `;
+
+        if (alreadySelectedElsewhere) {
+            btn.disabled = true;
+            btn.style.opacity = "0.5";
+            btn.style.cursor = "not-allowed";
+        } else {
             btn.onclick = () => {
-                input.value = item.name;
-                input.dataset.confirmedName = item.name;
-                row.querySelector('.item-id-input').value = item.id;
-                row.querySelector('.price-input').value = item.a4s_selling_price;
-                row.dataset.basePrice = item.a4s_selling_price;
-                row.querySelector('.stock-input').value = item.current_stock;
-                suggestions.style.display = 'none';
-                calculateRow(row);
+            // If this row previously had an item, remove it from the set first
+            rebuildSelectedItemIds(); // easy + safe
+
+            input.value = item.name;
+            input.dataset.confirmedName = item.name;
+            row.querySelector('.item-id-input').value = item.id;
+            row.querySelector('.price-input').value = item.a4s_selling_price;
+            row.dataset.basePrice = item.a4s_selling_price;
+            row.querySelector('.stock-input').value = item.current_stock;
+
+            rebuildSelectedItemIds();
+            suggestions.style.display = 'none';
+            calculateRow(row);
             };
-            suggestions.appendChild(btn);
+        }
+
+        suggestions.appendChild(btn);
         });
 
         suggestions.style.display = 'block';
@@ -829,6 +851,42 @@ document.getElementById('payment-category').addEventListener('change', function 
     validateForm();
 });
 
+// Tracks all item_ids currently selected in the table
+const selectedItemIds = new Set();
+
+function rebuildSelectedItemIds() {
+  selectedItemIds.clear();
+  document.querySelectorAll('.item-row').forEach(row => {
+    const id = row.querySelector('.item-id-input')?.value;
+    if (id) selectedItemIds.add(String(id));
+  });
+}
+
+// Clears a row safely (used when removing/overwriting)
+function clearItemRow(row) {
+  row.querySelector('.item-id-input').value = '';
+  row.querySelector('.item-input').value = '';
+  row.querySelector('.item-input').dataset.confirmedName = '';
+  row.querySelector('.price-input').value = '';
+  row.querySelector('.stock-input').value = '--';
+  row.querySelector('.discount-input').value = 0;
+  delete row.dataset.basePrice;
+
+  const originalPriceEl = row.querySelector('.original-price');
+  if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
+
+  row.querySelector('.subtotal-display').innerText = '₱0.00';
+  const qtyInp = row.querySelector('.qty-input');
+  qtyInp.value = 1;
+  qtyInp.classList.remove('border-danger');
+  qtyInp.style.color = '';
+  qtyInp.style.boxShadow = "none";
+  row.querySelector('.stock-warning-text').style.display = 'none';
+
+  calculateGrandTotal();
+  validateForm();
+}
+
 // Mechanic toggle
 document.getElementById('mechanic-id').addEventListener('change', function () {
     const servicesSection = document.getElementById('services-section');
@@ -888,6 +946,7 @@ document.addEventListener('click', (e) => {
 
     if (rows.length > 1) {
         row.remove();
+        rebuildSelectedItemIds();
         calculateGrandTotal();
     } else {
         row.querySelector('.item-id-input').value = '';
@@ -907,6 +966,8 @@ document.addEventListener('click', (e) => {
         qtyInp.style.color = '';
         qtyInp.style.boxShadow = "none";
         row.querySelector('.stock-warning-text').style.display = 'none';
+        clearItemRow(row);
+        rebuildSelectedItemIds();
         calculateGrandTotal();
         validateForm();
     }
@@ -989,6 +1050,7 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     newRow.querySelector('.search-suggestions').style.display = 'none';
 
     tbody.appendChild(newRow);
+    rebuildSelectedItemIds();
     validateForm();
 });
 

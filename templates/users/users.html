@@ -589,15 +589,18 @@
                         <td>
                             {% if log.reference_id %}
                                 {% if log.reference_type == 'PURCHASE_ORDER' %}
-                                <button class="btn btn-sm btn-outline-warning border-0"
-                                        onclick="viewOrder('{{ log.reference_id }}')">
-                                    <i class="bi bi-box-seam me-1"></i>
-                                    {{ log.po_number or log.reference_id }}
-                                </button>
+                                    <button class="btn btn-sm btn-outline-warning border-0 text-nowrap"
+                                            style="white-space: nowrap;"
+                                            onclick="viewOrder('{{ log.reference_id }}')">
+                                        <i class="bi bi-box-seam me-1"></i>
+                                        {{ log.po_number or log.reference_id }}
+                                    </button>
                                 {% else %}
-                                    <button class="btn btn-sm btn-outline-danger border-0" 
+                                    <button class="btn btn-sm btn-outline-danger border-0 text-nowrap"
+                                            style="white-space: nowrap;"
                                             onclick="viewSaleDetails('{{ log.reference_id }}', '{{ log.sales_number or log.reference_id }}')">
-                                        <i class="bi bi-receipt-cutoff"></i> {{ log.sales_number or log.reference_id }}
+                                        <i class="bi bi-receipt-cutoff"></i>
+                                        {{ log.sales_number or log.reference_id }}
                                     </button>
                                 {% endif %}
                             {% else %}
@@ -605,13 +608,15 @@
                             {% endif %}
                         </td>
                         <td class="text-white-50 small">
-                            {% if log.notes %}
-                                <span class="text-info" title="{{ log.notes }}">
-                                    <i class="bi bi-chat-left-text me-1"></i>{{ log.notes[:40] }}{% if log.notes|length > 40 %}...{% endif %}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
+                        {% if log.notes %}
+                            <span class="text-info d-inline-block"
+                                title="{{ log.notes }}"
+                                style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;">
+                            <i class="bi bi-chat-left-text me-1"></i>{{ log.notes }}
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
                         </td>
                         <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
                     </tr>
