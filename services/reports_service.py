@@ -252,6 +252,7 @@ def get_sales_report_by_date(report_date):
                 "status":         sale["status"],
                 "payment_method": sale["payment_method"] or "—",
                 "notes":          sale["notes"] or "",
+                "transaction_date": format_date(sale["transaction_date"]),
                 "products":       items_by_sale.get(sale_id, []),
                 "services":       services_by_sale.get(sale_id, []),
             })
@@ -311,6 +312,181 @@ def get_sales_report_by_date(report_date):
 
     items_summary_list = sorted(items_summary.values(), key=lambda x: x["item_name"])
 
+    total_mech_cut   = round(total_mech_cut, 2)
+    total_shop_topup = round(total_shop_topup, 2)
+
+    return {
+        "sales":            paid_sales,
+        "unresolved":       all_unresolved,
+        "mechanic_summary": mechanic_summary,
+        "items_summary":    items_summary_list,
+        "total_gross":      round(total_gross, 2),
+        "total_mech_cut":   total_mech_cut,
+        "total_shop_topup": total_shop_topup,
+        "net_revenue":      round(total_gross - total_mech_cut - total_shop_topup, 2),
+    }
+
+def get_sales_report_by_range(start_date, end_date):
+    """
+    Pulls all completed sales between start_date and end_date (inclusive)
+    for a multi-day PDF report.
+
+    Quota note: MECHANIC_QUOTA is applied once across the full range total
+    per mechanic, not per-day. If you later need per-day quota enforcement,
+    this function will need to be restructured to group by date first.
+
+    Multi-branch note: add branch_id filter here when branches are added.
+    """
+    conn = get_db()
+
+    MECHANIC_QUOTA = 500.0
+
+    sales_rows = conn.execute("""
+        SELECT
+            s.id,
+            s.sales_number,
+            s.customer_name,
+            s.total_amount,
+            s.status,
+            s.notes,
+            s.transaction_date,
+            m.id              AS mechanic_id,
+            m.name            AS mechanic_name,
+            m.commission_rate,
+            pm.name           AS payment_method
+        FROM sales s
+        LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+        LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+        WHERE DATE(s.transaction_date) BETWEEN ? AND ?
+        ORDER BY s.transaction_date ASC
+    """, (start_date, end_date)).fetchall()
+
+    all_unresolved = get_all_unresolved_sales(conn)
+
+    if not sales_rows and not all_unresolved:
+        conn.close()
+        return []
+
+    paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
+    all_sale_ids  = [row["id"] for row in sales_rows]
+
+    items_by_sale    = {}
+    services_by_sale = {}
+
+    if paid_sale_ids:
+        placeholders = ",".join("?" * len(paid_sale_ids))
+        items_rows = conn.execute(f"""
+            SELECT
+                si.sale_id,
+                i.name                  AS item_name,
+                si.quantity,
+                si.original_unit_price,
+                si.discount_percent,
+                si.discount_amount,
+                si.final_unit_price,
+                (si.quantity * si.final_unit_price) AS line_total
+            FROM sales_items si
+            JOIN items i ON i.id = si.item_id
+            WHERE si.sale_id IN ({placeholders})
+            ORDER BY si.sale_id, i.name
+        """, paid_sale_ids).fetchall()
+        for row in items_rows:
+            items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+
+    if all_sale_ids:
+        placeholders = ",".join("?" * len(all_sale_ids))
+        services_rows = conn.execute(f"""
+            SELECT
+                ss.sale_id,
+                sv.name   AS service_name,
+                ss.price
+            FROM sales_services ss
+            JOIN services sv ON sv.id = ss.service_id
+            WHERE ss.sale_id IN ({placeholders})
+            ORDER BY ss.sale_id, sv.name
+        """, all_sale_ids).fetchall()
+        for row in services_rows:
+            services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+
+    conn.close()
+
+    paid_sales   = []
+    total_gross  = 0.0
+    mechanic_map = {}
+
+    for sale in sales_rows:
+        sale_id         = sale["id"]
+        mechanic_id     = sale["mechanic_id"]
+        mechanic_name   = sale["mechanic_name"] or "—"
+        commission_rate = sale["commission_rate"] or 0.0
+        services_total  = sum(svc["price"] for svc in services_by_sale.get(sale_id, []))
+
+        if sale["status"] == "Paid":
+            total_amount = sale["total_amount"] or 0.0
+            paid_sales.append({
+                "sales_number":   sale["sales_number"] or f"#{sale_id}",
+                "customer_name":  sale["customer_name"] or "Walk-in",
+                "mechanic_name":  mechanic_name,
+                "services_total": round(services_total, 2),
+                "total_amount":   total_amount,
+                "status":         sale["status"],
+                "payment_method": sale["payment_method"] or "—",
+                "notes":          sale["notes"] or "",
+                "transaction_date": format_date(sale["transaction_date"]),
+                "products":       items_by_sale.get(sale_id, []),
+                "services":       services_by_sale.get(sale_id, []),
+            })
+            total_gross += total_amount
+
+        if mechanic_id and services_total > 0:
+            if mechanic_id not in mechanic_map:
+                mechanic_map[mechanic_id] = {
+                    "mechanic_name":   mechanic_name,
+                    "commission_rate": commission_rate,
+                    "services_total":  0.0,
+                }
+            mechanic_map[mechanic_id]["services_total"] += services_total
+
+    mechanic_summary = []
+    total_mech_cut   = 0.0
+    total_shop_topup = 0.0
+
+    for mech_id, mech in mechanic_map.items():
+        services_total  = round(mech["services_total"], 2)
+        commission_rate = mech["commission_rate"]
+
+        if services_total > 0 and services_total < MECHANIC_QUOTA:
+            shop_topup     = round(MECHANIC_QUOTA - services_total, 2)
+            effective_base = MECHANIC_QUOTA
+        else:
+            shop_topup     = 0.0
+            effective_base = services_total
+
+        mech_cut = round(effective_base * commission_rate, 2)
+        total_mech_cut   += mech_cut
+        total_shop_topup += shop_topup
+
+        mechanic_summary.append({
+            "mechanic_name":   mech["mechanic_name"],
+            "commission_rate": commission_rate,
+            "services_total":  services_total,
+            "effective_base":  round(effective_base, 2),
+            "shop_topup":      shop_topup,
+            "mechanic_cut":    mech_cut,
+        })
+
+    mechanic_summary.sort(key=lambda x: x["mechanic_name"])
+
+    items_summary = {}
+    for sale in paid_sales:
+        for item in sale["products"]:
+            key = item["item_name"]
+            if key not in items_summary:
+                items_summary[key] = {"item_name": item["item_name"], "quantity": 0, "total": 0.0}
+            items_summary[key]["quantity"] += item["quantity"]
+            items_summary[key]["total"]    += item["line_total"]
+
+    items_summary_list = sorted(items_summary.values(), key=lambda x: x["item_name"])
     total_mech_cut   = round(total_mech_cut, 2)
     total_shop_topup = round(total_shop_topup, 2)
 

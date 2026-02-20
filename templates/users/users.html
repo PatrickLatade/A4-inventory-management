@@ -165,6 +165,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'debt-audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#debt-audit-tab" type="button">
+            <i class="bi bi-cash-coin"></i> Debt Payments
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link {% if active_tab == 'audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
             <i class="bi bi-clock-history"></i> Audit Trail
         </button>
@@ -526,6 +531,31 @@
         </div>
     </div>
 
+    <!-- DEBT PAYMENTS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'debt-audit-tab' %}show active{% endif %}" id="debt-audit-tab">
+        <div class="table-responsive">
+            <h6 class="text-warning fw-semibold fs-5 mt-4 mb-3">
+            <i class="bi bi-cash-coin me-2"></i> Debt Payment History
+            </h6>
+            <table class="table table-dark table-hover align-middle">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th>Paid At</th>
+                        <th>Customer</th>
+                        <th>Receipt #</th>
+                        <th class="text-center">Amount Paid</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th>Staff</th>
+                    </tr>
+                </thead>
+                <tbody id="debt-audit-body">
+                    <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- AUDIT TAB -->
     <div class="tab-pane fade {% if active_tab == 'audit-tab' %}show active{% endif %}" id="audit-tab">
         <div class="table-responsive">
@@ -621,27 +651,6 @@
                         <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
                     </tr>
                     {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <h6 class="text-warning fw-semibold fs-5 mt-4 mb-3">
-            <i class="bi bi-cash-coin me-2"></i> Debt Payment History
-        </h6>
-        <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle">
-                <thead>
-                    <tr class="border-bottom border-secondary">
-                        <th>Paid At</th>
-                        <th>Customer</th>
-                        <th>Receipt #</th>
-                        <th class="text-center">Amount Paid</th>
-                        <th>Method</th>
-                        <th>Reference</th>
-                        <th>Staff</th>
-                    </tr>
-                </thead>
-                <tbody id="debt-audit-body">
-                    <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -927,7 +936,7 @@ function viewOrder(poId) {
         });
 }
 
-document.querySelector('[data-bs-target="#audit-tab"]').addEventListener('shown.bs.tab', function () {
+document.querySelector('[data-bs-target="#debt-audit-tab"]').addEventListener('shown.bs.tab', function () {
     fetch('/api/debt/audit')
         .then(r => r.json())
         .then(data => {
@@ -940,7 +949,10 @@ document.querySelector('[data-bs-target="#audit-tab"]').addEventListener('shown.
                 <tr>
                     <td class="text-white-50 small">${p.paid_at}</td>
                     <td class="fw-bold">${p.customer_name || 'Walk-in'}</td>
-                    <td class="text-warning">${p.sales_number || p.sale_id}</td>
+                    <td class="text-warning">
+                        ${p.sales_number || p.sale_id}
+                        ${p.fully_paid ? '<span class="badge bg-success ms-2" style="font-size:0.65rem;">PAID IN FULL</span>' : ''}
+                    </td>
                     <td class="text-center fw-bold text-success">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
                     <td><span class="badge bg-dark border border-secondary text-info">${p.payment_method || '—'}</span></td>
                     <td class="text-white-50 small">${p.reference_no || '—'}</td>

@@ -8,6 +8,7 @@
 
 from flask import Flask, render_template, request, redirect, Response
 from flask import session, abort, url_for
+from datetime import date
 import webbrowser
 import threading
 
@@ -79,6 +80,9 @@ def restrict_access():
         if session.get("role") != "admin":
             abort(403)
 app.secret_key = "dev-secret-change-later"
+@app.context_processor
+def inject_globals():
+    return {"current_date": date.today().isoformat()}
 init_db()  # Safe to call on startup (creates tables if missing)
 
 # Register API routes (kept separate from UI routes)

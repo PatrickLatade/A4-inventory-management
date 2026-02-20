@@ -657,6 +657,13 @@
                     <hr class="dropdown-divider">
 
                     <!-- Actions -->
+                    <a class="dropdown-item profile-action" 
+                    href="/reports/sales-summary?report_date={{ current_date }}"
+                    target="_blank">
+                        <i class="bi bi-calendar-check me-2"></i>
+                        Generate Daily Report
+                    </a>
+
                     <button class="dropdown-item profile-action" 
                             data-bs-toggle="modal" 
                             data-bs-target="#reportModal">
@@ -722,12 +729,19 @@
             </div>
             <form action="/reports/sales-summary" method="GET" target="_blank">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label text small">Select Date</label>
-                        <input type="date" name="report_date" class="form-control" required 
-                            value="{{ current_date }}">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label text small">Start Date</label>
+                            <input type="date" name="start_date" class="form-control" required
+                                value="{{ current_date }}">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label text small">End Date</label>
+                            <input type="date" name="end_date" class="form-control" required
+                                value="{{ current_date }}">
+                        </div>
                     </div>
-                    <p class="text small">The report will generate a PDF summary of all transactions, mechanic commissions, and items sold for this specific day.</p>
+                    <p class="text small">The report will generate a PDF summary of all transactions, mechanic commissions, and items sold for the selected date range.</p>
                 </div>
                 <div class="modal-footer border-top-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

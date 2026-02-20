@@ -15,11 +15,14 @@ def format_date(dt_str, show_time=False):
         return "-"
     try:
         dt = datetime.strptime(str(dt_str)[:19], "%Y-%m-%d %H:%M:%S")
-        if show_time:
-            return dt.strftime("%b %d, %Y %I:%M %p")
-        return dt.strftime("%b %d, %Y")
     except ValueError:
-        return str(dt_str)  # fallback if format is unexpected
+        try:
+            dt = datetime.strptime(str(dt_str)[:10], "%Y-%m-%d")
+        except ValueError:
+            return str(dt_str)  # fallback if format is unexpected
+    if show_time:
+        return dt.strftime("%b %d, %Y %I:%M %p")
+    return dt.strftime("%b %d, %Y")
     
 def norm_text(s: str) -> str:
     # trims + collapses internal whitespace

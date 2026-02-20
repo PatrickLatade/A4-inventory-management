@@ -282,7 +282,14 @@
         <tbody>
             {% for sale in data.sales %}
             <tr>
-                <td style="font-weight: 700;">{{ sale.sales_number }}</td>
+                <td style="font-weight: 700;">
+                    {{ sale.sales_number }}
+                    {% if is_range %}
+                    <div style="font-size: 11px; color: #666; font-weight: 400; margin-top: 3px;">
+                        {{ sale.transaction_date }}
+                    </div>
+                    {% endif %}
+                </td>
                 <td>{{ sale.customer_name }}</td>
                 <td>
                     {% for item in sale.products %}

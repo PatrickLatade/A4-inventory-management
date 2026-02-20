@@ -64,14 +64,21 @@ def debt_audit_api():
     conn = get_db()
     rows = conn.execute("""
         SELECT
+            dp.id,
             dp.paid_at,
             dp.amount_paid,
             dp.reference_no,
             s.sales_number,
-            s.id AS sale_id,
+            s.id        AS sale_id,
+            s.total_amount,
             s.customer_name,
             u.username  AS paid_by,
-            pm.name     AS payment_method
+            pm.name     AS payment_method,
+            SUM(dp.amount_paid) OVER (
+                PARTITION BY dp.sale_id
+                ORDER BY dp.paid_at
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS running_total
         FROM debt_payments dp
         JOIN sales s                  ON s.id = dp.sale_id
         LEFT JOIN users u             ON u.id = dp.paid_by
@@ -85,6 +92,7 @@ def debt_audit_api():
     for r in rows:
         d = dict(r)
         d['paid_at'] = format_date(d['paid_at'], show_time=True)
+        d['fully_paid'] = round(d['running_total'], 2) >= round(d['total_amount'], 2)
         formatted.append(d)
 
     return jsonify({"payments": formatted})
