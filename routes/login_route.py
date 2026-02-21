@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, request, redirect, session, flash, url_for
+from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
 from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date, norm_text
+from services.audit_service import get_audit_trail
+from services.sales_admin_service import get_sales_paginated
 
 # 1. Initialize the Blueprint
 auth_bp = Blueprint('auth', __name__)
@@ -75,47 +77,8 @@ def manage_users():
         ORDER BY u.created_at DESC
     """).fetchall()
 
-    # --- 2.5 NEW: FETCH SALES HISTORY ---
-    # Using your actual table name 'sales' and matching the schema columns
-    sales_history = conn.execute("""
-        SELECT
-            s.id,
-            s.transaction_date, 
-            s.sales_number, 
-            s.customer_name, 
-            s.total_amount,
-            p.name as payment_method_name
-        FROM sales s
-        JOIN payment_methods p ON s.payment_method_id = p.id
-        ORDER BY s.transaction_date DESC
-        LIMIT 20
-    """).fetchall()
-
     # --- 3. NEW: FETCH MECHANICS (This was the missing piece!) ---
     mechanics = conn.execute("SELECT * FROM mechanics ORDER BY name ASC").fetchall()
-
-    # --- 3. FETCH TRANSACTION HISTORY (The Audit Trail / Item Movements) ---
-    history = conn.execute("""
-        SELECT 
-            t.transaction_date, 
-            t.transaction_type, 
-            SUM(t.quantity) as total_qty, 
-            t.user_name,
-            t.change_reason,
-            t.reference_type,
-            t.reference_id,
-            t.notes,
-            s.sales_number,
-            po.po_number,
-            GROUP_CONCAT(i.name, ', ') as items_summary
-        FROM inventory_transactions t
-        JOIN items i ON t.item_id = i.id
-        LEFT JOIN sales s ON t.reference_id = s.id AND t.reference_type = 'SALE'
-        LEFT JOIN purchase_orders po ON t.reference_id = po.id AND t.reference_type = 'PURCHASE_ORDER'
-        GROUP BY t.reference_id, t.transaction_date, t.transaction_type, t.change_reason
-        ORDER BY t.transaction_date DESC
-        LIMIT 50
-    """).fetchall()
 
     services_list = conn.execute("SELECT * FROM services ORDER BY category ASC, name ASC LIMIT 20").fetchall()
     categories = conn.execute("SELECT DISTINCT category FROM services WHERE category IS NOT NULL").fetchall()
@@ -128,17 +91,9 @@ def manage_users():
         {**dict(u), "created_at": format_date(u["created_at"], show_time=True)}
         for u in users
     ]
-    sales_history = [
-        {**dict(s), "transaction_date": format_date(s["transaction_date"], show_time=True)}
-        for s in sales_history
-    ]
-    history = [
-        {**dict(h), "transaction_date": format_date(h["transaction_date"], show_time=True)}
-        for h in history
-    ]
 
     # --- 5. SERVE THE PAGE ---
-    return render_template("users/users.html", users=users, history=history, sales_history=sales_history, mechanics=mechanics, services_list=services_list, categories=categories, payment_methods=payment_methods, active_tab=active_tab)
+    return render_template("users/users.html", users=users, mechanics=mechanics, services_list=services_list, categories=categories, payment_methods=payment_methods, active_tab=active_tab)
 
 @auth_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
 def toggle_user(user_id):
@@ -425,3 +380,49 @@ def toggle_payment_method(pm_id):
 
     conn.close()
     return redirect(url_for('auth.manage_users', tab='payment-methods-tab'))
+
+@auth_bp.route("/api/audit/trail")
+def audit_trail_api():
+    """
+    Paginated, filterable audit trail for the admin panel.
+    Query params: page, start_date, end_date, type (IN/OUT/ORDER)
+    """
+    try:
+        page          = int(request.args.get("page", 1))
+        start_date    = request.args.get("start_date") or None
+        end_date      = request.args.get("end_date") or None
+        movement_type = request.args.get("type") or None
+
+        # Validate type to prevent arbitrary SQL injection via the filter
+        VALID_TYPES = {"IN", "OUT", "ORDER", None}
+        if movement_type not in VALID_TYPES:
+            return jsonify({"error": "Invalid movement type"}), 400
+
+        data = get_audit_trail(
+            page=page,
+            start_date=start_date,
+            end_date=end_date,
+            movement_type=movement_type,
+        )
+        return jsonify(data)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@auth_bp.route("/api/admin/sales")
+def admin_sales_api():
+    try:
+        page       = int(request.args.get("page", 1))
+        start_date = request.args.get("start_date") or None
+        end_date   = request.args.get("end_date") or None
+        search     = request.args.get("search", "").strip() or None
+
+        data = get_sales_paginated(
+            page=page,
+            start_date=start_date,
+            end_date=end_date,
+            search=search,
+        )
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 
 {% block styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
 <style>
     .admin-card {
         background-color: #1e1e1e;
@@ -125,6 +127,38 @@
     font-size: 0.8rem;
     letter-spacing: 0.6px;
     border-radius: 50px;
+    }
+
+    /* Debt accordion row hover */
+    .debt-parent-row:hover {
+        background: rgba(193, 18, 31, 0.08) !important;
+        transition: background 0.15s ease;
+    }
+
+    .debt-parent-row:hover .debt-chevron {
+        color: var(--bs-warning) !important;
+    }
+
+    .debt-chevron {
+        display: inline-block;         /* <-- important */
+        transform: rotate(0deg);       /* <-- explicit initial state */
+        transform-origin: 50% 50%;
+        font-size: 0.9rem;
+        color: #555;
+        transition: transform 0.2s ease, color 0.15s ease;
+    }
+
+    .debt-expand-hint {
+        font-size: 0.65rem;
+        color: #555;
+        letter-spacing: 0.4px;
+        display: block;
+        margin-top: 2px;
+        transition: color 0.15s ease;
+    }
+
+    .debt-parent-row:hover .debt-expand-hint {
+        color: #888;
     }
 </style>
 {% endblock %}
@@ -485,72 +519,152 @@
 
     <!-- SALES TAB -->
     <div class="tab-pane fade {% if active_tab == 'sales-tab' %}show active{% endif %}" id="sales-tab">
+
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-danger fw-semibold fs-5 mb-0">
+                    <i class="bi bi-cash-stack me-2"></i> Sales History
+                </h6>
+                <span class="text-danger small" id="sales-summary"></span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <!-- Search -->
+                <div class="input-group input-group-sm" style="width: 220px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="sales-search-input"
+                        class="form-control form-control-sm"
+                        placeholder="Receipt # or customer..."
+                        style="background:#141720; border-color:#333; color:#fff;">
+                </div>
+
+                <!-- Date range -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="sales-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearSalesFilters()" title="Clear all filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </div>
+        </div>
+
         <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle">
+            <table class="table table-dark table-hover align-middle" style="table-layout: fixed; width: 100%;">
                 <thead class="table-danger text-dark">
                     <tr>
-                        <th>Date & Time</th>
-                        <th>Receipt #</th>
-                        <th>Customer</th>
-                        <th>Payment</th>
-                        <th>Total Amount</th>
-                        <th class="text-center">Action</th>
+                        <th style="width:18%;">Date & Time</th>
+                        <th style="width:15%;">Receipt #</th>
+                        <th style="width:22%;">Customer</th>
+                        <th style="width:13%;">Payment</th>
+                        <th style="width:12%;">Status</th>
+                        <th style="width:12%;">Total</th>
+                        <th style="width:8%; text-align:center;">Action</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for sale in sales_history %}
-                    <tr>
-                        <td class="text-white-50 small">{{ sale.transaction_date }}</td>
-                        <td class="fw-bold text-warning">{{ sale.sales_number }}</td>
-                        <td>{{ sale.customer_name }}</td>
-                        <td>
-                            <span class="badge bg-dark border border-secondary text-info">
-                                {{ sale.payment_method_name }}
-                            </span>
-                        </td>
-                        <td class="fw-bold text-danger">₱{{ "{:,.2f}".format(sale.total_amount) }}</td>
-                        <td class="text-center">
-                        <div class="btn-group">
-                            <button class="btn btn-sm btn-outline-info me-1" 
-                                    onclick="viewSaleDetails('{{ sale.id }}', '{{ sale.sales_number }}')">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                            <a href="/print_receipt/{{ sale.sales_number }}" target="_blank" class="btn btn-sm btn-outline-warning">
-                                <i class="bi bi-printer"></i>
-                            </a>
-                        </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">No sales recorded yet.</td>
-                    </tr>
-                    {% endfor %}
+                <tbody id="sales-admin-body">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="sales-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="sales-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="sales-prev-btn" onclick="salesChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="sales-next-btn" onclick="salesChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <!-- DEBT PAYMENTS TAB -->
     <div class="tab-pane fade {% if active_tab == 'debt-audit-tab' %}show active{% endif %}" id="debt-audit-tab">
+
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+
+            <!-- Left: Title + summary count -->
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-warning fw-semibold fs-5 mb-0">
+                    <i class="bi bi-cash-coin me-2"></i> Debt Payment History
+                </h6>
+                <span class="text-warning small" id="debt-audit-summary"></span>
+            </div>
+
+            <!-- Right: Toggle + Date Filter -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <!-- Status toggle -->
+                <div class="btn-group btn-group-sm" id="debt-status-toggle">
+                    <button type="button" class="btn btn-outline-secondary active" data-filter="unpaid"
+                            onclick="setDebtFilter('unpaid', this)">
+                        <i class="bi bi-exclamation-circle me-1"></i>Unpaid
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-filter="all"
+                            onclick="setDebtFilter('all', this)">
+                        All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-filter="paid"
+                            onclick="setDebtFilter('paid', this)">
+                        <i class="bi bi-check-circle me-1"></i>Paid
+                    </button>
+                </div>
+
+                <!-- Date range picker -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="debt-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="applyDebtDateFilter()" title="Apply filter">
+                    <i class="bi bi-search"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearDebtDateFilter()" title="Clear dates">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </div>
+        </div>
+
         <div class="table-responsive">
-            <h6 class="text-warning fw-semibold fs-5 mt-4 mb-3">
-            <i class="bi bi-cash-coin me-2"></i> Debt Payment History
-            </h6>
-            <table class="table table-dark table-hover align-middle">
+            <table class="table table-dark align-middle" id="debt-audit-table">
                 <thead>
                     <tr class="border-bottom border-secondary">
-                        <th>Paid At</th>
+                        <th width="3%"></th>
                         <th>Customer</th>
                         <th>Receipt #</th>
-                        <th class="text-center">Amount Paid</th>
-                        <th>Method</th>
-                        <th>Reference</th>
-                        <th>Staff</th>
+                        <th>Date</th>
+                        <th class="text-end">Total Debt</th>
+                        <th class="text-end">Total Paid</th>
+                        <th class="text-end">Remaining</th>
+                        <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody id="debt-audit-body">
-                    <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -558,102 +672,91 @@
 
     <!-- AUDIT TAB -->
     <div class="tab-pane fade {% if active_tab == 'audit-tab' %}show active{% endif %}" id="audit-tab">
+
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+
+            <!-- Left: Title + count -->
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-info fw-semibold fs-5 mb-0">
+                    <i class="bi bi-truck me-2"></i> Item Movement
+                </h6>
+                <span class="text-info small" id="audit-summary"></span>
+            </div>
+
+            <!-- Right: Filters -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <!-- Movement type toggle -->
+                <div class="btn-group btn-group-sm" id="audit-type-toggle">
+                    <button type="button" class="btn btn-outline-secondary active" 
+                            onclick="setAuditType(null, this)">All</button>
+                    <button type="button" class="btn btn-outline-success"
+                            onclick="setAuditType('IN', this)">
+                        <i class="bi bi-box-arrow-in-down me-1"></i>IN
+                    </button>
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="setAuditType('OUT', this)">
+                        <i class="bi bi-box-arrow-up me-1"></i>OUT
+                    </button>
+                    <button type="button" class="btn btn-outline-info"
+                            onclick="setAuditType('ORDER', this)">
+                        <i class="bi bi-clipboard-check me-1"></i>ORDER
+                    </button>
+                </div>
+
+                <!-- Date range picker -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="audit-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearAuditDateFilter()" title="Clear dates">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </div>
+        </div>
+
+        <!-- Table -->
         <div class="table-responsive">
-            <h6 class="text-info fw-semibold fs-5 mt-4 mb-3">
-            <i class="bi bi-truck me-2"></i> Item Movement
-            </h6>
-            <table class="table table-dark table-hover align-middle">
+            <table class="table table-dark table-hover align-middle" style="table-layout: fixed; width: 100%;">
                 <thead>
                     <tr class="border-bottom border-secondary">
-                        <th>Date & Time</th>
-                        <th>Item Summary</th>
-                        <th class="text-center">Movement</th>
-                        <th>Reason</th>
-                        <th class="text-center">Qty</th>
-                        <th>Reference</th>
-                        <th>Notes</th>
-                        <th>Staff</th>
+                        <th style="width: 13%;">Date & Time</th>
+                        <th style="width: 22%;">Item Summary</th>
+                        <th style="width: 8%; text-align:center;">Movement</th>
+                        <th style="width: 12%;">Reason</th>
+                        <th style="width: 5%; text-align:center;">Qty</th>
+                        <th style="width: 13%;">Reference</th>
+                        <th style="width: 18%;">Notes</th>
+                        <th style="width: 9%;">Staff</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for log in history %}
-                    <tr>
-                        <td class="text-white-50 small">{{ log.transaction_date }}</td>
-                        <td>
-                            <div class="fw-bold text-white">{{ log.items_summary[:40] }}{% if log.items_summary|length > 40 %}...{% endif %}</div>
-                        </td>
-                        <td class="text-center">
-                            {% set type = log.transaction_type|upper %}
-                            
-                            {# RED PILL: OUT #}
-                            {% if type == 'SALE' or type == 'OUT' or type == 'REMOVE' %}
-                                <span class="badge rounded-pill bg-danger audit-badge">
-                                    <i class="bi bi-box-arrow-up me-1"></i> OUT
-                                </span>
-
-                            {# GREEN PILL: IN #}
-                            {% elif type in ['RESTOCK', 'IN', 'ADD', 'RECEIVED'] %}
-                                <span class="badge rounded-pill bg-success audit-badge">
-                                    <i class="bi bi-box-arrow-in-down me-1"></i> IN
-                                </span>
-
-                            {# BLUE PILL: ORDER (New clipboard design) #}
-                            {% elif type == 'ORDER' %}
-                                <span class="badge rounded-pill bg-info text-dark audit-badge">
-                                    <i class="bi bi-clipboard-check-fill me-1"></i> ORDER
-                                </span>
-
-                            {# GRAY PILL: Fallback #}
-                            {% else %}
-                                <span class="badge rounded-pill bg-secondary px-3 py-2" audit-badge">
-                                    {{ log.transaction_type }}
-                                </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="text-white-50 small fst-italic fw-bold">
-                                {{ log.change_reason and log.change_reason|replace('_', ' ') or '<span class="text-muted fw-bold">No reason provided</span>'|safe }}
-                            </span>
-                        </td>
-                        <td class="text-center fw-bold">{{ log.total_qty }}</td>
-                        <td>
-                            {% if log.reference_id %}
-                                {% if log.reference_type == 'PURCHASE_ORDER' %}
-                                    <button class="btn btn-sm btn-outline-warning border-0 text-nowrap"
-                                            style="white-space: nowrap;"
-                                            onclick="viewOrder('{{ log.reference_id }}')">
-                                        <i class="bi bi-box-seam me-1"></i>
-                                        {{ log.po_number or log.reference_id }}
-                                    </button>
-                                {% else %}
-                                    <button class="btn btn-sm btn-outline-danger border-0 text-nowrap"
-                                            style="white-space: nowrap;"
-                                            onclick="viewSaleDetails('{{ log.reference_id }}', '{{ log.sales_number or log.reference_id }}')">
-                                        <i class="bi bi-receipt-cutoff"></i>
-                                        {{ log.sales_number or log.reference_id }}
-                                    </button>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-muted">---</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50 small">
-                        {% if log.notes %}
-                            <span class="text-info d-inline-block"
-                                title="{{ log.notes }}"
-                                style="max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;">
-                            <i class="bi bi-chat-left-text me-1"></i>{{ log.notes }}
-                            </span>
-                        {% else %}
-                            <span class="text-muted">—</span>
-                        {% endif %}
-                        </td>
-                        <td class="text-white-50 small"><i class="bi bi-person"></i> {{ log.user_name }}</td>
-                    </tr>
-                    {% endfor %}
+                <tbody id="audit-trail-body">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="audit-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="audit-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="audit-prev-btn" onclick="auditChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="audit-next-btn" onclick="auditChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <!-- SALES MODAL -->
@@ -743,6 +846,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
 let initialServicesHTML = "";
 document.addEventListener('DOMContentLoaded', () => {
@@ -936,30 +1040,512 @@ function viewOrder(poId) {
         });
 }
 
+// --- DEBT TAB STATE ---
+let debtAllSales = [];       // full server response, never mutated
+let debtActiveFilter = 'unpaid'; // default view is unpaid only
+let debtFlatpickr = null; 
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Init Flatpickr in range mode on the debt tab input
+    debtFlatpickr = flatpickr('#debt-date-range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',        // what gets sent to the server
+        altInput: true,
+        altFormat: 'M j, Y',        // what the user sees
+        allowInput: false,
+        disableMobile: false,
+        onClose: function(selectedDates) {
+            // Auto-apply when user finishes picking both dates
+            if (selectedDates.length === 2) {
+                applyDebtDateFilter();
+            }
+        }
+    });
+});
+
 document.querySelector('[data-bs-target="#debt-audit-tab"]').addEventListener('shown.bs.tab', function () {
-    fetch('/api/debt/audit')
+    // Only fetch if not already loaded (no date filter applied yet)
+    if (debtAllSales.length === 0) {
+        loadDebtSummary();
+    }
+});
+
+function loadDebtSummary(startDate = null, endDate = null) {
+    const tbody = document.getElementById('debt-audit-body');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    let url = '/api/debt/summary';
+    const params = [];
+    if (startDate) params.push(`start_date=${startDate}`);
+    if (endDate)   params.push(`end_date=${endDate}`);
+    if (params.length) url += '?' + params.join('&');
+
+    fetch(url)
         .then(r => r.json())
         .then(data => {
-            const tbody = document.getElementById('debt-audit-body');
+            debtAllSales = data.sales || [];
+            renderDebtTable();
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Failed to load data.</td></tr>';
+        });
+}
+
+function setDebtFilter(filter, btn) {
+    debtActiveFilter = filter;
+
+    // Update button active state
+    document.querySelectorAll('#debt-status-toggle .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    renderDebtTable();
+}
+
+function applyDebtDateFilter() {
+    if (!debtFlatpickr) return;
+
+    const selected = debtFlatpickr.selectedDates;
+
+    // Need both dates selected before fetching
+    if (selected.length < 2) return;
+
+    const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+    };
+    const start = fmt(selected[0]);
+    const end   = fmt(selected[1]);
+
+    debtAllSales = [];
+    loadDebtSummary(start, end);
+}
+
+function clearDebtDateFilter() {
+    if (debtFlatpickr) debtFlatpickr.clear();
+    debtAllSales = [];
+    loadDebtSummary();
+}
+
+// --- AUDIT TRAIL STATE ---
+let auditPage        = 1;
+let auditType        = null;   // null = all
+let auditFlatpickr   = null;
+let auditStartDate   = null;
+let auditEndDate     = null;
+
+document.querySelector('[data-bs-target="#audit-tab"]').addEventListener('shown.bs.tab', function () {
+    if (auditPage === 1 && document.getElementById('audit-trail-body').textContent.includes('Loading')) {
+        loadAuditTrail();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    auditFlatpickr = flatpickr('#audit-date-range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        onClose: function(selectedDates) {
+            if (selectedDates.length === 2) {
+                const fmt = d => {
+                    const y   = d.getFullYear();
+                    const m   = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+                auditStartDate = fmt(selectedDates[0]);
+                auditEndDate   = fmt(selectedDates[1]);
+                auditPage = 1;
+                loadAuditTrail();
+            }
+        }
+    });
+});
+
+function setAuditType(type, btn) {
+    auditType = type;
+    auditPage = 1;
+    document.querySelectorAll('#audit-type-toggle .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAuditTrail();
+}
+
+function clearAuditDateFilter() {
+    if (auditFlatpickr) auditFlatpickr.clear();
+    auditStartDate = null;
+    auditEndDate   = null;
+    auditPage      = 1;
+    loadAuditTrail();
+}
+
+function auditChangePage(direction) {
+    auditPage += direction;
+    loadAuditTrail();
+}
+
+function loadAuditTrail() {
+    const tbody = document.getElementById('audit-trail-body');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    const params = [`page=${auditPage}`];
+    if (auditStartDate) params.push(`start_date=${auditStartDate}`);
+    if (auditEndDate)   params.push(`end_date=${auditEndDate}`);
+    if (auditType)      params.push(`type=${auditType}`);
+
+    fetch(`/api/audit/trail?${params.join('&')}`)
+        .then(r => r.json())
+        .then(data => renderAuditTrail(data))
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Failed to load data.</td></tr>';
+        });
+}
+
+function renderAuditTrail(data) {
+    const tbody      = document.getElementById('audit-trail-body');
+    const summaryEl  = document.getElementById('audit-summary');
+    const pageLabel  = document.getElementById('audit-page-label');
+    const paginationRow = document.getElementById('audit-pagination-row');
+    const prevBtn    = document.getElementById('audit-prev-btn');
+    const nextBtn    = document.getElementById('audit-next-btn');
+
+    summaryEl.textContent = `${data.total.toLocaleString()} total entries`;
+
+    // Pagination controls
+    if (data.total_pages > 1) {
+        paginationRow.style.display = 'flex';
+        pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= data.total_pages;
+    } else {
+        paginationRow.style.display = 'none';
+    }
+
+    if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>';
+        return;
+    }
+
+    const typeBadge = {
+        'OUT':    `<span class="badge rounded-pill bg-danger audit-badge"><i class="bi bi-box-arrow-up me-1"></i> OUT</span>`,
+        'IN':     `<span class="badge rounded-pill bg-success audit-badge"><i class="bi bi-box-arrow-in-down me-1"></i> IN</span>`,
+        'ORDER':  `<span class="badge rounded-pill bg-info text-dark audit-badge"><i class="bi bi-clipboard-check-fill me-1"></i> ORDER</span>`,
+    };
+
+    tbody.innerHTML = data.rows.map(log => {
+        const type    = (log.transaction_type || '').toUpperCase();
+        const badge   = typeBadge[type] || `<span class="badge rounded-pill bg-secondary audit-badge">${log.transaction_type}</span>`;
+        const reason  = log.change_reason
+            ? log.change_reason.replace(/_/g, ' ')
+            : '<span class="text-muted fw-bold">—</span>';
+        const summary = log.items_summary
+            ? (log.items_summary.length > 40 ? log.items_summary.slice(0, 40) + '...' : log.items_summary)
+            : '—';
+        const notes = log.notes
+            ? `<span class="text-info" style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${log.notes}">
+                <i class="bi bi-chat-left-text me-1"></i>${log.notes}
+            </span>`
+            : '<span class="text-muted">—</span>';
+
+        let refBtn = '<span class="text-muted">---</span>';
+        if (log.reference_id) {
+            if (log.reference_type === 'PURCHASE_ORDER') {
+                refBtn = `<button class="btn btn-sm btn-outline-warning border-0" 
+                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;"
+                    onclick="viewOrder('${log.reference_id}')">
+                    <i class="bi bi-box-seam me-1"></i>${log.po_number || log.reference_id}
+                </button>`;
+            } else {
+                refBtn = `<button class="btn btn-sm btn-outline-danger border-0"
+                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;"
+                    onclick="viewSaleDetails('${log.reference_id}', '${log.sales_number || log.reference_id}')">
+                    <i class="bi bi-receipt-cutoff me-1"></i>${log.sales_number || log.reference_id}
+                </button>`;
+            }
+        }
+
+        return `
+            <tr>
+                <td class="text-white-50 small">${log.transaction_date}</td>
+                <td><div class="fw-bold text-white">${summary}</div></td>
+                <td class="text-center">${badge}</td>
+                <td><span class="text-white-50 small fst-italic fw-bold">${reason}</span></td>
+                <td class="text-center fw-bold">${log.total_qty}</td>
+                <td>${refBtn}</td>
+                <td class="text-white-50 small">${notes}</td>
+                <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
+            </tr>`;
+    }).join('');
+}
+
+// --- SALES TAB STATE ---
+let salesPage      = 1;
+let salesStartDate = null;
+let salesEndDate   = null;
+let salesSearch    = '';
+let salesSearchTimeout;
+let salesFlatpickr = null;
+
+document.querySelector('[data-bs-target="#sales-tab"]').addEventListener('shown.bs.tab', function () {
+    if (salesPage === 1 && document.getElementById('sales-admin-body').textContent.includes('Loading')) {
+        loadSalesAdmin();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    salesFlatpickr = flatpickr('#sales-date-range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        onClose: function(selectedDates) {
+            if (selectedDates.length === 2) {
+                const fmt = d => {
+                    const y   = d.getFullYear();
+                    const m   = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+                salesStartDate = fmt(selectedDates[0]);
+                salesEndDate   = fmt(selectedDates[1]);
+                salesPage = 1;
+                loadSalesAdmin();
+            }
+        }
+    });
+
+    document.getElementById('sales-search-input').addEventListener('input', function() {
+        clearTimeout(salesSearchTimeout);
+        salesSearchTimeout = setTimeout(() => {
+            salesSearch = this.value.trim();
+            salesPage = 1;
+            loadSalesAdmin();
+        }, 500);
+    });
+});
+
+function clearSalesFilters() {
+    if (salesFlatpickr) salesFlatpickr.clear();
+    document.getElementById('sales-search-input').value = '';
+    salesStartDate = null;
+    salesEndDate   = null;
+    salesSearch    = '';
+    salesPage      = 1;
+    loadSalesAdmin();
+}
+
+function salesChangePage(direction) {
+    salesPage += direction;
+    loadSalesAdmin();
+}
+
+function loadSalesAdmin() {
+    const tbody = document.getElementById('sales-admin-body');
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    const params = [`page=${salesPage}`];
+    if (salesStartDate) params.push(`start_date=${salesStartDate}`);
+    if (salesEndDate)   params.push(`end_date=${salesEndDate}`);
+    if (salesSearch)    params.push(`search=${encodeURIComponent(salesSearch)}`);
+
+    fetch(`/api/admin/sales?${params.join('&')}`)
+        .then(r => r.json())
+        .then(data => renderSalesAdmin(data))
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Failed to load data.</td></tr>';
+        });
+}
+
+function renderSalesAdmin(data) {
+    const tbody         = document.getElementById('sales-admin-body');
+    const summaryEl     = document.getElementById('sales-summary');
+    const pageLabel     = document.getElementById('sales-page-label');
+    const paginationRow = document.getElementById('sales-pagination-row');
+    const prevBtn       = document.getElementById('sales-prev-btn');
+    const nextBtn       = document.getElementById('sales-next-btn');
+
+    summaryEl.textContent = `${data.total.toLocaleString()} total sales`;
+
+    if (data.total_pages > 1) {
+        paginationRow.style.display = 'flex';
+        pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= data.total_pages;
+    } else {
+        paginationRow.style.display = 'none';
+    }
+
+    if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">No records found.</td></tr>';
+        return;
+    }
+
+    const statusBadge = {
+        'Paid':       `<span class="badge bg-success">Paid</span>`,
+        'Partial':    `<span class="badge bg-warning text-dark">Partial</span>`,
+        'Unresolved': `<span class="badge bg-danger">Unpaid</span>`,
+    };
+
+    tbody.innerHTML = data.rows.map(sale => `
+        <tr>
+            <td class="text-white-50 small">${sale.transaction_date}</td>
+            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sale.sales_number || '—'}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sale.customer_name || 'Walk-in'}</td>
+            <td>
+                <span class="badge bg-dark border border-secondary text-info">
+                    ${sale.payment_method_name || '—'}
+                </span>
+            </td>
+            <td>${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}</td>
+            <td class="fw-bold text-danger">₱${parseFloat(sale.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td class="text-center">
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-info me-1"
+                            onclick="viewSaleDetails('${sale.id}', '${sale.sales_number}')">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    <a href="/print_receipt/${sale.sales_number}" target="_blank"
+                    class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-printer"></i>
+                    </a>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function renderDebtTable() {
+    const tbody = document.getElementById('debt-audit-body');
+    const summaryEl = document.getElementById('debt-audit-summary');
+
+    // Apply status filter client-side (data already loaded, no limit on server)
+    const filtered = debtActiveFilter === 'all'
+        ? debtAllSales
+        : debtActiveFilter === 'paid'
+            ? debtAllSales.filter(s => s.status === 'paid')
+            : debtAllSales.filter(s => s.status !== 'paid'); // unpaid = partial + unpaid
+
+    // Summary counts always reflect full dataset, not filtered view
+    const totalCount  = debtAllSales.length;
+    const openCount   = debtAllSales.filter(s => s.status !== 'paid').length;
+    summaryEl.textContent = `${totalCount} total · ${openCount} open`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    filtered.forEach(sale => {
+        const collapseId = `debt-collapse-${sale.sale_id}`;
+
+        const statusBadge = {
+            'paid':    `<span class="badge bg-success">PAID IN FULL</span>`,
+            'partial': `<span class="badge bg-warning text-dark">PARTIAL</span>`,
+            'unpaid':  `<span class="badge bg-danger">UNPAID</span>`,
+        }[sale.status] || '';
+
+        tbody.innerHTML += `
+            <tr class="debt-parent-row ${sale.status === 'paid' ? 'opacity-75' : ''}"
+                style="cursor: pointer;"
+                onclick="toggleDebtRow('${collapseId}', ${sale.sale_id}, this)">
+                <td class="text-center">
+                    <i class="bi bi-chevron-down debt-chevron"></i>
+                    <span class="debt-expand-hint">EXPAND</span>
+                </td>
+                <td class="fw-bold">${sale.customer_name}</td>
+                <td class="text-warning">${sale.sales_number || sale.sale_id}</td>
+                <td class="text-white-50 small">${sale.date}</td>
+                <td class="text-end">₱${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="text-end text-success">₱${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="text-end ${sale.remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">
+                    ₱${sale.remaining.toLocaleString(undefined, {minimumFractionDigits:2})}
+                </td>
+                <td class="text-center">${statusBadge}</td>
+            </tr>
+            <tr id="${collapseId}" style="display:none;">
+                <td colspan="8" class="p-0 border-0">
+                    <div id="${collapseId}-inner" style="background:#0d0f13;">
+                        <div class="text-center text-muted py-3 small">
+                            <i class="bi bi-hourglass-split me-1"></i> Loading payments...
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+    });
+}
+
+function toggleDebtRow(collapseId, saleId, parentRow) {
+    const row     = document.getElementById(collapseId);
+    const chevron = parentRow.querySelector('.debt-chevron');
+    const hint    = parentRow.querySelector('.debt-expand-hint');
+    const isOpen  = row.style.display !== 'none';
+
+    if (isOpen) {
+        row.style.display = 'none';
+        chevron.style.transform = 'rotate(0deg)';
+        if (hint) hint.textContent = 'EXPAND';
+        return;
+    }
+
+    row.style.display = 'table-row';
+    chevron.style.transform = 'rotate(180deg)';
+    if (hint) hint.textContent = 'HIDE';
+
+    const inner = document.getElementById(`${collapseId}-inner`);
+    if (inner.dataset.loaded) return;
+
+    fetch(`/api/debt/payments/${saleId}`)
+        .then(r => r.json())
+        .then(data => {
             if (!data.payments || data.payments.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No debt payments recorded yet.</td></tr>';
+                inner.innerHTML = '<div class="text-muted text-center py-2 small">No payment entries recorded yet.</div>';
+                inner.dataset.loaded = '1';
                 return;
             }
-            tbody.innerHTML = data.payments.map(p => `
-                <tr>
-                    <td class="text-white-50 small">${p.paid_at}</td>
-                    <td class="fw-bold">${p.customer_name || 'Walk-in'}</td>
-                    <td class="text-warning">
-                        ${p.sales_number || p.sale_id}
-                        ${p.fully_paid ? '<span class="badge bg-success ms-2" style="font-size:0.65rem;">PAID IN FULL</span>' : ''}
+
+            const rows = data.payments.map(p => `
+                <tr style="font-size: 0.82rem;">
+                    <td></td>
+                    <td class="text-white-50">${p.paid_at}</td>
+                    <td class="text-info fw-bold">
+                        ₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}
                     </td>
-                    <td class="text-center fw-bold text-success">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</td>
-                    <td><span class="badge bg-dark border border-secondary text-info">${p.payment_method || '—'}</span></td>
-                    <td class="text-white-50 small">${p.reference_no || '—'}</td>
-                    <td class="text-white-50 small"><i class="bi bi-person"></i> ${p.paid_by || 'Staff'}</td>
-                </tr>
-            `).join('');
+                    <td colspan="3">
+                        <span class="badge bg-dark border border-secondary text-info me-2">
+                            ${p.payment_method || '—'}
+                        </span>
+                        <span class="text-white-50">${p.reference_no || ''}</span>
+                    </td>
+                    <td class="text-white-50">
+                        <i class="bi bi-person me-1"></i>${p.paid_by || 'Staff'}
+                    </td>
+                    <td class="text-white-50 small fst-italic">${p.notes || ''}</td>
+                </tr>`).join('');
+
+            inner.innerHTML = `
+                <table class="table table-dark mb-0 border-0">
+                    <thead style="font-size:0.75rem;">
+                        <tr class="text-muted">
+                            <th width="3%"></th>
+                            <th>Paid At</th>
+                            <th>Amount</th>
+                            <th colspan="3">Method & Reference</th>
+                            <th>Staff</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+
+            inner.dataset.loaded = '1';
+        })
+        .catch(() => {
+            inner.innerHTML = '<div class="text-danger text-center py-2 small">Failed to load payments.</div>';
         });
-});
+}
 </script>
 {% endblock %}
