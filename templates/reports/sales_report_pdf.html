@@ -401,7 +401,7 @@
 
         {# Box 3: Financials #}
         <div class="summary-box">
-            <div class="summary-box-title">Financials</div>
+            <div class="summary-box-title">Sales Details</div>
             <div class="summary-box-body fin-body">
                 <div class="fin-rows">
                     <div class="fin-row">
@@ -419,7 +419,7 @@
                     </div>
                     {% endif %}
                     <div class="fin-row net">
-                        <span class="label">NET REVENUE</span>
+                        <span class="label">TOTAL</span>
                         <span class="value">₱ {{ "%.2f"|format(data.net_revenue) }}</span>
                     </div>
                 </div>
@@ -437,7 +437,7 @@
     {# ── Deliverables — always starts on a new page ── #}
     {% if data.unresolved %}
     <div class="deliverables-header">
-        <div class="deliverables-title">⚠ Payables</div>
+        <div class="deliverables-title">⚠ Receivables</div>
         <div class="deliverables-subtitle">
             All unresolved transactions across all dates. These have been excluded from the daily totals above.
         </div>
