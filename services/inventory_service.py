@@ -85,20 +85,36 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
         rows = []
 
     # 2. GET STOCK LEVELS
-    # We keep your original logic here to map stock to the items found
     from services.inventory_service import get_items_with_stock
     all_stock = get_items_with_stock(snapshot_date)
     stock_map = {s["id"]: s["current_stock"] for s in all_stock}
-    
+
+    # 3. GET PENDING STOCK
+    # Only counts units still outstanding on PENDING or PARTIAL POs.
+    # quantity_ordered - quantity_received = true remaining balance.
+    # NOTE (future branches): add branch_id filter here when ready.
+    pending_rows = conn.execute("""
+        SELECT
+            pi.item_id,
+            SUM(pi.quantity_ordered - pi.quantity_received) AS pending_stock
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        WHERE po.status IN ('PENDING', 'PARTIAL')
+        AND pi.quantity_ordered > pi.quantity_received
+        GROUP BY pi.item_id
+    """).fetchall()
+    pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
+
     conn.close()
 
-    # 3. MERGE DATA
+    # 4. MERGE
     results = []
     for row in rows:
         d = dict(row)
         d["current_stock"] = stock_map.get(row["id"], 0)
+        d["pending_stock"] = pending_map.get(row["id"], 0)
         results.append(d)
-        
+
     return results
 
 def get_unique_categories():

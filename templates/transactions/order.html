@@ -9,6 +9,13 @@
     }
     .result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; }
     .result-item:hover { background: #e63946; color: white; }
+    .result-item.no-results:hover { 
+    background: #252525; 
+    color: inherit; 
+    }
+    .result-item.no-results .btn {
+    border-width: 2px;
+    }
     .table-order thead { background-color: #e63946; color: white; }
 </style>
 {% endblock %}
@@ -47,6 +54,7 @@
                     <thead>
                         <tr>
                             <th>Item Name</th>
+                            <th width="140">Stock Status</th>
                             <th width="150">Qty to Order</th>
                             <th width="150">Est. Cost</th>
                             <th width="50"></th>
@@ -54,7 +62,7 @@
                     </thead>
                     <tbody id="orderTableBody">
                         <tr id="emptyRow">
-                            <td colspan="4" class="text-center text-muted">No items added yet. Search above to start.</td>
+                            <td colspan="5" class="text-center text-muted">No items added yet. Search above to start.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -70,15 +78,64 @@
 </div>
 
 <script>
+/*
+ * DRAFT STATE: Uses sessionStorage to preserve order items when navigating
+ * away to add a new item. This is a per-tab, per-session solution.
+ *
+ * TODO (Option 3 migration): If the business needs cross-session draft POs
+ * (e.g. start on one device, finish on another), staff collaboration on POs,
+ * or manager visibility into draft POs across branches — replace this with a
+ * draft_purchase_orders table in the DB. The sessionStorage key is
+ * 'po_draft_items'. The DB equivalent would be a draft PO with status='DRAFT'
+ * tied to the user_id. On migration, remove the sessionStorage logic below
+ * and replace DOMContentLoaded restore with a fetch to load the draft from DB.
+ */
+
+const DRAFT_KEY = 'po_draft_items';
 let orderItems = [];
 
 const itemSearch = document.getElementById('itemSearch');
 const searchResults = document.getElementById('searchResults');
 const orderTableBody = document.getElementById('orderTableBody');
 
-// 1. Search Logic
+// ── On Load: Restore draft + auto-select new item if returning from items page ──
+document.addEventListener('DOMContentLoaded', async () => {
+    const params = new URLSearchParams(window.location.search);
+    const prefilledId = params.get('prefilled_id');
+
+    // Restore saved draft if it exists
+    const savedDraft = sessionStorage.getItem(DRAFT_KEY);
+    if (savedDraft) {
+        try {
+            orderItems = JSON.parse(savedDraft);
+            renderTable();
+        } catch (e) {
+            console.error("Failed to restore draft:", e);
+            orderItems = [];
+        }
+        sessionStorage.removeItem(DRAFT_KEY);
+    }
+
+    // Auto-select the newly created item
+    if (prefilledId) {
+        try {
+            const response = await fetch(`/api/search?id=${prefilledId}`);
+            const data = await response.json();
+            if (data.items && data.items.length > 0) {
+                addItemToOrder(data.items[0]);
+            }
+        } catch (err) {
+            console.error("Error fetching prefilled item:", err);
+        }
+
+        // Clean the URL so a refresh doesn't re-add the item
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+});
+
+// ── Search ───────────────────────────────────────────────────────
 itemSearch.addEventListener('input', async (e) => {
-    const query = e.target.value;
+    const query = e.target.value.trim();
     if (query.length < 2) {
         searchResults.style.display = 'none';
         return;
@@ -90,32 +147,62 @@ itemSearch.addEventListener('input', async (e) => {
 
     searchResults.innerHTML = '';
 
-    items.forEach(item => {
+    if (items && items.length > 0) {
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'result-item';
+            div.innerHTML = `<strong>${item.name}</strong> 
+                            <small class="text-muted">(Stock: ${item.current_stock})</small>`;
+            div.onclick = () => addItemToOrder(item);
+            searchResults.appendChild(div);
+        });
+    } else {
+        // Empty state — save draft before leaving
         const div = document.createElement('div');
-        div.className = 'result-item';
-        div.innerHTML = `<strong>${item.name}</strong> 
-                        <small class="text-muted">(Stock: ${item.current_stock})</small>`;
-        div.onclick = () => addItemToOrder(item);
+        div.className = 'result-item no-results d-flex justify-content-between align-items-center';
+        div.innerHTML = `
+            <span class="text-muted">No results for "<strong>${query}</strong>"</span>
+            <a href="/transaction/items?return_to=po" 
+            class="btn btn-sm btn-outline-success"
+            onclick="saveDraftBeforeLeaving()">
+                <i class="bi bi-plus-circle"></i> Add New Item
+            </a>
+        `;
         searchResults.appendChild(div);
-    });
+    }
 
     searchResults.style.display = 'block';
 });
 
-// 2. Add Item to Table
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+    if (!itemSearch.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.style.display = 'none';
+    }
+});
+
+// ── Draft save — called before navigating away ───────────────────
+function saveDraftBeforeLeaving() {
+    if (orderItems.length > 0) {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(orderItems));
+    }
+}
+
+// ── Order table logic ────────────────────────────────────────────
 function addItemToOrder(item) {
     if (orderItems.some(i => i.id === item.id)) {
         showOrderAlert("Item already in the list!", "warning");
         return;
     }
 
-    const itemObj = { 
+    orderItems.push({ 
         id: item.id, 
         name: item.name, 
         qty: 1, 
-        cost: item.cost_per_piece || 0 
-    };
-    orderItems.push(itemObj);
+        cost: item.cost_per_piece || 0,
+        current_stock: item.current_stock || 0,
+        pending_stock: item.pending_stock || 0
+    });
     renderTable();
     
     itemSearch.value = '';
@@ -124,15 +211,23 @@ function addItemToOrder(item) {
 
 function renderTable() {
     if (orderItems.length === 0) {
-        orderTableBody.innerHTML = `<tr id="emptyRow"><td colspan="4" class="text-center text-muted">No items added yet.</td></tr>`;
+        orderTableBody.innerHTML = `<tr id="emptyRow"><td colspan="5" class="text-center text-muted">No items added yet. Search above to start.</td></tr>`;
         return;
     }
 
     orderTableBody.innerHTML = '';
     orderItems.forEach((item, index) => {
+        const pendingHtml = item.pending_stock > 0
+            ? `<div style="color: #ffc107; font-size: 0.78rem;">+${item.pending_stock} incoming</div>`
+            : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`;
+
         orderTableBody.innerHTML += `
             <tr>
                 <td>${item.name}</td>
+                <td>
+                    <div style="font-size: 0.85rem;">${item.current_stock} on hand</div>
+                    ${pendingHtml}
+                </td>
                 <td>
                     <input type="number" class="form-control form-control-sm bg-dark text-white" 
                         value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
@@ -175,9 +270,7 @@ function showOrderAlert(message, type) {
     `;
 
     container.appendChild(alert);
-
     requestAnimationFrame(() => alert.classList.add('show'));
-
     setTimeout(() => {
         alert.classList.remove('show');
         alert.classList.add('hide');
@@ -185,9 +278,11 @@ function showOrderAlert(message, type) {
     }, 4000);
 }
 
-// 3. Final Submit
 async function submitOrder() {
-    if (orderItems.length === 0) { alert("Add at least one item!"); return; }
+    if (orderItems.length === 0) { 
+        showOrderAlert("Add at least one item!", "warning"); 
+        return; 
+    }
     
     const payload = {
         vendor_name: document.getElementById('vendor_name').value,
@@ -203,9 +298,11 @@ async function submitOrder() {
 
     const result = await response.json();
     if (result.status === 'success') {
-        window.location.href = '/transaction/orders/list'; // Redirect to a list of POs
+        // Clear draft on successful save — no ghost data on next PO
+        sessionStorage.removeItem(DRAFT_KEY);
+        window.location.href = '/transaction/orders/list';
     } else {
-        alert("Error saving order: " + result.message);
+        showOrderAlert("Error saving order: " + result.message, "danger");
     }
 }
 </script>
