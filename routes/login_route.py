@@ -426,3 +426,23 @@ def admin_sales_api():
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@auth_bp.route("/api/item/<int:item_id>")
+def get_item_details(item_id):
+    conn = get_db()
+    try:
+        item = conn.execute("""
+            SELECT name, category, description, pack_size,
+                vendor_price, cost_per_piece, a4s_selling_price,
+                markup, reorder_level, vendor
+            FROM items WHERE id = ?
+        """, (item_id,)).fetchone()
+
+        if not item:
+            return jsonify({"error": "Item not found"}), 404
+
+        return jsonify(dict(item))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()

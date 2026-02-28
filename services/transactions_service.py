@@ -52,26 +52,45 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
 # ITEMS
 # ─────────────────────────────────────────────
 
-def add_item_to_db(data):
-    """Saves a brand new product to the items table."""
+def add_item_to_db(data, user_id=None, username=None):
+    """Saves a brand new product to the items table and logs an audit entry."""
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        cursor = conn.execute("""
+            INSERT INTO items (
+                name, category, description, pack_size, 
+                vendor_price, cost_per_piece, a4s_selling_price, 
+                markup, reorder_level, vendor, mechanic
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data['name'], data['category'], data['description'], data['pack_size'],
+            data['vendor_price'], data['cost_per_piece'], data['selling_price'],
+            data['markup'], data['reorder_level'], data['vendor'], data['mechanic']
+        ))
 
-    cursor.execute("""
-        INSERT INTO items (
-            name, category, description, pack_size, 
-            vendor_price, cost_per_piece, a4s_selling_price, 
-            markup, reorder_level, vendor, mechanic
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data['name'], data['category'], data['description'], data['pack_size'],
-        data['vendor_price'], data['cost_per_piece'], data['selling_price'],
-        data['markup'], data['reorder_level'], data['vendor'], data['mechanic']
-    ))
+        new_id = cursor.lastrowid
 
-    new_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+        add_transaction(
+            item_id=new_id,
+            quantity=0,
+            transaction_type='IN',
+            user_id=user_id,
+            user_name=username,
+            reference_id=new_id,
+            reference_type='ITEM_CATALOG',
+            change_reason='ITEM_CREATED',
+            unit_price=data['selling_price'],
+            external_conn=conn
+        )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
     return new_id
 
 
@@ -689,12 +708,12 @@ def get_status_class(status):
     """Returns Bootstrap badge class for a PO status string."""
     status = (status or "Pending").upper()
     if status == "COMPLETED":
-        return "bg-success-custom"
+        return "bg-success"
     elif status == "PARTIAL":
-        return "bg-info-custom"
+        return "bg-info text-dark"
     elif status == "PENDING":
-        return "bg-warning-custom text-dark"
+        return "bg-warning text-dark"
     elif status == "CANCELLED":
-        return "bg-danger-custom"
+        return "bg-danger"
     else:
         return "bg-secondary"

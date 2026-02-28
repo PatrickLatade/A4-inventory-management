@@ -66,7 +66,7 @@ def add_item():
         'mechanic': request.form.get("mechanic")
     }
 
-    new_item_id = add_item_to_db(form_data)
+    new_item_id = add_item_to_db(form_data, user_id=session.get('user_id'), username=session.get('username'))
 
     # Redirect back to wherever the user came from
     if return_to == 'po':
