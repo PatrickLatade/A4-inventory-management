@@ -17,7 +17,17 @@ def get_all_debts():
             s.paid_at,
             m.name  AS mechanic_name,
             pm.name AS payment_method,
-            COALESCE(SUM(dp.amount_paid), 0) AS total_paid
+            COALESCE(SUM(dp.amount_paid), 0) AS total_paid,
+            COALESCE((
+                SELECT SUM(ss.price)
+                FROM sales_services ss
+                WHERE ss.sale_id = s.id
+            ), 0) AS service_total,
+            COALESCE((
+                SELECT SUM(dp2.service_portion)
+                FROM debt_payments dp2
+                WHERE dp2.sale_id = s.id
+            ), 0) AS service_paid
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
@@ -33,6 +43,12 @@ def get_all_debts():
     for row in rows:
         d = dict(row)
         d['remaining'] = round(d['total_amount'] - d['total_paid'], 2)
+        d['service_total'] = round(d['service_total'] or 0, 2)
+        d['service_paid'] = round(d['service_paid'] or 0, 2)
+        d['service_remaining'] = round(max(0, d['service_total'] - d['service_paid']), 2)
+        d['item_total'] = round(max(0, d['total_amount'] - d['service_total']), 2)
+        d['item_paid'] = round(max(0, d['total_paid'] - d['service_paid']), 2)
+        d['item_remaining'] = round(max(0, d['remaining'] - d['service_remaining']), 2)
         d['transaction_date'] = format_date(d['transaction_date'], show_time=True)
         d['paid_at'] = format_date(d['paid_at'], show_time=True)
         result.append(d)
@@ -54,7 +70,17 @@ def get_debt_detail(sale_id):
             s.paid_at,
             m.name  AS mechanic_name,
             pm.name AS payment_method,
-            COALESCE(SUM(dp.amount_paid), 0) AS total_paid
+            COALESCE(SUM(dp.amount_paid), 0) AS total_paid,
+            COALESCE((
+                SELECT SUM(ss.price)
+                FROM sales_services ss
+                WHERE ss.sale_id = s.id
+            ), 0) AS service_total,
+            COALESCE((
+                SELECT SUM(dp2.service_portion)
+                FROM debt_payments dp2
+                WHERE dp2.sale_id = s.id
+            ), 0) AS service_paid
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
@@ -107,6 +133,12 @@ def get_debt_detail(sale_id):
 
     sale_dict = dict(sale)
     sale_dict['remaining'] = round(sale_dict['total_amount'] - sale_dict['total_paid'], 2)
+    sale_dict['service_total'] = round(sale_dict['service_total'] or 0, 2)
+    sale_dict['service_paid'] = round(sale_dict['service_paid'] or 0, 2)
+    sale_dict['service_remaining'] = round(max(0, sale_dict['service_total'] - sale_dict['service_paid']), 2)
+    sale_dict['item_total'] = round(max(0, sale_dict['total_amount'] - sale_dict['service_total']), 2)
+    sale_dict['item_paid'] = round(max(0, sale_dict['total_paid'] - sale_dict['service_paid']), 2)
+    sale_dict['item_remaining'] = round(max(0, sale_dict['remaining'] - sale_dict['service_remaining']), 2)
     sale_dict['transaction_date'] = format_date(sale_dict['transaction_date'], show_time=True)
     sale_dict['paid_at'] = format_date(sale_dict['paid_at'], show_time=True)
 
