@@ -44,10 +44,10 @@ def get_cash_summary(branch_id=1):
     }
 
 
-def get_cash_entries(branch_id=1, limit=None):
+def get_cash_entries(branch_id=1, limit=None, offset=0, entry_type=None, start_date=None, end_date=None):
     """
     Returns all cash entries for a branch, newest first.
-    Optional limit for dashboard previews.
+    Optional limit/offset for dashboard previews and pagination.
     """
     conn = get_db()
 
@@ -65,16 +65,29 @@ def get_cash_entries(branch_id=1, limit=None):
         FROM cash_entries ce
         LEFT JOIN users u ON u.id = ce.user_id
         WHERE ce.branch_id = ?
-        ORDER BY ce.created_at DESC
     """
 
-    params = (branch_id,)
+    params = [branch_id]
+
+    if entry_type:
+        query += " AND ce.entry_type = ?"
+        params.append(entry_type)
+
+    if start_date:
+        query += " AND DATE(ce.created_at) >= DATE(?)"
+        params.append(start_date)
+
+    if end_date:
+        query += " AND DATE(ce.created_at) <= DATE(?)"
+        params.append(end_date)
+
+    query += " ORDER BY ce.created_at DESC"
 
     if limit:
-        query += " LIMIT ?"
-        params = (branch_id, limit)
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
 
-    rows = conn.execute(query, params).fetchall()
+    rows = conn.execute(query, tuple(params)).fetchall()
     conn.close()
 
     result = []
@@ -84,6 +97,36 @@ def get_cash_entries(branch_id=1, limit=None):
         result.append(d)
 
     return result
+
+
+def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date=None):
+    """
+    Returns the total number of cash entries for a branch.
+    """
+    conn = get_db()
+    query = """
+        SELECT COUNT(*) AS total_entries
+        FROM cash_entries
+        WHERE branch_id = ?
+    """
+    params = [branch_id]
+
+    if entry_type:
+        query += " AND entry_type = ?"
+        params.append(entry_type)
+
+    if start_date:
+        query += " AND DATE(created_at) >= DATE(?)"
+        params.append(start_date)
+
+    if end_date:
+        query += " AND DATE(created_at) <= DATE(?)"
+        params.append(end_date)
+
+    row = conn.execute(query, tuple(params)).fetchone()
+    conn.close()
+
+    return row['total_entries']
 
 
 # ─────────────────────────────────────────────
