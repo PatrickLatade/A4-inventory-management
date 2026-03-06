@@ -3,7 +3,7 @@ from utils.formatters import format_date
 
 # --- CATEGORIES ---
 CASH_IN_CATEGORIES  = ['Petty Cash', 'Owner Deposit', 'Other Income']
-CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Mechanic Payout', 'Other Expense']
+CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Other Expense', 'Mechanic Payout']
 
 # --- PHYSICAL CASH FILTER ---
 # Only payment methods in this category count as physical cash in the drawer.
@@ -100,7 +100,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
         FROM cash_entries ce
         LEFT JOIN users u ON u.id = ce.user_id
         WHERE ce.branch_id = ?
-          AND ce.reference_type = 'MANUAL'
+        AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
     """
 
     if entry_type:
@@ -236,7 +236,7 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
 
 
 def get_cash_entries(branch_id=1, limit=None, offset=None,
-                     entry_type=None, start_date=None, end_date=None):
+                    entry_type=None, start_date=None, end_date=None):
     """
     Unified ledger with optional pagination and filtering.
 
@@ -271,10 +271,55 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
 
 
 # ─────────────────────────────────────────────
+# MECHANIC PAYOUT HELPERS
+
+def get_already_paid_mechanic_identifiers(date, branch_id=1):
+    """
+    Returns paid identifiers for Mechanic Payout entries on the given date.
+    New rows are matched by mechanic reference_id, with fallback to legacy
+    description matching for existing records.
+    """
+    conn = get_db()
+    mechanic_rows = conn.execute("""
+        SELECT reference_id
+        FROM cash_entries
+        WHERE branch_id = ?
+        AND entry_type = 'CASH_OUT'
+        AND category = 'Mechanic Payout'
+        AND reference_type = 'MECHANIC_PAYOUT'
+        AND DATE(created_at) = ?
+        AND reference_id IS NOT NULL
+    """, (branch_id, date)).fetchall()
+
+    rows = conn.execute("""
+        SELECT description
+        FROM cash_entries
+        WHERE branch_id = ?
+        AND entry_type = 'CASH_OUT'
+        AND category = 'Mechanic Payout'
+        AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+        AND DATE(created_at) = ?
+    """, (branch_id, date)).fetchall()
+    conn.close()
+
+    return {
+        "mechanic_ids": {int(row["reference_id"]) for row in mechanic_rows if row["reference_id"] is not None},
+        "mechanic_names": {row["description"] for row in rows if row["description"]},
+    }
+
+
+def get_already_paid_mechanic_names(date, branch_id=1):
+    """
+    Backward-compatible helper for legacy callsites.
+    """
+    return get_already_paid_mechanic_identifiers(date, branch_id=branch_id)["mechanic_names"]
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
 # WRITE
 # ─────────────────────────────────────────────
 
-def add_cash_entry(entry_type, amount, category, description, user_id, branch_id=1):
+def add_cash_entry(entry_type, amount, category, description, reference_id, user_id, branch_id=1):
     """
     Records a single manual petty cash movement only.
     Sales and debt cash is calculated live — never written here.
@@ -294,14 +339,34 @@ def add_cash_entry(entry_type, amount, category, description, user_id, branch_id
     if category not in valid_categories:
         raise ValueError(f"Invalid category for {entry_type}.")
 
+    normalized_reference_id = None
+    if reference_id not in (None, ""):
+        try:
+            normalized_reference_id = int(reference_id)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid mechanic reference.")
+
+    reference_type = 'MANUAL'
+    if category == 'Mechanic Payout' and normalized_reference_id is not None:
+        reference_type = 'MECHANIC_PAYOUT'
+
     conn = get_db()
     try:
         conn.execute("""
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, category, description,
-                 reference_type, reference_id, user_id)
-            VALUES (?, ?, ?, ?, ?, 'MANUAL', NULL, ?)
-        """, (branch_id, entry_type, amount, category, description or None, user_id))
+                reference_type, reference_id, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            branch_id,
+            entry_type,
+            amount,
+            category,
+            description or None,
+            reference_type,
+            normalized_reference_id,
+            user_id
+        ))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -313,7 +378,7 @@ def add_cash_entry(entry_type, amount, category, description, user_id, branch_id
 def delete_cash_entry(entry_id, branch_id=1):
     """
     Hard deletes a manual cash entry.
-    reference_type = 'MANUAL' guard means sales and debt rows
+    reference_type in ('MANUAL', 'MECHANIC_PAYOUT') guard means sales and debt rows
     can never be deleted through this path even if called directly.
     Admin-only enforced at route level.
     """
@@ -321,7 +386,7 @@ def delete_cash_entry(entry_id, branch_id=1):
     try:
         result = conn.execute("""
             DELETE FROM cash_entries
-            WHERE id = ? AND branch_id = ? AND reference_type = 'MANUAL'
+            WHERE id = ? AND branch_id = ? AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
         """, (entry_id, branch_id))
 
         if result.rowcount == 0:

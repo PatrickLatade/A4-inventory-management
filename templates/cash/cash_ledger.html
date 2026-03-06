@@ -44,6 +44,12 @@
 
     .entry-amount-in  { color: #4ade80; font-weight: 600; }
     .entry-amount-out { color: #ff6b6b; font-weight: 600; }
+    .ledger-table { table-layout: auto; }
+    .ledger-date-col,
+    .date-cell {
+        white-space: nowrap;
+        min-width: 190px;
+    }
 
     .form-section-label {
         font-size: 0.72rem;
@@ -143,6 +149,120 @@
         border-color: #ff6b6b;
         color: #ff6b6b;
     }
+
+    .pending-payouts-panel {
+        background: var(--bg-card);
+        border: 1px solid #f4c430;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .pending-payouts-header {
+        background: rgba(244, 196, 48, 0.08);
+        border-bottom: 1px solid rgba(244, 196, 48, 0.25);
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #f4c430;
+        font-size: 0.9rem;
+    }
+
+    .pending-count {
+        background: rgba(244, 196, 48, 0.15);
+        color: #f4c430;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 20px;
+        letter-spacing: 0.5px;
+    }
+
+    .pending-payouts-body {
+        padding: 8px 12px;
+    }
+
+    .payout-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 11px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .payout-row:last-child { border-bottom: none; }
+
+    .payout-row:hover {
+        background: rgba(244, 196, 48, 0.07);
+    }
+
+    .payout-name {
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .payout-amount {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #ff6b6b;
+    }
+
+    .topup-badge {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 20px;
+        background: rgba(244, 196, 48, 0.15);
+        color: #f4c430;
+        letter-spacing: 0.4px;
+        vertical-align: middle;
+    }
+ 
+    .reminder-panel {
+        background: var(--bg-card);
+        border: 1px solid #ffb347;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .reminder-header {
+        background: rgba(255, 179, 71, 0.1);
+        border-bottom: 1px solid rgba(255, 179, 71, 0.25);
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #ffb347;
+        font-size: 0.9rem;
+    }
+
+    .reminder-body {
+        padding: 10px 12px 12px;
+    }
+
+    .reminder-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-soft);
+        border-radius: 10px;
+    }
+
+    .reminder-row:last-child {
+        border-bottom: none;
+    }
+
+    .reminder-action {
+        color: #0d6efd;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -157,6 +277,31 @@
 </div>
 
 <!-- ── Summary Cards ── -->
+{% if overdue_payouts %}
+<div class="reminder-panel mb-4">
+    <div class="reminder-header">
+        <div>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>Reminder:</strong>
+            <span class="ms-2">Unpaid mechanic payout{{ 's' if overdue_payouts|length > 1 }} from {{ overdue_date }}</span>
+        </div>
+        <a class="reminder-action" href="{{ url_for('cash.cash_ledger', start_date=overdue_date, end_date=overdue_date, type='CASH_OUT') }}">
+            Review yesterday’s entries
+        </a>
+    </div>
+    <div class="reminder-body">
+        {% for m in overdue_payouts %}
+        <div class="reminder-row">
+            <div class="payout-name">
+                <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
+                {{ m.mechanic_name }}
+            </div>
+            <div class="payout-amount">₱{{ "{:,.2f}".format(m.total_payout) }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 <div class="row g-3 mb-4">
 
     <div class="col-md-4">
@@ -189,6 +334,40 @@
     </div>
 
 </div>
+
+{% if pending_payouts %}
+<!-- ── Pending Mechanic Payouts Panel ── -->
+<div class="pending-payouts-panel mb-4">
+    <div class="pending-payouts-header">
+        <div>
+            <i class="bi bi-person-check me-2"></i>
+            <strong>Pending Mechanic Payouts — Today</strong>
+            <span class="pending-count ms-2">{{ pending_payouts|length }} pending</span>
+        </div>
+        <span>Click a row to pre-fill the form below</span>
+    </div>
+    <div class="pending-payouts-body">
+        {% for m in pending_payouts %}
+        <div class="payout-row"
+             data-mechanic-id="{{ m.mechanic_id }}"
+             data-mechanic-name="{{ m.mechanic_name }}"
+             data-total-payout="{{ m.total_payout }}">
+            <div class="payout-name">
+                <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
+                {{ m.mechanic_name }}
+                {% if m.has_topup %}
+                <span class="topup-badge ms-2">Quota Top-up Applied</span>
+                {% endif %}
+            </div>
+            <div class="payout-amount">
+                ₱{{ "{:,.2f}".format(m.total_payout) }}
+                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem;"></i>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <!-- ── Main Layout: Form + Table ── -->
 <div class="row g-4">
@@ -237,6 +416,7 @@
                 <input type="text" id="entry-description" class="form-control"
                     placeholder="e.g. Bought brake pads from supplier">
             </div>
+            <input type="hidden" id="entry-reference-id" value="">
 
             <button class="btn btn-primary w-100 fw-semibold" id="submit-entry-btn">
                 <i class="bi bi-plus-lg me-1"></i> Add Entry
@@ -304,7 +484,7 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table table-dark table-hover align-middle mb-0" id="ledger-table">
+                <table class="table table-dark table-hover align-middle mb-0 ledger-table" id="ledger-table">
                     <thead>
                         <tr>
                             <th style="width:110px;">Type</th>
@@ -312,7 +492,7 @@
                             <th>Description</th>
                             <th class="text-end">Amount</th>
                             <th>Recorded By</th>
-                            <th>Date</th>
+                            <th class="ledger-date-col">Date</th>
                             {% if session.get('role') == 'admin' %}
                             <th style="width:50px;"></th>
                             {% endif %}
@@ -341,7 +521,7 @@
                                 ₱{{ "{:,.2f}".format(entry.amount) }}
                             </td>
                             <td class="small">{{ entry.recorded_by or '—' }}</td>
-                            <td class="small">{{ entry.created_at }}</td>
+                            <td class="small date-cell">{{ entry.created_at }}</td>
                             {% if session.get('role') == 'admin' %}
                             <td>
                                 <button class="btn btn-sm btn-outline-danger delete-btn"
@@ -427,14 +607,28 @@ function populateCategories(type) {
     });
 }
 
+document.getElementById('entry-category').addEventListener('change', () => {
+    const category = document.getElementById('entry-category').value;
+    if (category !== 'Mechanic Payout') {
+        document.getElementById('entry-reference-id').value = '';
+    }
+});
+
 document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
-    radio.addEventListener('change', () => populateCategories(radio.value));
+    radio.addEventListener('change', () => {
+        populateCategories(radio.value);
+
+        if (radio.value === 'CASH_IN') {
+            document.getElementById('entry-reference-id').value = '';
+        }
+    });
 });
 
 // Populate on page load (default: CASH_IN)
 populateCategories('CASH_IN');
-showPendingFlashAfterReload();
-initializeLedgerFilters();
+    showPendingFlashAfterReload();
+    initializeLedgerFilters();
+    initializePendingPayoutRows();
 
 
 // ─────────────────────────────────────────
@@ -445,6 +639,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     const amount      = parseFloat(document.getElementById('entry-amount').value);
     const category    = document.getElementById('entry-category').value;
     const description = document.getElementById('entry-description').value.trim();
+    const referenceId = document.getElementById('entry-reference-id').value || null;
 
     if (!amount || amount <= 0) {
         showFlash('Please enter a valid amount.', 'danger');
@@ -459,7 +654,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         const res = await fetch('/api/cash/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ entry_type, amount, category, description }),
+            body: JSON.stringify({ entry_type, amount, category, description, reference_id: referenceId }),
         });
 
         const data = await res.json();
@@ -557,6 +752,51 @@ function showPendingFlashAfterReload() {
     } catch (err) {
         // Ignore malformed sessionStorage data and continue normally.
     }
+}
+
+// ─────────────────────────────────────────
+// Pre-fill form from mechanic payout panel
+// ─────────────────────────────────────────
+function prefillPayout(mechanicName, mechanicId, amount) {
+    // Switch to CASH_OUT
+    document.getElementById('type_out').checked = true;
+    populateCategories('CASH_OUT');
+
+    // Set amount
+    document.getElementById('entry-amount').value = amount.toFixed(2);
+
+    // Set category to Mechanic Payout
+    const select = document.getElementById('entry-category');
+    for (let opt of select.options) {
+        if (opt.value === 'Mechanic Payout') {
+            opt.selected = true;
+            break;
+        }
+    }
+
+    // Set description to mechanic name — used for already-paid matching
+    document.getElementById('entry-description').value = mechanicName;
+    const parsedId = Number.parseInt(mechanicId || '', 10);
+    document.getElementById('entry-reference-id').value = Number.isFinite(parsedId) ? String(parsedId) : '';
+
+    // Scroll to form and highlight card border
+    const form = document.getElementById('submit-entry-btn').closest('.card');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.style.transition = 'border-color 0.2s ease';
+    form.style.borderColor = '#f4c430';
+    setTimeout(() => { form.style.borderColor = ''; }, 1500);
+}
+
+function initializePendingPayoutRows() {
+    document.querySelectorAll('.pending-payouts-body .payout-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            const mechanicName = row.getAttribute('data-mechanic-name') || '';
+            const amount = parseFloat(row.getAttribute('data-total-payout') || '0');
+            const mechanicId = row.getAttribute('data-mechanic-id') || '';
+            const parsedId = Number.parseInt(mechanicId, 10);
+            prefillPayout(mechanicName, Number.isFinite(parsedId) ? parsedId : '', Number.isFinite(amount) ? amount : 0);
+        });
+    });
 }
 
 function initializeLedgerFilters() {

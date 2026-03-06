@@ -1,13 +1,16 @@
 from flask import Blueprint, render_template, request, jsonify, session
+from datetime import date as date_today, timedelta
 from services.cash_service import (
     get_cash_summary,
     get_cash_entries,
     get_cash_entry_count,
+    get_already_paid_mechanic_identifiers,
     add_cash_entry,
     delete_cash_entry,
     CASH_IN_CATEGORIES,
     CASH_OUT_CATEGORIES,
 )
+from services.reports_service import get_mechanic_payouts_for_date
 
 cash_bp = Blueprint('cash', __name__)
 LEDGER_PAGE_SIZE = 20
@@ -65,6 +68,38 @@ def cash_ledger():
     start_entry = offset + 1 if total_entries else 0
     end_entry   = offset + len(entries)
 
+    # --- Mechanic Payout Panel ---
+    today               = date_today.today().isoformat()
+    mechanic_payouts    = get_mechanic_payouts_for_date(today)
+    paid_today          = get_already_paid_mechanic_identifiers(today, branch_id=branch_id)
+    already_paid_ids    = paid_today.get("mechanic_ids", set())
+    already_paid_names  = paid_today.get("mechanic_names", set())
+
+    # Filter out mechanics already paid today
+    pending_payouts = [
+        m for m in mechanic_payouts
+        if not (
+            (m.get('mechanic_id') and m['mechanic_id'] in already_paid_ids)
+            or (m.get('mechanic_name') in already_paid_names)
+        )
+    ]
+
+    # --- Missed mechanic payouts from yesterday (quick reminder) ---
+    yesterday = date_today.today() - timedelta(days=1)
+    yesterday_date = yesterday.isoformat()
+    yesterday_mechanic_payouts = get_mechanic_payouts_for_date(yesterday_date)
+    paid_yesterday       = get_already_paid_mechanic_identifiers(yesterday_date, branch_id=branch_id)
+    yesterday_paid_ids   = paid_yesterday.get("mechanic_ids", set())
+    yesterday_paid_names = paid_yesterday.get("mechanic_names", set())
+
+    overdue_yesterday_payouts = [
+        m for m in yesterday_mechanic_payouts
+        if not (
+            (m.get('mechanic_id') and m['mechanic_id'] in yesterday_paid_ids)
+            or (m.get('mechanic_name') in yesterday_paid_names)
+        )
+    ]
+
     return render_template(
         "cash/cash_ledger.html",
         summary=summary,
@@ -79,6 +114,10 @@ def cash_ledger():
         selected_end_date=end_date,
         cash_in_categories=CASH_IN_CATEGORIES,
         cash_out_categories=CASH_OUT_CATEGORIES,
+        pending_payouts=pending_payouts,
+        today=today,
+        overdue_payouts=overdue_yesterday_payouts,
+        overdue_date=yesterday_date,
     )
 
 
@@ -116,6 +155,9 @@ def cash_entries_api():
 @cash_bp.route("/api/cash/add", methods=["POST"])
 def cash_add_api():
     data = request.get_json()
+    reference_id = data.get("reference_id")
+    if reference_id in ("", None):
+        reference_id = None
 
     try:
         add_cash_entry(
@@ -123,6 +165,7 @@ def cash_add_api():
             amount=data.get("amount"),
             category=data.get("category"),
             description=data.get("description", ""),
+            reference_id=reference_id,
             user_id=session.get("user_id"),
             branch_id=_get_branch_id(),
         )
