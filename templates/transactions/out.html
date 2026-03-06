@@ -208,7 +208,6 @@
         border-top: none !important;
         border-radius: 0 0 10px 10px;
         box-shadow: 0 12px 28px rgba(0,0,0,0.55);
-        z-index: 9999 !important;
         overflow: hidden;
     }
 
@@ -366,7 +365,7 @@
             </thead>
             <tbody id="transaction-body">
                 <tr class="item-row">
-                    <td>
+                    <td class="dropdown-cell">
                         <div class="position-relative">
                             <input type="text"
                                 class="form-control form-control-sm item-input"
@@ -440,10 +439,10 @@
                 </thead>
                 <tbody id="services-body">
                     <tr class="service-row">
-                        <td>
+                        <td class="dropdown-cell">
                             <div class="position-relative">
                                 <input type="text" class="form-control form-control-sm border-info-soft service-input" placeholder="Search service..." autocomplete="off">
-                                <div class="search-suggestions list-group position-absolute w-100" style="display:none; z-index:1000;"></div>
+                                <div class="search-suggestions list-group position-absolute w-100" style="display:none;"></div>
                                 <input type="hidden" class="service-id-input">
                             </div>
                         </td>

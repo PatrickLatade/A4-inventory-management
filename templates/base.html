@@ -206,6 +206,22 @@
             border-color: var(--border-soft);
         }
 
+        /* Helper: use on cells that contain absolute-positioned autocomplete/dropdowns */
+        .table td.dropdown-cell,
+        .table th.dropdown-cell {
+            overflow: visible !important;
+            position: relative;
+        }
+
+        /* Helper: common positioning layer for autocomplete/dropdown overlays inside table cells */
+        .table .dropdown-cell .search-suggestions,
+        .table .dropdown-cell .table-overlay-menu {
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            z-index: 1100 !important;
+        }
+
         .table thead th {
             white-space: normal !important;
             overflow: visible !important;

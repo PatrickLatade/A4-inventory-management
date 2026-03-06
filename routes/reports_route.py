@@ -5,6 +5,7 @@ from services.reports_service import (
     get_sales_report_by_date,
     get_sales_report_by_range,
 )
+from services.cash_service import get_cash_entries_for_report
 from utils.formatters import format_date
 
 reports_bp = Blueprint("reports", __name__)
@@ -54,18 +55,21 @@ def sales_summary_report():
 
     # Single-date path (Generate Daily Report button)
     if report_date:
-        data = get_sales_report_by_date(report_date)
-        date_label = format_date(report_date)
-        is_range   = False
+        data        = get_sales_report_by_date(report_date)
+        date_label  = format_date(report_date)
+        is_range    = False
+        # Daily: both bounds are the same date
+        cash_data   = get_cash_entries_for_report(report_date, report_date)
 
     # Range path (Generate Sales Report modal)
     elif start_date and end_date:
         if end_date < start_date:
             flash("End date cannot be before start date.", "warning")
             return redirect(url_for("index"))
-        data = get_sales_report_by_range(start_date, end_date)
-        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
-        is_range   = True
+        data        = get_sales_report_by_range(start_date, end_date)
+        date_label  = f"{format_date(start_date)} to {format_date(end_date)}"
+        is_range    = True
+        cash_data   = get_cash_entries_for_report(start_date, end_date)
 
     else:
         flash("Please select a date.", "warning")
@@ -73,16 +77,16 @@ def sales_summary_report():
 
     if not data:
         data = {
-            "sales":            [],
-            "unresolved":       [],
-            "mechanic_summary": [],
-            "items_summary":    [],
-            "total_gross":      0.0,
-            "total_mech_cut":   0.0,
-            "total_shop_topup": 0.0,
-            "net_revenue":      0.0,
-            "debt_collected":   [],
-            "total_debt_collected": 0.0, 
+            "sales":                [],
+            "unresolved":           [],
+            "mechanic_summary":     [],
+            "items_summary":        [],
+            "total_gross":          0.0,
+            "total_mech_cut":       0.0,
+            "total_shop_topup":     0.0,
+            "net_revenue":          0.0,
+            "debt_collected":       [],
+            "total_debt_collected": 0.0,
         }
 
     return render_template(
@@ -90,4 +94,5 @@ def sales_summary_report():
         report_date=date_label,
         data=data,
         is_range=is_range,
+        cash_data=cash_data,
     )

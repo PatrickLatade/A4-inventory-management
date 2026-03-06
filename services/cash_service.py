@@ -2,9 +2,172 @@ from db.database import get_db
 from utils.formatters import format_date
 
 # --- CATEGORIES ---
-# Hardcoded for now. Future: move to a DB table if client wants to manage them.
 CASH_IN_CATEGORIES  = ['Petty Cash', 'Owner Deposit', 'Other Income']
-CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Other Expense']
+CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Mechanic Payout', 'Other Expense']
+
+# --- PHYSICAL CASH FILTER ---
+# Only payment methods in this category count as physical cash in the drawer.
+# If client later confirms GCash/PayMaya count too, add 'Online' here.
+# One constant, affects the entire service automatically.
+PHYSICAL_CASH_CATEGORIES = ('Cash',)
+
+
+# ─────────────────────────────────────────────
+# PRIVATE HELPERS
+# ─────────────────────────────────────────────
+
+def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
+    """
+    [Source 1] Direct cash sales that are fully Paid.
+    Always CASH_IN — never appears when filtering for CASH_OUT.
+    """
+    placeholders = ','.join('?' * len(PHYSICAL_CASH_CATEGORIES))
+    params = list(PHYSICAL_CASH_CATEGORIES)
+
+    query = f"""
+        SELECT
+            s.id            AS reference_id,
+            s.sales_number,
+            s.customer_name,
+            s.total_amount  AS amount,
+            s.transaction_date AS created_at,
+            u.username      AS recorded_by
+        FROM sales s
+        JOIN payment_methods pm ON pm.id = s.payment_method_id
+        LEFT JOIN users u       ON u.id  = s.user_id
+        WHERE pm.category IN ({placeholders})
+        AND s.status = 'Paid'
+    """
+
+    if date_from:
+        query += " AND DATE(s.transaction_date) >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(s.transaction_date) <= ?"
+        params.append(date_to)
+
+    return conn.execute(query, params).fetchall()
+
+
+def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
+    """
+    [Source 2] Cash payments that settled Utang balances.
+    Always CASH_IN — never appears when filtering for CASH_OUT.
+    """
+    placeholders = ','.join('?' * len(PHYSICAL_CASH_CATEGORIES))
+    params = list(PHYSICAL_CASH_CATEGORIES)
+
+    query = f"""
+        SELECT
+            dp.id           AS reference_id,
+            s.sales_number,
+            s.customer_name,
+            dp.amount_paid  AS amount,
+            dp.paid_at      AS created_at,
+            u.username      AS recorded_by
+        FROM debt_payments dp
+        JOIN sales s            ON s.id  = dp.sale_id
+        JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        LEFT JOIN users u       ON u.id  = dp.paid_by
+        WHERE pm.category IN ({placeholders})
+    """
+
+    if date_from:
+        query += " AND DATE(dp.paid_at) >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(dp.paid_at) <= ?"
+        params.append(date_to)
+
+    return conn.execute(query, params).fetchall()
+
+
+def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_type=None):
+    """
+    [Sources 3 & 4] Manual petty cash entries.
+    Supports optional entry_type filter ('CASH_IN' or 'CASH_OUT').
+    """
+    params = [branch_id]
+    query = """
+        SELECT
+            ce.id,
+            ce.entry_type,
+            ce.amount,
+            ce.category,
+            ce.description,
+            ce.created_at,
+            u.username AS recorded_by
+        FROM cash_entries ce
+        LEFT JOIN users u ON u.id = ce.user_id
+        WHERE ce.branch_id = ?
+          AND ce.reference_type = 'MANUAL'
+    """
+
+    if entry_type:
+        query += " AND ce.entry_type = ?"
+        params.append(entry_type)
+    if date_from:
+        query += " AND DATE(ce.created_at) >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(ce.created_at) <= ?"
+        params.append(date_to)
+
+    return conn.execute(query, params).fetchall()
+
+
+def _build_unified(sales_rows, debt_rows, manual_rows):
+    """
+    Merges all 3 sources into a single normalized list sorted newest first.
+    Each row has the same shape regardless of source — the HTML never needs
+    to know where a row came from.
+    """
+    unified = []
+
+    for row in sales_rows:
+        customer = row['customer_name'] or 'Walk-in'
+        unified.append({
+            'entry_type':  'CASH_IN',
+            'amount':      round(row['amount'], 2),
+            'category':    'Cash Sale',
+            'description': f"{row['sales_number']} — {customer}",
+            'created_at':  format_date(row['created_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or '—',
+            'source':      'sale',
+            '_raw_date':   row['created_at'] or '',
+        })
+
+    for row in debt_rows:
+        customer = row['customer_name'] or 'Walk-in'
+        unified.append({
+            'entry_type':  'CASH_IN',
+            'amount':      round(row['amount'], 2),
+            'category':    'Debt Payment',
+            'description': f"{row['sales_number']} — {customer}",
+            'created_at':  format_date(row['created_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or '—',
+            'source':      'debt_payment',
+            '_raw_date':   row['created_at'] or '',
+        })
+
+    for row in manual_rows:
+        unified.append({
+            'entry_type':  row['entry_type'],
+            'amount':      round(row['amount'], 2),
+            'category':    row['category'],
+            'description': row['description'] or '—',
+            'created_at':  format_date(row['created_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or '—',
+            'source':      'manual',
+            '_raw_date':   row['created_at'] or '',
+        })
+
+    unified.sort(key=lambda x: x['_raw_date'], reverse=True)
+
+    for row in unified:
+        del row['_raw_date']
+
+    return unified
 
 
 # ─────────────────────────────────────────────
@@ -13,29 +176,31 @@ CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies
 
 def get_cash_summary(branch_id=1):
     """
-    Returns total CASH_IN, total CASH_OUT, and computed cash on hand for a branch.
-
-    branch_id defaults to 1 (current only branch).
-    When multi-branch is needed, callers pass the correct branch_id.
-
-    Future: when sales cash integration is confirmed by client,
-    add a second query here for reference_type = 'SALE' and sum it in.
+    Full cash on hand from all 4 sources.
+    Summary always ignores entry_type filter — it must always show
+    the real total regardless of what the ledger table is filtered to.
     """
     conn = get_db()
-
-    row = conn.execute("""
-        SELECT
-            COALESCE(SUM(CASE WHEN entry_type = 'CASH_IN'  THEN amount ELSE 0 END), 0) AS total_in,
-            COALESCE(SUM(CASE WHEN entry_type = 'CASH_OUT' THEN amount ELSE 0 END), 0) AS total_out
-        FROM cash_entries
-        WHERE branch_id = ?
-        AND reference_type = 'MANUAL'
-    """, (branch_id,)).fetchone()
-
+    sales_rows  = _get_sales_cash(conn, branch_id)
+    debt_rows   = _get_debt_cash_payments(conn, branch_id)
+    manual_rows = _get_manual_entries(conn, branch_id)
     conn.close()
 
-    total_in  = round(row['total_in'],  2)
-    total_out = round(row['total_out'], 2)
+    total_in  = 0.0
+    total_out = 0.0
+
+    for row in sales_rows:
+        total_in += row['amount']
+    for row in debt_rows:
+        total_in += row['amount']
+    for row in manual_rows:
+        if row['entry_type'] == 'CASH_IN':
+            total_in  += row['amount']
+        else:
+            total_out += row['amount']
+
+    total_in  = round(total_in,  2)
+    total_out = round(total_out, 2)
 
     return {
         'total_in':     total_in,
@@ -44,89 +209,65 @@ def get_cash_summary(branch_id=1):
     }
 
 
-def get_cash_entries(branch_id=1, limit=None, offset=0, entry_type=None, start_date=None, end_date=None):
-    """
-    Returns all cash entries for a branch, newest first.
-    Optional limit/offset for dashboard previews and pagination.
-    """
-    conn = get_db()
-
-    query = """
-        SELECT
-            ce.id,
-            ce.entry_type,
-            ce.amount,
-            ce.category,
-            ce.description,
-            ce.reference_type,
-            ce.reference_id,
-            ce.created_at,
-            u.username AS recorded_by
-        FROM cash_entries ce
-        LEFT JOIN users u ON u.id = ce.user_id
-        WHERE ce.branch_id = ?
-    """
-
-    params = [branch_id]
-
-    if entry_type:
-        query += " AND ce.entry_type = ?"
-        params.append(entry_type)
-
-    if start_date:
-        query += " AND DATE(ce.created_at) >= DATE(?)"
-        params.append(start_date)
-
-    if end_date:
-        query += " AND DATE(ce.created_at) <= DATE(?)"
-        params.append(end_date)
-
-    query += " ORDER BY ce.created_at DESC"
-
-    if limit:
-        query += " LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-
-    rows = conn.execute(query, tuple(params)).fetchall()
-    conn.close()
-
-    result = []
-    for row in rows:
-        d = dict(row)
-        d['created_at'] = format_date(d['created_at'], show_time=True)
-        result.append(d)
-
-    return result
-
-
 def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date=None):
     """
-    Returns the total number of cash entries for a branch.
+    Total number of unified ledger rows matching the given filters.
+    Used by the route to calculate total_pages before fetching the page slice.
+
+    Why not just len(get_cash_entries(...))?
+    Because get_cash_entries fetches and formats every row just to count them.
+    This is cheaper — build unified list without formatting, just count it.
+    At current scale it barely matters, but it's the right habit.
     """
     conn = get_db()
-    query = """
-        SELECT COUNT(*) AS total_entries
-        FROM cash_entries
-        WHERE branch_id = ?
-    """
-    params = [branch_id]
 
-    if entry_type:
-        query += " AND entry_type = ?"
-        params.append(entry_type)
+    # Sales and debt are always CASH_IN — skip them entirely if filtering for CASH_OUT
+    if entry_type == 'CASH_OUT':
+        sales_rows = []
+        debt_rows  = []
+    else:
+        sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
+        debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
 
-    if start_date:
-        query += " AND DATE(created_at) >= DATE(?)"
-        params.append(start_date)
-
-    if end_date:
-        query += " AND DATE(created_at) <= DATE(?)"
-        params.append(end_date)
-
-    row = conn.execute(query, tuple(params)).fetchone()
+    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
     conn.close()
 
-    return row['total_entries']
+    return len(sales_rows) + len(debt_rows) + len(manual_rows)
+
+
+def get_cash_entries(branch_id=1, limit=None, offset=None,
+                     entry_type=None, start_date=None, end_date=None):
+    """
+    Unified ledger with optional pagination and filtering.
+
+    entry_type  : 'CASH_IN', 'CASH_OUT', or None (all)
+    start_date  : 'YYYY-MM-DD' or None
+    end_date    : 'YYYY-MM-DD' or None
+    limit       : page size
+    offset      : how many rows to skip (for pagination)
+    """
+    conn = get_db()
+
+    # Sales and debt are always CASH_IN — skip entirely if filtering for CASH_OUT
+    if entry_type == 'CASH_OUT':
+        sales_rows = []
+        debt_rows  = []
+    else:
+        sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
+        debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
+
+    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
+    conn.close()
+
+    unified = _build_unified(sales_rows, debt_rows, manual_rows)
+
+    # Apply pagination after merge+sort so ordering is always correct
+    if offset:
+        unified = unified[offset:]
+    if limit:
+        unified = unified[:limit]
+
+    return unified
 
 
 # ─────────────────────────────────────────────
@@ -135,18 +276,9 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
 
 def add_cash_entry(entry_type, amount, category, description, user_id, branch_id=1):
     """
-    Records a single petty cash movement (MANUAL only for now).
-
-    entry_type  : 'CASH_IN' or 'CASH_OUT'
-    amount      : positive float
-    category    : must be in the appropriate category list
-    description : free text, optional but encouraged
-    user_id     : the logged-in user recording this
-    branch_id   : defaults to 1, ready for multi-branch
-
-    Raises ValueError for bad input — caller (route) handles the HTTP response.
+    Records a single manual petty cash movement only.
+    Sales and debt cash is calculated live — never written here.
     """
-    # --- Validation ---
     if entry_type not in ('CASH_IN', 'CASH_OUT'):
         raise ValueError("Invalid entry type.")
 
@@ -162,18 +294,15 @@ def add_cash_entry(entry_type, amount, category, description, user_id, branch_id
     if category not in valid_categories:
         raise ValueError(f"Invalid category for {entry_type}.")
 
-    # --- Insert ---
     conn = get_db()
     try:
         conn.execute("""
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, category, description,
-                reference_type, reference_id, user_id)
+                 reference_type, reference_id, user_id)
             VALUES (?, ?, ?, ?, ?, 'MANUAL', NULL, ?)
         """, (branch_id, entry_type, amount, category, description or None, user_id))
-
         conn.commit()
-
     except Exception:
         conn.rollback()
         raise
@@ -183,26 +312,22 @@ def add_cash_entry(entry_type, amount, category, description, user_id, branch_id
 
 def delete_cash_entry(entry_id, branch_id=1):
     """
-    Hard delete a cash entry.
-
-    branch_id guard prevents a user from deleting entries from another branch.
-    Only admins should be able to call this — enforce that in the route, not here.
-
-    Future: consider soft delete (is_deleted flag) before going live
-    if the client wants an audit trail of deletions.
+    Hard deletes a manual cash entry.
+    reference_type = 'MANUAL' guard means sales and debt rows
+    can never be deleted through this path even if called directly.
+    Admin-only enforced at route level.
     """
     conn = get_db()
     try:
         result = conn.execute("""
             DELETE FROM cash_entries
-            WHERE id = ? AND branch_id = ?
+            WHERE id = ? AND branch_id = ? AND reference_type = 'MANUAL'
         """, (entry_id, branch_id))
 
         if result.rowcount == 0:
-            raise ValueError("Entry not found or does not belong to this branch.")
+            raise ValueError("Entry not found or cannot be deleted.")
 
         conn.commit()
-
     except Exception:
         conn.rollback()
         raise
@@ -216,45 +341,25 @@ def delete_cash_entry(entry_id, branch_id=1):
 
 def get_cash_entries_for_report(date_from, date_to, branch_id=1):
     """
-    Returns entries and summary for a given date range.
-    Used by the sales report PDF section.
+    Full unified ledger for a date range — used by the sales report PDF.
+    Sorted oldest first so the PDF reads chronologically.
     """
     conn = get_db()
-
-    rows = conn.execute("""
-        SELECT
-            ce.id,
-            ce.entry_type,
-            ce.amount,
-            ce.category,
-            ce.description,
-            ce.created_at,
-            u.username AS recorded_by
-        FROM cash_entries ce
-        LEFT JOIN users u ON u.id = ce.user_id
-        WHERE ce.branch_id = ?
-        AND DATE(ce.created_at) BETWEEN DATE(?) AND DATE(?)
-        ORDER BY ce.created_at ASC
-    """, (branch_id, date_from, date_to)).fetchall()
-
+    sales_rows  = _get_sales_cash(conn, branch_id, date_from, date_to)
+    debt_rows   = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
+    manual_rows = _get_manual_entries(conn, branch_id, date_from, date_to)
     conn.close()
 
-    entries = []
-    total_in  = 0.0
-    total_out = 0.0
+    unified = _build_unified(sales_rows, debt_rows, manual_rows)
 
-    for row in rows:
-        d = dict(row)
-        d['created_at'] = format_date(d['created_at'], show_time=True)
-        entries.append(d)
+    # Reverse to oldest-first for PDF reading order
+    unified.reverse()
 
-        if d['entry_type'] == 'CASH_IN':
-            total_in  += d['amount']
-        else:
-            total_out += d['amount']
+    total_in  = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_IN')
+    total_out = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_OUT')
 
     return {
-        'entries':      entries,
+        'entries':      unified,
         'total_in':     round(total_in,  2),
         'total_out':    round(total_out, 2),
         'cash_on_hand': round(total_in - total_out, 2),

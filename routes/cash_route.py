@@ -12,6 +12,7 @@ from services.cash_service import (
 cash_bp = Blueprint('cash', __name__)
 LEDGER_PAGE_SIZE = 20
 
+
 # ─────────────────────────────────────────────
 # HELPER
 # ─────────────────────────────────────────────
@@ -21,8 +22,6 @@ def _get_branch_id():
     Central branch resolution.
     Today: always returns 1 (single branch).
     Future: return session.get('branch_id') once multi-branch is live.
-    All routes call this — so the day branch support is needed,
-    this is the only function that needs to change.
     """
     return 1
 
@@ -33,14 +32,10 @@ def _get_branch_id():
 
 @cash_bp.route("/cash-ledger")
 def cash_ledger():
-    """
-    Main petty cash page.
-    Renders the ledger table + summary + the form to add new entries.
-    """
-    branch_id = _get_branch_id()
+    branch_id  = _get_branch_id()
     entry_type = request.args.get("type") or None
     start_date = request.args.get("start_date") or None
-    end_date = request.args.get("end_date") or None
+    end_date   = request.args.get("end_date") or None
 
     if entry_type not in {"CASH_IN", "CASH_OUT", None}:
         entry_type = None
@@ -53,8 +48,8 @@ def cash_ledger():
     )
     total_pages = max(1, (total_entries + LEDGER_PAGE_SIZE - 1) // LEDGER_PAGE_SIZE)
 
-    page = request.args.get("page", default=1, type=int) or 1
-    page = max(1, min(page, total_pages))
+    page   = request.args.get("page", default=1, type=int) or 1
+    page   = max(1, min(page, total_pages))
     offset = (page - 1) * LEDGER_PAGE_SIZE
 
     summary = get_cash_summary(branch_id=branch_id)
@@ -68,7 +63,7 @@ def cash_ledger():
     )
 
     start_entry = offset + 1 if total_entries else 0
-    end_entry = offset + len(entries)
+    end_entry   = offset + len(entries)
 
     return render_template(
         "cash/cash_ledger.html",
@@ -93,34 +88,33 @@ def cash_ledger():
 
 @cash_bp.route("/api/cash/summary")
 def cash_summary_api():
-    """
-    Returns current cash on hand summary as JSON.
-    Useful for dashboard widgets or future mobile integrations.
-    """
     branch_id = _get_branch_id()
-    summary = get_cash_summary(branch_id=branch_id)
+    summary   = get_cash_summary(branch_id=branch_id)
     return jsonify(summary)
 
 
 @cash_bp.route("/api/cash/entries")
 def cash_entries_api():
-    """
-    Returns the full ledger as JSON.
-    Optional ?limit=N for dashboard preview use.
-    """
-    branch_id = _get_branch_id()
-    limit = request.args.get("limit", type=int)
-    entries = get_cash_entries(branch_id=branch_id, limit=limit)
+    branch_id  = _get_branch_id()
+    limit      = request.args.get("limit", type=int)
+    offset     = request.args.get("offset", type=int)
+    entry_type = request.args.get("type") or None
+    start_date = request.args.get("start_date") or None
+    end_date   = request.args.get("end_date") or None
+
+    entries = get_cash_entries(
+        branch_id=branch_id,
+        limit=limit,
+        offset=offset,
+        entry_type=entry_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
     return jsonify({"entries": entries})
 
 
 @cash_bp.route("/api/cash/add", methods=["POST"])
 def cash_add_api():
-    """
-    Records a new cash entry (CASH_IN or CASH_OUT).
-    Expects JSON body:
-    { entry_type, amount, category, description }
-    """
     data = request.get_json()
 
     try:
@@ -142,11 +136,6 @@ def cash_add_api():
 
 @cash_bp.route("/api/cash/delete/<int:entry_id>", methods=["DELETE"])
 def cash_delete_api(entry_id):
-    """
-    Hard deletes a cash entry.
-    Admin only — enforced here at the route level, not in the service.
-    The service handles the branch_id guard (can't delete another branch's entry).
-    """
     if session.get("role") != "admin":
         return jsonify({"status": "error", "message": "Admin access required."}), 403
 

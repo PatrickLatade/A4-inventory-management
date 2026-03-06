@@ -285,6 +285,46 @@
             .no-print { display: none; }
             body { padding: 0; margin: 0; }
         }
+        .cash-section {
+            margin-top: 14px;
+            border: 1px solid #b8d4e8;
+            border-radius: 6px;
+            overflow: hidden;
+            page-break-inside: avoid;
+        }
+        .cash-section-title {
+            background: #d0e8f5;
+            color: #0a3d5e;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #b8d4e8;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .cash-type-in  { color: #155724; font-weight: 700; }
+        .cash-type-out { color: #721c24; font-weight: 700; }
+        .cash-summary-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-top: 1px solid #b8d4e8;
+        }
+        .cash-on-hand-bar {
+            background: #0a3d5e;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 800;
+            padding: 8px 12px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
     </style>
 </head>
 <body>
@@ -555,6 +595,69 @@
         </div>
     </div>
     {% endif %}
+
+    <div class="cash-section">
+        <div class="cash-section-title">
+            💵 Cash Ledger — {{ report_date }}
+        </div>
+
+        {% if cash_data.entries %}
+        <table style="margin-top: 0; border: none;">
+            <thead>
+                <tr>
+                    <th width="11%">Type</th>
+                    <th width="15%">Category</th>
+                    <th width="38%">Description</th>
+                    <th width="13%">Recorded By</th>
+                    <th width="13%">Date</th>
+                    <th width="10%" style="text-align:right;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in cash_data.entries %}
+                <tr>
+                    <td>
+                        {% if entry.entry_type == 'CASH_IN' %}
+                            <span class="cash-type-in">▲ IN</span>
+                        {% else %}
+                            <span class="cash-type-out">▼ OUT</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 12px;">{{ entry.category }}</td>
+                    <td style="font-size: 12px; color: #444;">{{ entry.description }}</td>
+                    <td style="font-size: 11px; color: #666;">{{ entry.recorded_by }}</td>
+                    <td style="font-size: 11px; color: #666;">{{ entry.created_at }}</td>
+                    <td style="text-align: right; font-weight: 600;
+                        {% if entry.entry_type == 'CASH_IN' %}color: #155724;
+                        {% else %}color: #721c24;{% endif %}">
+                        {% if entry.entry_type == 'CASH_OUT' %}−{% endif %}
+                        ₱ {{ "%.2f"|format(entry.amount) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="cash-summary-row" style="color: #155724;">
+            <span>Total Cash In</span>
+            <span>+ ₱ {{ "%.2f"|format(cash_data.total_in) }}</span>
+        </div>
+        <div class="cash-summary-row" style="color: #721c24;">
+            <span>Total Cash Out</span>
+            <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
+        </div>
+        <div class="cash-on-hand-bar">
+            <span>CASH ON HAND — {{ report_date }}</span>
+            <span>₱ {{ "%.2f"|format(cash_data.cash_on_hand) }}</span>
+        </div>
+
+        {% else %}
+        <div style="padding: 14px 12px; font-size: 12px; color: #888; text-align: center;">
+            No cash movements recorded for this period.
+        </div>
+        {% endif %}
+
+    </div>
 
     {# ── Deliverables — always starts on a new page ── #}
     {% if data.unresolved %}
