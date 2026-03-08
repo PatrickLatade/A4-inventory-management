@@ -3,10 +3,11 @@ from utils.formatters import format_date
 
 PER_PAGE = 50
 
-def get_sales_paginated(page=1, start_date=None, end_date=None, search=None):
+def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has_discount=False):
     """
     Paginated sales history for the admin panel.
     Searchable by receipt number or customer name.
+    Optional has_discount=True filters to sales containing discounted items.
     
     NOTE (future branches): add branch_id filter here when ready.
     """
@@ -25,6 +26,14 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None):
     if search:
         conditions.append("(s.sales_number LIKE ? OR s.customer_name LIKE ?)")
         params.extend([f"%{search}%", f"%{search}%"])
+    if has_discount:
+        conditions.append("""
+            EXISTS (
+                SELECT 1
+                FROM sales_items si
+                WHERE si.sale_id = s.id AND (si.discount_percent > 0 OR si.discount_amount > 0)
+            )
+        """)
 
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 

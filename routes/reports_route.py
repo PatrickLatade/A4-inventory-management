@@ -1,7 +1,7 @@
-# Add to imports at the top
+﻿# Add to imports at the top
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, date
 from flask import Response
 from db.database import get_db
 from flask import Blueprint, request, render_template, redirect, url_for, flash
@@ -116,22 +116,36 @@ def export_inventory_snapshot():
     conn = get_db()
     rows = conn.execute("""
         SELECT
-            items.id,
-            items.name,
-            items.category,
-            items.a4s_selling_price,
-            COALESCE(SUM(
-                CASE WHEN t.transaction_type = 'IN'  THEN t.quantity
-                    WHEN t.transaction_type = 'OUT' THEN -t.quantity
-                    ELSE 0 END
-            ), 0) AS current_stock,
-            COALESCE(SUM(
-                CASE WHEN t.transaction_type = 'OUT' THEN t.quantity ELSE 0 END
-            ), 0) AS total_sold
-        FROM items
-        LEFT JOIN inventory_transactions t ON items.id = t.item_id
-        GROUP BY items.id
-        ORDER BY items.name ASC
+            i.id,
+            i.name,
+            i.category,
+            i.a4s_selling_price,
+            COALESCE(inv.current_stock, 0) AS current_stock,
+            COALESCE(inv.total_sold, 0) AS total_sold,
+            COALESCE(sale_totals.total_revenue, 0) AS total_revenue
+        FROM items i
+        LEFT JOIN (
+            SELECT
+                item_id,
+                SUM(
+                    CASE WHEN transaction_type = 'IN'  THEN quantity
+                         WHEN transaction_type = 'OUT' THEN -quantity
+                         ELSE 0 END
+                ) AS current_stock,
+                SUM(
+                    CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END
+                ) AS total_sold
+            FROM inventory_transactions
+            GROUP BY item_id
+        ) AS inv ON i.id = inv.item_id
+        LEFT JOIN (
+            SELECT
+                item_id,
+                SUM(COALESCE(final_unit_price, 0) * quantity) AS total_revenue
+            FROM sales_items
+            GROUP BY item_id
+        ) AS sale_totals ON i.id = sale_totals.item_id
+        ORDER BY i.name ASC
     """).fetchall()
     conn.close()
 
@@ -151,7 +165,7 @@ def export_inventory_snapshot():
             row["a4s_selling_price"] or 0,
             row["current_stock"],
             row["total_sold"],
-            round((row["a4s_selling_price"] or 0) * row["total_sold"], 2),
+            round(row["total_revenue"] or 0, 2),
         ])
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -162,3 +176,102 @@ def export_inventory_snapshot():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@reports_bp.route("/export/items-sold-today")
+def export_items_sold_today():
+    today = date.today()
+    today_iso = today.isoformat()
+    today_display = today.strftime("%B %d, %Y").replace(" 0", " ")
+    conn = get_db()
+    sales_rows = conn.execute("""
+        SELECT
+            x.sale_id,
+            x.sales_number,
+            x.status,
+            x.total_amount,
+            x.service_total,
+            x.total_paid,
+            x.service_paid,
+            x.payment_method_name
+        FROM (
+            SELECT
+                s.id                AS sale_id,
+                s.sales_number,
+                s.status,
+                COALESCE(s.total_amount, 0) AS total_amount,
+                COALESCE((SELECT SUM(ss.price) FROM sales_services ss WHERE ss.sale_id = s.id), 0) AS service_total,
+                COALESCE((SELECT SUM(dp.amount_paid) FROM debt_payments dp WHERE dp.sale_id = s.id), 0) AS total_paid,
+                COALESCE((SELECT SUM(dp.service_portion) FROM debt_payments dp WHERE dp.sale_id = s.id), 0) AS service_paid,
+                COALESCE(pm.name, 'N/A') AS payment_method_name
+            FROM sales s
+            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            WHERE DATE(s.transaction_date) = ?
+        ) x
+        WHERE
+            x.status = 'Paid'
+            OR (
+                x.status = 'Partial'
+                AND x.service_paid >= x.service_total
+            )
+    """, (today_iso,)).fetchall()
+
+    sale_map = {
+        row["sale_id"]: dict(row)
+        for row in sales_rows
+    }
+
+    rows = []
+    if sales_rows:
+        sale_ids = [row["sale_id"] for row in sales_rows]
+        placeholders = ",".join("?" * len(sale_ids))
+        rows = conn.execute(f"""
+            SELECT
+                si.sale_id,
+                COALESCE(i.name, '') AS item_name,
+                COALESCE(si.quantity, 0) AS quantity,
+                COALESCE(si.final_unit_price, 0) AS final_unit_price
+            FROM sales_items si
+            LEFT JOIN items i ON i.id = si.item_id
+            WHERE si.sale_id IN ({placeholders})
+            ORDER BY si.sale_id ASC
+        """, sale_ids).fetchall()
+    conn.close()
+
+    output = []
+    output.append(f"Date,{today_display}")
+    output.append("quantity,item,OR No,Payment Mod,amount")
+
+    for row in rows:
+        sale = sale_map.get(row["sale_id"], {})
+        item = row["item_name"].replace('"', '""') if row["item_name"] else ""
+        sales_number = sale.get("sales_number", "") or ""
+        sales_number = sales_number.replace('"', '""')
+        line_total = (row["final_unit_price"] or 0) * row["quantity"]
+
+        paid_amount = line_total
+        if sale.get("status") == "Partial":
+            item_total = (sale.get("total_amount", 0) or 0) - (sale.get("service_total", 0) or 0)
+            item_paid = max(0.0, (sale.get("total_paid", 0) or 0) - (sale.get("service_paid", 0) or 0))
+            if item_total > 0:
+                ratio = min(1.0, item_paid / item_total)
+                paid_amount = round(line_total * ratio, 2)
+            else:
+                paid_amount = 0.0
+
+        paid_amount = round(paid_amount, 2)
+        if paid_amount <= 0:
+            continue
+
+        payment_method = (sale.get("payment_method_name", "N/A") or "N/A").replace('"', '""')
+        output.append(
+            f'{row["quantity"]},"{item}","{sales_number}","{payment_method}",'
+            f'{paid_amount:.2f}'
+        )
+
+    return Response(
+        "\n".join(output) + "\n",
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=items_sold_{today_iso}.csv"},
+    )
+

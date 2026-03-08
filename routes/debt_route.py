@@ -204,10 +204,12 @@ def debt_payments_for_sale(sale_id):
             dp.reference_no,
             dp.notes,
             pm.name     AS payment_method,
-            u.username  AS paid_by
+            u.username  AS paid_by,
+            s.sales_number
         FROM debt_payments dp
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u            ON u.id  = dp.paid_by
+        JOIN sales s                  ON s.id  = dp.sale_id
         WHERE dp.sale_id = ?
         ORDER BY dp.paid_at ASC
     """, (sale_id,)).fetchall()

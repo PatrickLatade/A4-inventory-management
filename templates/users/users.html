@@ -155,8 +155,51 @@
         transition: color 0.15s ease;
     }
 
+    .page-indicator {
+        color: #d6d9e0;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-left: 0.45rem;
+        padding: 0.12rem 0.56rem;
+        border-radius: 999px;
+        border: 1px solid rgba(230, 83, 80, 0.55);
+        background: rgba(230, 83, 80, 0.16);
+        color: #ff9c95;
+        font-weight: 700;
+        font-size: 0.7rem;
+        letter-spacing: 0.2px;
+        text-transform: uppercase;
+    }
+
+    .filter-chip-audit {
+        border-color: rgba(103, 194, 228, 0.55);
+        background: rgba(103, 194, 228, 0.16);
+        color: #8fd2eb;
+    }
+
     .debt-parent-row:hover .debt-expand-hint {
         color: #888;
+    }
+
+    .debt-payments-table,
+    .debt-payments-table thead,
+    .debt-payments-table tbody {
+        width: 100% !important;
+        table-layout: auto !important;
+    }
+
+    .debt-payments-table th,
+    .debt-payments-table td {
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        text-align: left !important;
     }
 </style>
 {% endblock %}
@@ -552,6 +595,15 @@
                         style="background:#141720; border-color:#333; color:#fff;"
                         readonly>
                 </div>
+
+                <!-- Discounted sales filter -->
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="sales-discount-filter">
+                    <label class="form-check-label text-white-50 small" for="sales-discount-filter">
+                        Discounted sales only
+                    </label>
+                </div>
+
                 <button class="btn btn-sm btn-outline-secondary" onclick="clearSalesFilters()" title="Clear all filters">
                     <i class="bi bi-x-lg"></i>
                 </button>
@@ -647,11 +699,10 @@
             </div>
         </div>
 
-        <div class="table-responsive">
+    <div class="table-responsive">
             <table class="table table-dark align-middle" id="debt-audit-table">
                 <thead>
                     <tr class="border-bottom border-secondary">
-                        <th width="3%"></th>
                         <th>Customer</th>
                         <th>Receipt #</th>
                         <th>Date</th>
@@ -663,7 +714,7 @@
                     </tr>
                 </thead>
                 <tbody id="debt-audit-body">
-                    <tr><td colspan="9" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -715,6 +766,15 @@
                         style="background:#141720; border-color:#333; color:#fff;"
                         readonly>
                 </div>
+
+                <!-- Discounted sales filter -->
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="audit-discount-filter">
+                    <label class="form-check-label text-white-50 small" for="audit-discount-filter">
+                        Discounted sales only
+                    </label>
+                </div>
+
                 <button class="btn btn-sm btn-outline-secondary" onclick="clearAuditDateFilter()" title="Clear dates">
                     <i class="bi bi-x-lg"></i>
                 </button>
@@ -853,6 +913,26 @@
                 </div>
                 <div class="modal-body" id="itemCreatedBody">
                     <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEBT PAYMENTS MODAL -->
+    <div class="modal fade" id="debtPaymentsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content bg-dark border-secondary text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-warning">
+                        <i class="bi bi-clock-history me-1 text-warning"></i>
+                        Payment History
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="debt-payments-body">
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-hourglass-split me-1"></i> Select a sale to view history.
+                    </div>
                 </div>
             </div>
         </div>
@@ -1150,6 +1230,7 @@ let auditType        = null;   // null = all
 let auditFlatpickr   = null;
 let auditStartDate   = null;
 let auditEndDate     = null;
+let auditHasDiscount = false;
 
 document.querySelector('[data-bs-target="#audit-tab"]').addEventListener('shown.bs.tab', function () {
     if (auditPage === 1 && document.getElementById('audit-trail-body').textContent.includes('Loading')) {
@@ -1179,6 +1260,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    document.getElementById('audit-discount-filter').addEventListener('change', function () {
+        auditHasDiscount = this.checked;
+        auditPage = 1;
+        loadAuditTrail();
+    });
 });
 
 function setAuditType(type, btn) {
@@ -1191,6 +1278,8 @@ function setAuditType(type, btn) {
 
 function clearAuditDateFilter() {
     if (auditFlatpickr) auditFlatpickr.clear();
+    document.getElementById('audit-discount-filter').checked = false;
+    auditHasDiscount = false;
     auditStartDate = null;
     auditEndDate   = null;
     auditPage      = 1;
@@ -1210,10 +1299,17 @@ function loadAuditTrail() {
     if (auditStartDate) params.push(`start_date=${auditStartDate}`);
     if (auditEndDate)   params.push(`end_date=${auditEndDate}`);
     if (auditType)      params.push(`type=${auditType}`);
+    if (auditHasDiscount) params.push('has_discount=1');
 
     fetch(`/api/audit/trail?${params.join('&')}`)
         .then(r => r.json())
-        .then(data => renderAuditTrail(data))
+        .then(data => {
+            if (data.error) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${data.error}</td></tr>`;
+                return;
+            }
+            renderAuditTrail(data);
+        })
         .catch(() => {
             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Failed to load data.</td></tr>';
         });
@@ -1227,11 +1323,14 @@ function renderAuditTrail(data) {
     const prevBtn    = document.getElementById('audit-prev-btn');
     const nextBtn    = document.getElementById('audit-next-btn');
 
-    summaryEl.textContent = `${data.total.toLocaleString()} total entries`;
+    const auditSummary = `${data.total.toLocaleString()} total entries`;
+    const auditDiscountText = auditHasDiscount ? ' <span class="filter-chip filter-chip-audit">Discounted sales only</span>' : '';
+    summaryEl.innerHTML = `${auditSummary}${auditDiscountText}`;
 
     // Pagination controls
     if (data.total_pages > 1) {
         paginationRow.style.display = 'flex';
+        pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
@@ -1307,6 +1406,7 @@ let salesPage      = 1;
 let salesStartDate = null;
 let salesEndDate   = null;
 let salesSearch    = '';
+let salesHasDiscount = false;
 let salesSearchTimeout;
 let salesFlatpickr = null;
 
@@ -1347,14 +1447,22 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSalesAdmin();
         }, 500);
     });
+
+    document.getElementById('sales-discount-filter').addEventListener('change', function () {
+        salesHasDiscount = this.checked;
+        salesPage = 1;
+        loadSalesAdmin();
+    });
 });
 
 function clearSalesFilters() {
     if (salesFlatpickr) salesFlatpickr.clear();
     document.getElementById('sales-search-input').value = '';
+    document.getElementById('sales-discount-filter').checked = false;
     salesStartDate = null;
     salesEndDate   = null;
     salesSearch    = '';
+    salesHasDiscount = false;
     salesPage      = 1;
     loadSalesAdmin();
 }
@@ -1372,10 +1480,17 @@ function loadSalesAdmin() {
     if (salesStartDate) params.push(`start_date=${salesStartDate}`);
     if (salesEndDate)   params.push(`end_date=${salesEndDate}`);
     if (salesSearch)    params.push(`search=${encodeURIComponent(salesSearch)}`);
+    if (salesHasDiscount) params.push('has_discount=1');
 
     fetch(`/api/admin/sales?${params.join('&')}`)
         .then(r => r.json())
-        .then(data => renderSalesAdmin(data))
+        .then(data => {
+            if (data.error) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">${data.error}</td></tr>`;
+                return;
+            }
+            renderSalesAdmin(data);
+        })
         .catch(() => {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Failed to load data.</td></tr>';
         });
@@ -1389,10 +1504,13 @@ function renderSalesAdmin(data) {
     const prevBtn       = document.getElementById('sales-prev-btn');
     const nextBtn       = document.getElementById('sales-next-btn');
 
-    summaryEl.textContent = `${data.total.toLocaleString()} total sales`;
+    const salesSummary = `${data.total.toLocaleString()} total sales`;
+    const salesDiscountText = salesHasDiscount ? ' <span class="filter-chip">Discounted sales only</span>' : '';
+    summaryEl.innerHTML = `${salesSummary}${salesDiscountText}`;
 
     if (data.total_pages > 1) {
         paginationRow.style.display = 'flex';
+        pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
@@ -1494,14 +1612,15 @@ function renderDebtTable() {
     summaryEl.textContent = `${totalCount} total · ${openCount} open`;
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4">No records found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = '';
 
     filtered.forEach(sale => {
-        const collapseId = `debt-collapse-${sale.sale_id}`;
+            const displaySalesNo = sale.sales_number || sale.sale_id;
+            const customerName = sale.customer_name || 'Walk-in';
 
         const statusBadge = {
             'paid':    `<span class="badge bg-success">PAID IN FULL</span>`,
@@ -1510,15 +1629,9 @@ function renderDebtTable() {
         }[sale.status] || '';
 
         tbody.innerHTML += `
-            <tr class="debt-parent-row ${sale.status === 'paid' ? 'opacity-75' : ''}"
-                style="cursor: pointer;"
-                onclick="toggleDebtRow('${collapseId}', ${sale.sale_id}, this)">
-                <td class="text-center">
-                    <i class="bi bi-chevron-down debt-chevron"></i>
-                    <span class="debt-expand-hint">EXPAND</span>
-                </td>
-                <td class="fw-bold">${sale.customer_name}</td>
-                <td class="text-warning">${sale.sales_number || sale.sale_id}</td>
+            <tr class="debt-parent-row ${sale.status === 'paid' ? 'opacity-75' : ''}">
+                <td class="fw-bold">${customerName}</td>
+                <td class="text-warning">${displaySalesNo}</td>
                 <td class="text-white-50 small">${sale.date}</td>
                 <td class="text-end">₱${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 <td class="text-end text-success">₱${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
@@ -1529,93 +1642,89 @@ function renderDebtTable() {
                     ${statusBadge}
                 </td>
                 <td class="text-center">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-info me-1 view-debt-payments-btn"
+                            data-sale-id="${sale.sale_id}"
+                            data-sale-receipt="${sale.sales_number || ''}"
+                            title="View payment history">
+                        <i class="bi bi-eye"></i>
+                    </button>
                     <a href="/debt/statement/${sale.sale_id}" target="_blank"
                     class="btn btn-sm btn-outline-warning"
-                    title="Print customer statement"
-                    onclick="event.stopPropagation()">
+                    title="Print customer statement">
                         <i class="bi bi-printer"></i>
                     </a>
                 </td>
             </tr>
-            <tr id="${collapseId}" style="display:none;">
-                <td colspan="9" class="p-0 border-0">
-                    <div id="${collapseId}-inner" style="background:#0d0f13;">
-                        <div class="text-center text-muted py-3 small">
-                            <i class="bi bi-hourglass-split me-1"></i> Loading payments...
-                        </div>
-                    </div>
-                </td>
-            </tr>`;
+            `;
     });
 }
 
-function toggleDebtRow(collapseId, saleId, parentRow) {
-    const row     = document.getElementById(collapseId);
-    const chevron = parentRow.querySelector('.debt-chevron');
-    const hint    = parentRow.querySelector('.debt-expand-hint');
-    const isOpen  = row.style.display !== 'none';
+document.addEventListener('click', (e) => {
+    const viewDebtBtn = (e.target instanceof Element) ? e.target.closest('.view-debt-payments-btn') : null;
+    if (!viewDebtBtn) return;
+    const saleId = viewDebtBtn.dataset.saleId;
+    const saleReceipt = viewDebtBtn.dataset.saleReceipt || '';
+    if (!saleId) return;
 
-    if (isOpen) {
-        row.style.display = 'none';
-        chevron.style.transform = 'rotate(0deg)';
-        if (hint) hint.textContent = 'EXPAND';
-        return;
-    }
+    showDebtPaymentsModal(parseInt(saleId, 10), saleReceipt);
+});
 
-    row.style.display = 'table-row';
-    chevron.style.transform = 'rotate(180deg)';
-    if (hint) hint.textContent = 'HIDE';
-
-    const inner = document.getElementById(`${collapseId}-inner`);
-    if (inner.dataset.loaded) return;
+function showDebtPaymentsModal(saleId, saleReceipt = '') {
+    const body = document.getElementById('debt-payments-body');
+    body.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading payment history...</div>';
+    new bootstrap.Modal(document.getElementById('debtPaymentsModal')).show();
 
     fetch(`/api/debt/payments/${saleId}`)
         .then(r => r.json())
         .then(data => {
-            if (!data.payments || data.payments.length === 0) {
-                inner.innerHTML = '<div class="text-muted text-center py-2 small">No payment entries recorded yet.</div>';
-                inner.dataset.loaded = '1';
+            if (data.error) {
+                body.innerHTML = `<div class="text-danger text-center py-2">${data.error}</div>`;
                 return;
             }
 
-            const rows = data.payments.map(p => `
-                <tr style="font-size: 0.82rem;">
-                    <td></td>
+            const payments = data.payments || [];
+            const receiptNo = data.sales_number || saleReceipt || '—';
+            const header = `
+                <div class="mb-3">
+                    <div>Receipt # <span class="fw-semibold text-warning">${receiptNo}</span></div>
+                </div>`;
+
+            if (!payments.length) {
+                body.innerHTML = `${header}<div class="text-muted text-center py-2">No payment entries recorded yet.</div>`;
+                return;
+            }
+
+            const rows = payments.map(p => `
+                <tr style="font-size:0.83rem;">
                     <td class="text-white-50">${p.paid_at}</td>
-                    <td class="text-info fw-bold">
-                        ₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}
-                    </td>
-                    <td colspan="3">
-                        <span class="badge bg-dark border border-secondary text-info me-2">
-                            ${p.payment_method || '—'}
-                        </span>
-                        <span class="text-white-50">${p.reference_no || ''}</span>
-                    </td>
-                    <td class="text-white-50">
-                        <i class="bi bi-person me-1"></i>${p.paid_by || 'Staff'}
-                    </td>
+                    <td class="fw-bold text-info">₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info me-2">${p.payment_method || '—'}</span></td>
+                    <td class="text-white-50">${p.reference_no || '—'}</td>
+                    <td class="text-white-50"><i class="bi bi-person me-1"></i>${p.paid_by || 'Staff'}</td>
                     <td class="text-white-50 small fst-italic">${p.notes || ''}</td>
                 </tr>`).join('');
 
-            inner.innerHTML = `
-                <table class="table table-dark mb-0 border-0">
-                    <thead style="font-size:0.75rem;">
-                        <tr class="text-muted">
-                            <th width="3%"></th>
-                            <th>Date Paid</th>
-                            <th>Amount</th>
-                            <th colspan="3">Payment Method</th>
-                            <th>Staff</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>`;
-
-            inner.dataset.loaded = '1';
+            body.innerHTML = `
+                ${header}
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm table-hover mb-0 debt-payments-table">
+                        <thead style="font-size:0.72rem;">
+                            <tr class="text-muted">
+                                <th class="date-paid-col">Date Paid</th>
+                                <th>Amount</th>
+                                <th style="width: 18%;">Method</th>
+                                <th style="width: 14%;">Reference</th>
+                                <th style="width: 15%;">Staff</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
         })
         .catch(() => {
-            inner.innerHTML = '<div class="text-danger text-center py-2 small">Failed to load payments.</div>';
+            body.innerHTML = '<div class="text-danger text-center py-2">Failed to load payment history.</div>';
         });
 }
 </script>

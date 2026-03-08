@@ -3,12 +3,13 @@ from utils.formatters import format_date
 
 PER_PAGE = 50
 
-def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None):
+def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, has_discount=False):
     """
     Paginated audit trail with optional filters.
     
     - movement_type: 'IN', 'OUT', 'ORDER', or None for all
     - start_date / end_date: YYYY-MM-DD strings
+    - has_discount: when true, include only SALE movement rows from sales that have discounted items
     - Returns dict with rows, pagination metadata
     
     NOTE (future branches): add branch_id filter here when ready.
@@ -31,6 +32,17 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None):
     if movement_type:
         conditions.append("t.transaction_type = ?")
         params.append(movement_type)
+    if has_discount:
+        conditions.append("""
+            (
+                t.reference_type = 'SALE'
+                AND EXISTS (
+                    SELECT 1
+                    FROM sales_items si
+                    WHERE si.sale_id = t.reference_id AND (si.discount_percent > 0 OR si.discount_amount > 0)
+                )
+            )
+        """)
 
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 

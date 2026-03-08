@@ -517,7 +517,13 @@
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label">Notes</label>
+                    <label class="form-label">
+                        Notes
+                        <span id="notes-required-indicator" class="req" style="display:none;">*</span>
+                        <span id="notes-helper" class="text-warning" style="display:none; font-size:0.72rem; margin-left:6px;">
+                            Please indicate Payment Details i.e amount and reference no
+                        </span>
+                    </label>
                     <textarea class="form-control" rows="2" id="trans-notes"></textarea>
                 </div>
             </div>
@@ -998,14 +1004,24 @@ CUSTOMER SEARCH / AUTOCOMPLETE
 EVENT LISTENERS
 ========================================================= */
 // Payment category UI
-document.getElementById('payment-category').addEventListener('change', function () {
+function isOthersPaymentCategory() {
+    const selectedCatOption = document.getElementById('payment-category').selectedOptions[0];
+    return selectedCatOption && selectedCatOption.textContent.trim().toLowerCase() === 'others';
+}
+
+function updatePaymentCategoryUI() {
+    const paymentCategory = document.getElementById('payment-category');
     const methodDiv = document.getElementById('method-options');
     const methodSelect = document.getElementById('payment-method');
     const providerLabel = document.getElementById('provider-label');
     const submitBtn = document.getElementById('submit-btn');
+    const notesField = document.getElementById('trans-notes');
+    const notesRequired = document.getElementById('notes-required-indicator');
+    const notesHelper = document.getElementById('notes-helper');
 
-    const selectedCat = this.value;
+    const selectedCat = paymentCategory.value;
     const needsProvider = (selectedCat === 'Online' || selectedCat === 'Bank');
+    const needsNotes = isOthersPaymentCategory();
 
     if (needsProvider) {
         Array.from(methodSelect.options).forEach((opt, idx) => {
@@ -1036,7 +1052,18 @@ document.getElementById('payment-category').addEventListener('change', function 
         }
         submitBtn.style.minWidth = '220px';
     }
-});
+
+    notesField.required = needsNotes;
+    notesHelper.style.display = needsNotes ? 'block' : 'none';
+    notesRequired.style.display = needsNotes ? 'inline' : 'none';
+
+    if (!needsNotes) {
+        notesField.classList.remove('border-danger');
+    }
+}
+
+document.getElementById('payment-category').addEventListener('change', updatePaymentCategoryUI);
+updatePaymentCategoryUI();
 
 // Tracks all item_ids currently selected in the table
 const selectedItemIds = new Set();
@@ -1252,7 +1279,9 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     const paymentCat = document.getElementById('payment-category').value;
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo = document.getElementById('ref-no').value.trim();
+    const notes = document.getElementById('trans-notes').value.trim();
     const needsProvider = (paymentCat === 'Online' || paymentCat === 'Bank');
+    const needsNotes = isOthersPaymentCategory();
 
     let firstErrorEl = null;
 
@@ -1265,6 +1294,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     if (!customer)                          markError(document.getElementById('customer-search'), 'Customer is required.');
     if (needsProvider && !selectedProvider) markError(document.getElementById('payment-method'), 'Please select a provider.');
     if (needsProvider && !refNo)            markError(document.getElementById('ref-no'), 'Reference number is required.');
+    if (needsNotes && !notes)               markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
 
     if (firstErrorEl) {
         firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });

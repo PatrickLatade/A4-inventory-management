@@ -9,6 +9,10 @@ from services.sales_admin_service import get_sales_paginated
 # 1. Initialize the Blueprint
 auth_bp = Blueprint('auth', __name__)
 
+
+def _to_bool(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -398,11 +402,14 @@ def audit_trail_api():
         if movement_type not in VALID_TYPES:
             return jsonify({"error": "Invalid movement type"}), 400
 
+        has_discount = _to_bool(request.args.get("has_discount"))
+
         data = get_audit_trail(
             page=page,
             start_date=start_date,
             end_date=end_date,
             movement_type=movement_type,
+            has_discount=has_discount,
         )
         return jsonify(data)
 
@@ -417,11 +424,14 @@ def admin_sales_api():
         end_date   = request.args.get("end_date") or None
         search     = request.args.get("search", "").strip() or None
 
+        has_discount = _to_bool(request.args.get("has_discount"))
+
         data = get_sales_paginated(
             page=page,
             start_date=start_date,
             end_date=end_date,
             search=search,
+            has_discount=has_discount,
         )
         return jsonify(data)
     except Exception as e:
