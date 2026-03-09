@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block styles %}
 <style>
@@ -71,7 +71,7 @@
     .form-label .req   { color: var(--accent); margin-left: 2px; }
 
     /* =====================
-    FORM CONTROLS — inherit base.html vars
+    FORM CONTROLS  —  inherit base.html vars
     ===================== */
     .form-control, .form-select {
         background: #141720;
@@ -87,9 +87,11 @@
         color: var(--text-primary);
     }
 
-    .form-control:disabled {
+    .form-control:disabled, .form-select:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+        background: #141720;
+        color: var(--text-muted);
     }
 
     /* Warning border variant */
@@ -355,7 +357,18 @@
             <div id="customer-badge" style="display:none; margin-top:6px;">
                 <span class="badge bg-success" id="customer-badge-text"></span>
                 <button type="button" class="btn btn-link btn-sm p-0 ms-1" id="customer-clear-btn"
-                    style="font-size:0.75rem; color:#aaa;">✕ clear</button>
+                    style="font-size:0.75rem; color:#aaa;">&times; Clear</button>
+            </div>
+            <div id="vehicle-wrapper" style="display:none; margin-top:8px;">
+                <label class="form-label">Vehicle <span class="req">*</span></label>
+                <div class="d-flex align-items-center gap-2">
+                    <select id="vehicle-id" class="form-select border-warn form-select-sm">
+                        <option value="">Choose vehicle...</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-info btn-sm" id="vehicle-add-btn" style="display:none; white-space:nowrap;">
+                        + Vehicle
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -410,7 +423,7 @@
                     </td>
                     <td class="subtotal-display">₱0.00</td>
                     <td>
-                        <button type="button" class="remove-row-btn" tabindex="-1">×</button>
+                        <button type="button" class="remove-row-btn" tabindex="-1">&times;</button>
                     </td>
                 </tr>
             </tbody>
@@ -466,7 +479,7 @@
                         </td>
                         <td class="service-subtotal-display">₱0.00</td>
                         <td>
-                            <button type="button" class="remove-row-btn remove-service-btn">×</button>
+                            <button type="button" class="remove-row-btn remove-service-btn">&times;</button>
                         </td>
                     </tr>
                 </tbody>
@@ -533,7 +546,7 @@
             <div class="total-area">
                 <div class="total-label">Total Due</div>
                 <div id="grand-total">₱0.00</div>
-                <!-- Button is NOT disabled by default — validation runs on click -->
+                <!-- Button is NOT disabled by default  —  validation runs on click -->
                 <button id="submit-btn" class="btn btn-danger">
                     SUBMIT TRANSACTION
                 </button>
@@ -562,11 +575,44 @@
                     <label class="form-label" style="font-size:0.82rem;">Mobile No. <span class="req">*</span> <small style="color:#aaa;">(used as Customer No.)</small></label>
                     <input type="text" id="new-cust-no" class="form-control form-control-sm" placeholder="e.g. 09171234567">
                 </div>
+                <div class="mb-3">
+                    <label class="form-label" style="font-size:0.82rem;">Vehicle <span class="req">*</span></label>
+                    <input type="text" id="new-cust-vehicle" class="form-control form-control-sm" placeholder="e.g. Honda City / Car Plate #">
+                </div>
                 <div id="new-cust-error" style="color:#e74c3c; font-size:0.8rem;"></div>
             </div>
             <div class="modal-footer" style="border-top:1px solid #2a3550;">
                 <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-sm btn-info" id="save-new-customer-btn">Save Customer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD VEHICLE MODAL (for existing customers) -->
+<div class="modal fade" id="addVehicleModal" tabindex="-1" aria-labelledby="addVehicleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="background:#1a2236; border:1px solid #2a3550; color:#e0e6f0;">
+            <div class="modal-header" style="border-bottom:1px solid #2a3550;">
+                <h6 class="modal-title" id="addVehicleModalLabel">
+                    <i class="bi bi-plus-circle me-2" style="color:#67c2e4;"></i>Add Vehicle
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-1">
+                    <label class="form-label" style="font-size:0.82rem;">Customer <span class="req">*</span></label>
+                    <div id="add-vehicle-customer" class="text-warning small mb-2">Loading...</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" style="font-size:0.82rem;">Vehicle <span class="req">*</span></label>
+                    <input type="text" id="add-vehicle-name" class="form-control form-control-sm" placeholder="e.g. Honda City / Car Plate #">
+                </div>
+                <div id="add-vehicle-error" style="color:#e74c3c; font-size:0.8rem;"></div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #2a3550;">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-info" id="save-vehicle-btn">Save Vehicle</button>
             </div>
         </div>
     </div>
@@ -880,18 +926,103 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     const nameField    = document.getElementById('customer-name');
     const badge        = document.getElementById('customer-badge');
     const badgeText    = document.getElementById('customer-badge-text');
+    const vehicleSelect = document.getElementById('vehicle-id');
+    const vehicleWrapper = document.getElementById('vehicle-wrapper');
     const clearBtn     = document.getElementById('customer-clear-btn');
+    const vehicleAddBtn = document.getElementById('vehicle-add-btn');
 
     let debounceTimer;
 
-    function setCustomer(id, no, name) {
+    function resetVehiclePicker() {
+        vehicleSelect.innerHTML = '<option value="">Choose vehicle...</option>';
+        vehicleSelect.disabled = false;
+        vehicleWrapper.style.display = 'none';
+        vehicleSelect.value = '';
+        vehicleSelect.dataset.required = '0';
+        vehicleAddBtn.style.display = 'none';
+        vehicleAddBtn.disabled = true;
+    }
+
+    async function loadCustomerVehicles(customerId, selectedVehicleId = '') {
+        if (!customerId) {
+            resetVehiclePicker();
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/customers/${customerId}/vehicles`);
+            if (!res.ok) {
+                resetVehiclePicker();
+                return;
+            }
+            const data = await res.json();
+            const vehicles = (data.vehicles || []).filter(v => Number(v.is_active) !== 0);
+
+            if (!Array.isArray(vehicles) || vehicles.length === 0) {
+                vehicleSelect.innerHTML = '<option value="">No active vehicle on file for this customer</option>';
+                vehicleSelect.disabled = true;
+                vehicleWrapper.style.display = 'block';
+                vehicleSelect.dataset.required = '1';
+                vehicleAddBtn.style.display = 'inline-flex';
+                vehicleAddBtn.disabled = false;
+                return;
+            }
+
+            vehicleSelect.innerHTML = '';
+            vehicles.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = String(v.id);
+                opt.textContent = v.vehicle_name;
+                opt.dataset.active = (Number(v.is_active) !== 0).toString();
+                vehicleSelect.appendChild(opt);
+            });
+
+            const hasSelected = selectedVehicleId && [...vehicleSelect.options].some(opt => opt.value === String(selectedVehicleId));
+            if (selectedVehicleId && hasSelected) {
+                vehicleSelect.value = String(selectedVehicleId);
+            } else {
+                vehicleSelect.value = vehicleSelect.options[0]?.value || '';
+            }
+
+            vehicleSelect.disabled = false;
+            vehicleSelect.dataset.required = '1';
+            vehicleWrapper.style.display = 'block';
+            vehicleAddBtn.style.display = 'inline-flex';
+            vehicleAddBtn.disabled = false;
+        } catch (err) {
+            console.error('Vehicle fetch failed:', err);
+            resetVehiclePicker();
+        }
+    }
+
+    function openAddVehicleModal() {
+        const customerId = idField.value;
+        if (!customerId) return;
+
+        const displayName = badgeText.textContent || '';
+        document.getElementById('add-vehicle-customer').textContent = displayName || 'Selected customer';
+        document.getElementById('add-vehicle-name').value = '';
+        document.getElementById('add-vehicle-error').textContent = '';
+
+        const modal = new bootstrap.Modal(document.getElementById('addVehicleModal'));
+        modal.show();
+    }
+
+    async function setCustomer(id, no, name, vehicleId = '') {
         idField.value   = id || '';
         nameField.value = name;
         // Display name shows "Name (No.)" if registered, just name if walk-in
-        badgeText.textContent = id ? `${name} — ${no}` : `Walk-in: ${name}`;
+        badgeText.textContent = id ? `${name}  —  ${no}` : `Walk-in: ${name}`;
         badge.style.display = 'block';
         searchInput.style.display = 'none';
         suggestions.style.display = 'none';
+
+        if (id) {
+            await loadCustomerVehicles(id, vehicleId);
+            return;
+        }
+
+        resetVehiclePicker();
     }
 
     function clearCustomer() {
@@ -901,6 +1032,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         badge.style.display = 'none';
         searchInput.style.display = 'block';
         searchInput.focus();
+        resetVehiclePicker();
     }
 
     clearBtn.addEventListener('click', clearCustomer);
@@ -951,11 +1083,12 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         }
     });
 
-    // ── New Customer Modal Logic ────────────────────────────
+    // —— New Customer Modal Logic ————————————————————————————
     function openNewCustomerModal(prefill) {
         suggestions.style.display = 'none';
         document.getElementById('new-cust-name').value = '';
         document.getElementById('new-cust-no').value   = '';
+        document.getElementById('new-cust-vehicle').value = '';
         document.getElementById('new-cust-error').textContent = '';
 
         // Pre-fill: if prefill looks like a number, put in No. field, else Name field
@@ -972,28 +1105,71 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     document.getElementById('save-new-customer-btn').addEventListener('click', async () => {
         const name  = document.getElementById('new-cust-name').value.trim();
         const no    = document.getElementById('new-cust-no').value.trim();
+        const vehicle = document.getElementById('new-cust-vehicle').value.trim();
         const errEl = document.getElementById('new-cust-error');
         errEl.textContent = '';
 
-        if (!name || !no) {
-            errEl.textContent = 'Both fields are required.';
+        if (!name || !no || !vehicle) {
+            errEl.textContent = 'Name, mobile number, and vehicle are required.';
             return;
         }
 
         try {
-            const res  = await fetch('/api/customers/add', {
+                const res  = await fetch('/api/customers/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_name: name, customer_no: no, vehicle_name: vehicle })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
+                    await setCustomer(
+                        data.customer.id,
+                        data.customer.customer_no,
+                        data.customer.customer_name,
+                        data.vehicle?.id
+                    );
+                } else {
+                    errEl.textContent = data.message || 'Could not save customer.';
+                }
+        } catch (err) {
+            errEl.textContent = 'Network error. Try again.';
+        }
+    });
+
+    document.getElementById('vehicle-add-btn').addEventListener('click', openAddVehicleModal);
+
+    document.getElementById('save-vehicle-btn').addEventListener('click', async () => {
+        const customerId = idField.value;
+        const vehicleName = document.getElementById('add-vehicle-name').value.trim();
+        const errEl = document.getElementById('add-vehicle-error');
+        errEl.textContent = '';
+
+        if (!customerId) {
+            errEl.textContent = 'No customer selected.';
+            return;
+        }
+        if (!vehicleName) {
+            errEl.textContent = 'Vehicle name is required.';
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/customers/${customerId}/vehicles/add`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ customer_name: name, customer_no: no })
+                body: JSON.stringify({ vehicle_name: vehicleName })
             });
             const data = await res.json();
 
             if (data.status === 'success') {
-                bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
-                setCustomer(data.customer.id, data.customer.customer_no, data.customer.customer_name);
-            } else {
-                errEl.textContent = data.message || 'Could not save customer.';
+                bootstrap.Modal.getInstance(document.getElementById('addVehicleModal')).hide();
+                await loadCustomerVehicles(customerId, data.vehicle.id);
+                return;
             }
+
+            errEl.textContent = data.message || 'Could not save vehicle.';
         } catch (err) {
             errEl.textContent = 'Network error. Try again.';
         }
@@ -1268,10 +1444,10 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
 document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
 
-    // ── Step 1: Clear previous errors ────────────────────────────
+    // —— Step 1: Clear previous errors ————————————————————————————
     clearFieldErrors();
 
-    // ── Step 2: Header field validation ─────────────────────────
+    // —— Step 2: Header field validation —————————————————————————
     const salesNum = document.getElementById('sales-number').value.trim();
     const customerName = document.getElementById('customer-name').value.trim();
     const customerId = document.getElementById('customer-id').value.trim();
@@ -1282,6 +1458,10 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     const notes = document.getElementById('trans-notes').value.trim();
     const needsProvider = (paymentCat === 'Online' || paymentCat === 'Bank');
     const needsNotes = isOthersPaymentCategory();
+    const vehicleId = document.getElementById('vehicle-id').value;
+    const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
+    const vehicleIsActive = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
+    const vehicleRequired = document.getElementById('vehicle-id').dataset.required === '1';
 
     let firstErrorEl = null;
 
@@ -1292,6 +1472,8 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
     if (!salesNum)                          markError(document.getElementById('sales-number'), 'OR No. is required.');
     if (!customer)                          markError(document.getElementById('customer-search'), 'Customer is required.');
+    if (vehicleRequired && !vehicleId)       markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
+    if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
     if (needsProvider && !selectedProvider) markError(document.getElementById('payment-method'), 'Please select a provider.');
     if (needsProvider && !refNo)            markError(document.getElementById('ref-no'), 'Reference number is required.');
     if (needsNotes && !notes)               markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
@@ -1302,7 +1484,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    // ── Step 3: Must have at least one valid item OR one valid service ──
+    // —— Step 3: Must have at least one valid item OR one valid service ——
     const validItems = [];
     let hasUnconfirmedItem = false;
 
@@ -1359,7 +1541,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    // ── Step 4: All clear — submit ───────────────────────────────
+    // —— Step 4: All clear  —  submit ———————————————————————————————
     const btn = e.target;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
@@ -1390,6 +1572,7 @@ async function saveTransaction(items, services) {
         customer_name: document.getElementById('customer-name').value,
         customer_id: document.getElementById('customer-id').value || null,
         mechanic_id: document.getElementById('mechanic-id').value || null,
+        vehicle_id: document.getElementById('vehicle-id').value || null,
         payment_method_id: paymentId,
         reference_no: refNo,
         total_amount: parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
@@ -1422,3 +1605,9 @@ async function saveTransaction(items, services) {
 }
 </script>
 {% endblock %}
+
+
+
+
+
+

@@ -31,6 +31,7 @@
                     <th>Mobile No.</th>
                     <th>Total Visits</th>
                     <th>Last Visit</th>
+                    <th>Vehicles</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,10 +56,13 @@
                     <td style="color:#aaa; font-size:0.85rem;">
                         {{ c.last_visit_display or '—' }}
                     </td>
+                    <td style="color:#aaa; font-size:0.85rem;">
+                        {{ c.vehicles or '—' }}
+                    </td>
                 </tr>
                 <!-- Detail row (lazy loaded) -->
                 <tr class="detail-row" id="detail-{{ c.id }}" style="display:none;">
-                    <td colspan="5" style="padding:0;">
+                    <td colspan="6" style="padding:0;">
                         <div class="detail-inner" style="
                             background:#131820;
                             border-left:3px solid #67c2e4;
@@ -74,7 +78,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="5" class="text-center" style="color:#aaa; padding:40px;">
+                    <td colspan="6" class="text-center" style="color:#aaa; padding:40px;">
                         No customers yet.
                     </td>
                 </tr>
@@ -164,12 +168,13 @@ function buildTransactionHTML(data) {
     html += `<div class="table-responsive"><table class="table table-dark table-sm align-middle mb-0" style="font-size:0.82rem;">
         <thead>
             <tr style="color:#67c2e4;">
-                <th>OR No.</th>
-                <th>Date</th>
-                <th>Services</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Status</th>
+            <th>OR No.</th>
+            <th>Date</th>
+            <th>Vehicle</th>
+            <th>Services</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Status</th>
             </tr>
         </thead>
         <tbody>`;
@@ -189,6 +194,7 @@ function buildTransactionHTML(data) {
             <tr>
                 <td><strong>#${t.sales_number || t.id}</strong></td>
                 <td style="color:#aaa;">${t.transaction_date || '—'}</td>
+                <td style="color:#67c2e4;">${t.vehicle_name || '—'}</td>
                 <td>${services}</td>
                 <td style="color:#aaa;">${items}</td>
                 <td>₱${Number(t.total_amount).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>

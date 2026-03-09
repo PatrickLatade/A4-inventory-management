@@ -1,4 +1,4 @@
-from db.database import get_db
+﻿from db.database import get_db
 
 def init_db():
     conn = get_db()
@@ -176,7 +176,20 @@ def init_db():
     )
     """)
 
-    # 13. LOYALTY PROGRAMS TABLE (Phase 2 — skeleton only, do not remove)
+    # 13. VEHICLES TABLE
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS vehicles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        vehicle_name TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        updated_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+    )
+    """)
+
+    # 14. LOYALTY PROGRAMS TABLE (Phase 2 â€” skeleton only, do not remove)
     conn.execute("""
     CREATE TABLE IF NOT EXISTS loyalty_programs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,6 +243,11 @@ def init_db():
     # --- CUSTOMER MIGRATIONS ---
     try:
         conn.execute("ALTER TABLE sales ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
+    except:
+        pass
+
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id)")
     except:
         pass
 
@@ -317,7 +335,7 @@ def init_db():
     # --- CASH ENTRIES MIGRATION (for existing databases) ---
     # CREATE TABLE IF NOT EXISTS already handles new databases.
     # These alters guard existing DBs that were created before this table existed.
-    # Safe to run every startup — ALTER TABLE fails silently on already-existing columns.
+    # Safe to run every startup ALTER TABLE fails silently on already-existing columns.
     try:
         conn.execute("ALTER TABLE cash_entries ADD COLUMN branch_id INTEGER NOT NULL DEFAULT 1")
     except: pass

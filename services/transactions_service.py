@@ -62,7 +62,7 @@ def add_item_to_db(data, user_id=None, username=None):
                 name, category, description, pack_size, 
                 vendor_price, cost_per_piece, a4s_selling_price, 
                 markup, reorder_level, vendor, mechanic
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data['name'], data['category'], data['description'], data['pack_size'],
             data['vendor_price'], data['cost_per_piece'], data['selling_price'],
@@ -309,16 +309,34 @@ def record_sale(data, user_id, username):
         conn.execute("BEGIN")
 
         # 4) Insert sale
+        vehicle_id = data.get("vehicle_id")
+        if vehicle_id in ("", None):
+            vehicle_id = None
+        else:
+            try:
+                vehicle_id = int(vehicle_id)
+            except (TypeError, ValueError):
+                vehicle_id = None
+
+        if vehicle_id is not None and data.get("customer_id"):
+            valid_vehicle = conn.execute(
+                "SELECT id FROM vehicles WHERE id = ? AND customer_id = ? AND is_active = 1",
+                (vehicle_id, data.get("customer_id"))
+            ).fetchone()
+            if not valid_vehicle:
+                raise ValueError("Invalid vehicle selected for this customer.")
+
         cursor = conn.execute("""
             INSERT INTO sales (
-                sales_number, customer_name, customer_id, total_amount,
+                sales_number, customer_name, customer_id, vehicle_id, total_amount,
                 payment_method_id, reference_no, status,
                 notes, user_id, transaction_date, mechanic_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get('sales_number'),
             data.get('customer_name'),
             data.get('customer_id') or None,
+            vehicle_id,
             data.get('total_amount'),
             payment_method_id,
             data.get('reference_no'),

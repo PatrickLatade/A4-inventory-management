@@ -275,3 +275,156 @@ def export_items_sold_today():
         headers={"Content-Disposition": f"attachment; filename=items_sold_{today_iso}.csv"},
     )
 
+
+@reports_bp.route("/export/services-sold-today")
+def export_services_sold_today():
+    today = date.today()
+    today_iso = today.isoformat()
+
+    conn = get_db()
+    sale_rows = conn.execute("""
+        SELECT
+            x.sale_id,
+            x.sales_number,
+            x.customer_name,
+            COALESCE(x.vehicle_name, '') AS vehicle_name,
+            COALESCE(x.mechanic_name, 'N/A') AS mechanic_name,
+            COALESCE(x.commission_rate, 0.0) AS commission_rate
+        FROM (
+            SELECT
+                s.id                           AS sale_id,
+                s.sales_number,
+                COALESCE(c.customer_name, s.customer_name, 'Walk-in') AS customer_name,
+                v.vehicle_name,
+                m.name                         AS mechanic_name,
+                m.commission_rate,
+                COALESCE(ss.service_total, 0)  AS service_total,
+                COALESCE(dp.service_paid, 0)   AS service_paid,
+                s.status
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            LEFT JOIN vehicles v ON v.id = s.vehicle_id
+            LEFT JOIN mechanics m ON m.id = s.mechanic_id
+            LEFT JOIN (
+                SELECT
+                    sale_id,
+                    SUM(price) AS service_total
+                FROM sales_services
+                GROUP BY sale_id
+            ) ss ON ss.sale_id = s.id
+            LEFT JOIN (
+                SELECT
+                    dp.sale_id,
+                    SUM(COALESCE(dp.service_portion, 0)) AS service_paid
+                FROM debt_payments dp
+                GROUP BY dp.sale_id
+            ) dp ON dp.sale_id = s.id
+            WHERE DATE(s.transaction_date) = ?
+        ) x
+        WHERE
+            x.status = 'Paid'
+            OR (
+                x.status = 'Partial'
+                AND x.service_paid >= x.service_total
+            )
+    """, (today_iso,)).fetchall()
+
+    sales_map = {row["sale_id"]: dict(row) for row in sale_rows}
+
+    rows = []
+    if sale_rows:
+        sale_ids = [row["sale_id"] for row in sale_rows]
+        placeholders = ",".join("?" * len(sale_ids))
+        rows = conn.execute(f"""
+            SELECT
+                ss.sale_id,
+                sv.name AS service_name,
+                ss.price
+            FROM sales_services ss
+            JOIN services sv ON sv.id = ss.service_id
+            WHERE ss.sale_id IN ({placeholders})
+            ORDER BY ss.sale_id ASC, sv.name ASC
+        """, sale_ids).fetchall()
+
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Customer Name", "Vehicle", "Service Name", "Mechanic Name",
+        "OR No.", "Amount (Shop cut)", "Amount (Mechanic Cut)", "Total"
+    ])
+
+    total_shop_cut = 0.0
+    total_mechanic_cut = 0.0
+    total_amount = 0.0
+    mechanic_totals = {}
+
+    for row in rows:
+        sale = sales_map.get(row["sale_id"], {})
+        customer_name = sale.get("customer_name", "Walk-in")
+        vehicle_name = sale.get("vehicle_name", "N/A")
+        service_name = row["service_name"] or ""
+        mechanic_name = sale.get("mechanic_name", "N/A")
+        sales_number = sale.get("sales_number", "")
+
+        total = round(row["price"] or 0, 2)
+        commission_rate = round(sale.get("commission_rate", 0.0) or 0.0, 2)
+        mechanic_cut = round(total * commission_rate, 2)
+        shop_cut = round(total - mechanic_cut, 2)
+
+        writer.writerow([
+            customer_name,
+            vehicle_name,
+            service_name,
+            mechanic_name,
+            sales_number,
+            f"{shop_cut:.2f}",
+            f"{mechanic_cut:.2f}",
+            f"{total:.2f}",
+        ])
+
+        total_shop_cut += shop_cut
+        total_mechanic_cut += mechanic_cut
+        total_amount += total
+
+        mech = mechanic_name or "N/A"
+        if mech not in mechanic_totals:
+            mechanic_totals[mech] = {
+                "mechanic_cut": 0.0,
+                "shop_cut": 0.0,
+                "total": 0.0,
+            }
+        mechanic_totals[mech]["mechanic_cut"] += mechanic_cut
+        mechanic_totals[mech]["shop_cut"] += shop_cut
+        mechanic_totals[mech]["total"] += total
+
+    writer.writerow([
+        "TOTAL", "", "", "", "",
+        f"{round(total_shop_cut, 2):.2f}",
+        f"{round(total_mechanic_cut, 2):.2f}",
+        f"{round(total_amount, 2):.2f}",
+    ])
+    writer.writerow([])
+    writer.writerow(["Mechanic Name", "Amount (Mechanic Cut)", "Amount (Shop Cut)", "Total"])
+    for mechanic_name, values in sorted(mechanic_totals.items(), key=lambda item: item[0].lower()):
+        writer.writerow([
+            mechanic_name,
+            f"{round(values['mechanic_cut'], 2):.2f}",
+            f"{round(values['shop_cut'], 2):.2f}",
+            f"{round(values['total'], 2):.2f}",
+        ])
+
+    writer.writerow([
+        "TOTAL",
+        f"{round(total_mechanic_cut, 2):.2f}",
+        f"{round(total_shop_cut, 2):.2f}",
+        f"{round(total_amount, 2):.2f}",
+    ])
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=services_sold_{today_iso}.csv"},
+    )
+
