@@ -1,6 +1,7 @@
 from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date
+from services.loyalty_service import log_stamps_for_sale
 
 
 # ─────────────────────────────────────────────
@@ -415,20 +416,39 @@ def record_sale(data, user_id, username):
         # 6) Services
         service_subtotal = 0
         for service in data.get('services', []):
-            price = float(service.get('price', 0))
+            service_id = service.get('service_id')
+            if not service_id:
+                raise ValueError("Selected service is missing service_id.")
+
+            raw_price = service.get('price')
+            if raw_price in (None, ""):
+                raise ValueError("Price is required for each selected service.")
+
+            try:
+                price = float(raw_price)
+            except (TypeError, ValueError):
+                raise ValueError("Invalid service price. Please enter a valid amount.")
+
+            if price < 0:
+                raise ValueError("Service price cannot be negative.")
+
             service_subtotal += price
             conn.execute("""
                 INSERT INTO sales_services (sale_id, service_id, price)
                 VALUES (?, ?, ?)
-            """, (new_sale_id, service['service_id'], price))
+            """, (new_sale_id, service_id, price))
 
         conn.execute(
             "UPDATE sales SET service_fee = ? WHERE id = ?",
             (service_subtotal, new_sale_id)
         )
 
+        service_ids = [s["service_id"] for s in data.get("services", [])]
+        item_ids    = [i["item_id"] for i in raw_items]
+        log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
+
         conn.commit()
-        return data.get('sales_number')
+        return data.get('sales_number'), new_sale_id
 
     except Exception:
         conn.rollback()

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template
 from db.database import get_db
 from utils.formatters import format_date
+from services.loyalty_service import get_customer_loyalty_summary
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -167,13 +168,39 @@ def customer_list():
         ORDER BY c.customer_name ASC
     """).fetchall()
 
-    customers = [
-        {
-            **dict(c),
-            "last_visit_display": format_date(c["last_visit"]),
+    customers_with_loyalty = []
+    for c in customers:
+        c_dict = dict(c)
+        c_dict["last_visit_display"] = format_date(c_dict["last_visit"])
+
+        loyalty_programs = get_customer_loyalty_summary(c_dict["id"]).get("programs", [])
+        preview_programs = []
+        for program in loyalty_programs:
+            stamp_count = int(program.get("stamp_count", 0) or 0)
+            threshold = int(program.get("threshold", 0) or 0)
+            preview_programs.append({
+                "program_id": program["program_id"],
+                "name": program["name"],
+                "program_type": program.get("program_type"),
+                "stamp_count": stamp_count,
+                "threshold": threshold,
+                "remaining": max(0, threshold - stamp_count),
+                "is_eligible": bool(program.get("is_eligible")),
+                "redemption_count": int(program.get("redemption_count", 0) or 0),
+                "pct": (
+                    min(100, int((min(stamp_count, threshold) / threshold * 100)))
+                    if threshold > 0 else 0
+                ),
+            })
+
+        c_dict["loyalty_preview"] = {
+            "has_programs": bool(preview_programs),
+            "programs": preview_programs
         }
-        for c in customers
-    ]
+
+        customers_with_loyalty.append(c_dict)
+
+    customers = customers_with_loyalty
 
     conn.close()
     return render_template("customers/customers_list.html", customers=customers)
@@ -199,16 +226,35 @@ def customer_transactions(customer_id):
             s.id,
             s.sales_number,
             s.transaction_date,
-        s.total_amount,
-        s.status,
-        v.vehicle_name,
-        pm.name AS payment_method
+            s.total_amount,
+            s.status,
+            v.vehicle_name,
+            pm.name AS payment_method
         FROM sales s
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN vehicles v ON v.id = s.vehicle_id
         WHERE s.customer_id = ?
         ORDER BY s.transaction_date DESC
     """, (customer_id,)).fetchall()
+
+    loyalty_stamps_by_sale = {}
+    stamp_rows = conn.execute("""
+        SELECT
+            ls.sale_id,
+            lp.name AS program_name,
+            ls.redemption_id
+        FROM loyalty_stamps ls
+        JOIN loyalty_programs lp ON lp.id = ls.program_id
+        WHERE ls.customer_id = ?
+        ORDER BY ls.stamped_at ASC
+    """, (customer_id,)).fetchall()
+
+    for row in stamp_rows:
+        stamp_list = loyalty_stamps_by_sale.setdefault(row["sale_id"], [])
+        stamp_list.append({
+            "program_name": row["program_name"],
+            "is_active": row["redemption_id"] is None
+        })
 
     result = []
     for sale in sales:
@@ -236,9 +282,12 @@ def customer_transactions(customer_id):
             "status": sale['status'],
             "vehicle_name": sale['vehicle_name'],
             "payment_method": sale['payment_method'],
+            "loyalty_stamps": loyalty_stamps_by_sale.get(sale['id'], []),
             "services": [dict(s) for s in services],
             "items": [dict(i) for i in items],
         })
+
+    loyalty_summary = get_customer_loyalty_summary(customer_id)
 
     conn.close()
     return jsonify({
@@ -246,5 +295,6 @@ def customer_transactions(customer_id):
             **dict(customer),
             "created_at_display": format_date(customer["created_at"])
         },
-        "transactions": result
+        "transactions": result,
+        "loyalty_summary": loyalty_summary,
     })

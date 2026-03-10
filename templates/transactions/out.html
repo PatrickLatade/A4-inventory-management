@@ -308,6 +308,52 @@
         font-size: 0.72rem;
         margin-top: 4px;
     }
+
+    /* =====================
+    LOYALTY BANNER
+    ===================== */
+    .loyalty-program-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid #2d4a2d;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        transition: border-color 0.2s;
+    }
+    .loyalty-program-card:last-child { margin-bottom: 0; }
+    .loyalty-program-card.eligible {
+        border-color: #4caf50;
+        background: rgba(76,175,80,0.07);
+    }
+    .loyalty-stamp-bar-bg {
+        background: rgba(255,255,255,0.07);
+        border-radius: 99px;
+        height: 5px;
+        overflow: hidden;
+        margin-top: 6px;
+    }
+    .loyalty-stamp-bar-fill {
+        height: 100%;
+        border-radius: 99px;
+        background: #4caf50;
+        transition: width 0.4s ease;
+    }
+    .loyalty-redeem-btn {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 4px 12px;
+        border-radius: 6px;
+        border: 1.5px solid #4caf50;
+        background: transparent;
+        color: #4caf50;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .loyalty-redeem-btn:hover  { background: rgba(76,175,80,0.15); }
+    .loyalty-redeem-btn.active { background: #4caf50; color: #0d1117; }
 </style>
 {% endblock %}
 
@@ -371,6 +417,29 @@
                 </div>
             </div>
         </div>
+
+        <!-- LOYALTY ELIGIBILITY BANNER -->
+        <!-- Only visible when a registered customer is selected AND they have active loyalty programs -->
+        <div id="loyalty-banner-wrapper" class="col-12" style="display:none;">
+            <div style="
+                background: linear-gradient(135deg, #0f1f0f 0%, #141f14 100%);
+                border: 1px solid #2d5a2d;
+                border-radius: 12px;
+                padding: 14px 18px;
+            ">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-award-fill" style="color:#4caf50; font-size:1rem;"></i>
+                    <span style="font-size:0.72rem; font-weight:700; text-transform:uppercase;
+                                 letter-spacing:1.5px; color:#4caf50;">
+                        Loyalty Programs
+                    </span>
+                </div>
+                <div id="loyalty-programs-list">
+                    <!-- Populated by JS when a customer is selected -->
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- SECTION: ITEMS -->
@@ -546,7 +615,6 @@
             <div class="total-area">
                 <div class="total-label">Total Due</div>
                 <div id="grand-total">₱0.00</div>
-                <!-- Button is NOT disabled by default  —  validation runs on click -->
                 <button id="submit-btn" class="btn btn-danger">
                     SUBMIT TRANSACTION
                 </button>
@@ -917,18 +985,223 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
+   LOYALTY BANNER
+========================================================= */
+// Tracks which programs the staff has toggled "Redeem" on for this sale.
+// Key: program_id (int), Value includes reward and qualifying target info.
+const loyaltyPendingRedemptions = new Map();
+
+function getServiceRowByLoyaltyProgram(programId) {
+    return [...document.querySelectorAll('.service-row')].find(
+        row => String(row.dataset.loyaltyProgramId || '') === String(programId)
+    );
+}
+
+function clearServiceRow(row) {
+    row.querySelector('.service-input').value = '';
+    row.querySelector('.service-id-input').value = '';
+    row.querySelector('.service-price-input').value = '';
+    row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+    delete row.dataset.loyaltyProgramId;
+}
+
+function appendBlankServiceRow() {
+    const tbody  = document.getElementById('services-body');
+    const newRow = tbody.querySelector('.service-row').cloneNode(true);
+    clearServiceRow(newRow);
+    newRow.querySelector('.search-suggestions').style.display = 'none';
+    tbody.appendChild(newRow);
+    return newRow;
+}
+
+function getOrCreateServiceRowForLoyalty(programId) {
+    const existingRow = getServiceRowByLoyaltyProgram(programId);
+    if (existingRow) return existingRow;
+
+    const emptyRow = [...document.querySelectorAll('.service-row')].find(row => {
+        const hasId = row.querySelector('.service-id-input').value;
+        const hasName = row.querySelector('.service-input').value.trim();
+        return !hasId && !hasName && !row.dataset.loyaltyProgramId;
+    });
+    return emptyRow || appendBlankServiceRow();
+}
+
+function applyRedeemedServiceRow(redemption) {
+    if (redemption.program_type !== 'SERVICE' || !redemption.qualifying_id) return;
+
+    const mechanicId = document.getElementById('mechanic-id').value;
+    if (!mechanicId) return;
+
+    document.getElementById('services-section').style.display = 'block';
+    const row = getOrCreateServiceRowForLoyalty(redemption.program_id);
+
+    row.dataset.loyaltyProgramId = String(redemption.program_id);
+    row.querySelector('.service-input').value = redemption.qualifying_name || redemption.name || 'Redeemed Service';
+    row.querySelector('.service-id-input').value = redemption.qualifying_id;
+    const redeemedPrice = Number(redemption.reward_value);
+    row.querySelector('.service-price-input').value = Number.isFinite(redeemedPrice)
+        ? redeemedPrice.toFixed(2)
+        : '0.00';
+    row.querySelector('.search-suggestions').style.display = 'none';
+
+    calculateServiceRow(row);
+}
+
+function removeRedeemedServiceRow(programId) {
+    const row = getServiceRowByLoyaltyProgram(programId);
+    if (!row) return;
+
+    const allRows = document.querySelectorAll('.service-row');
+    if (allRows.length > 1) {
+        row.remove();
+    } else {
+        clearServiceRow(row);
+    }
+    calculateGrandTotal();
+}
+
+function clearAllRedeemedServiceRows() {
+    [...document.querySelectorAll('.service-row')].forEach(row => {
+        if (!row.dataset.loyaltyProgramId) return;
+        const allRows = document.querySelectorAll('.service-row');
+        if (allRows.length > 1) {
+            row.remove();
+        } else {
+            clearServiceRow(row);
+        }
+    });
+    calculateGrandTotal();
+}
+
+function applyPendingRedeemedServices() {
+    [...loyaltyPendingRedemptions.values()].forEach(redemption => {
+        applyRedeemedServiceRow(redemption);
+    });
+}
+
+async function fetchLoyaltyEligibility(customerId) {
+    const wrapper = document.getElementById('loyalty-banner-wrapper');
+    const list    = document.getElementById('loyalty-programs-list');
+
+    clearAllRedeemedServiceRows();
+    loyaltyPendingRedemptions.clear();
+
+    if (!customerId) {
+        wrapper.style.display = 'none';
+        list.innerHTML = '';
+        return;
+    }
+
+    try {
+        const res  = await fetch(`/api/loyalty/eligibility/${customerId}`);
+        const data = await res.json();
+        const programs = data.programs || [];
+
+        list.innerHTML = '';
+
+        if (programs.length === 0) {
+            wrapper.style.display = 'none';
+            return;
+        }
+
+        programs.forEach(prog => {
+            const pct  = Math.min(100, Math.round((prog.stamp_count / prog.threshold) * 100));
+            const card = document.createElement('div');
+            card.className = `loyalty-program-card${prog.is_eligible ? ' eligible' : ''}`;
+
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.83rem; font-weight:600; color:#e0e6f0;
+                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${prog.name}
+                        </div>
+                        <div style="font-size:0.72rem; color:#aaa; margin-top:2px;">
+                            ${prog.stamp_count} / ${prog.threshold} stamps
+                            ${prog.is_eligible
+                                ? '<span style="color:#4caf50; margin-left:6px; font-weight:600;">● Ready to redeem</span>'
+                                : `<span style="color:#666; margin-left:6px;">(${prog.stamps_remaining} more needed)</span>`
+                            }
+                        </div>
+                        <div class="loyalty-stamp-bar-bg">
+                            <div class="loyalty-stamp-bar-fill" style="width:${pct}%;"></div>
+                        </div>
+                        ${prog.reward_description
+                            ? `<div style="font-size:0.7rem; color:#888; margin-top:5px;">
+                                   Reward: ${prog.reward_description}
+                               </div>`
+                            : ''}
+                    </div>
+                    ${prog.is_eligible
+                        ? `<button type="button" class="loyalty-redeem-btn" data-program-id="${prog.program_id}">
+                               Redeem
+                           </button>`
+                        : ''}
+                </div>
+            `;
+
+            // Wire toggle on eligible programs
+            if (prog.is_eligible) {
+                const btn = card.querySelector('.loyalty-redeem-btn');
+                btn.addEventListener('click', () => {
+                    const pid = prog.program_id;
+                    if (loyaltyPendingRedemptions.has(pid)) {
+                        loyaltyPendingRedemptions.delete(pid);
+                        removeRedeemedServiceRow(pid);
+                        btn.classList.remove('active');
+                        btn.textContent = 'Redeem';
+                    } else {
+                        loyaltyPendingRedemptions.set(pid, {
+                            program_id:         prog.program_id,
+                            name:               prog.name,
+                            program_type:       prog.program_type,
+                            qualifying_id:      prog.qualifying_id,
+                            qualifying_name:    prog.qualifying_name,
+                            reward_type:        prog.reward_type,
+                            reward_value:       prog.reward_value,
+                            reward_description: prog.reward_description,
+                        });
+                        btn.classList.add('active');
+                        btn.textContent = '✓ Redeeming';
+
+                        if (prog.program_type === 'SERVICE') {
+                            const mechanicSelect = document.getElementById('mechanic-id');
+                            if (!mechanicSelect.value) {
+                                showAlert('Redeem selected. Choose Assigned Mechanic to auto-fill the redeemed service at ₱0.00.', 'info');
+                                mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                mechanicSelect.focus();
+                            } else {
+                                applyPendingRedeemedServices();
+                            }
+                        }
+                    }
+                });
+            }
+
+            list.appendChild(card);
+        });
+
+        wrapper.style.display = 'block';
+
+    } catch (err) {
+        console.error('Loyalty eligibility fetch failed:', err);
+        wrapper.style.display = 'none';
+    }
+}
+
+/* =========================================================
 CUSTOMER SEARCH / AUTOCOMPLETE
 ========================================================= */
 (function () {
-    const searchInput  = document.getElementById('customer-search');
-    const suggestions  = document.getElementById('customer-suggestions');
-    const idField      = document.getElementById('customer-id');
-    const nameField    = document.getElementById('customer-name');
-    const badge        = document.getElementById('customer-badge');
-    const badgeText    = document.getElementById('customer-badge-text');
+    const searchInput   = document.getElementById('customer-search');
+    const suggestions   = document.getElementById('customer-suggestions');
+    const idField       = document.getElementById('customer-id');
+    const nameField     = document.getElementById('customer-name');
+    const badge         = document.getElementById('customer-badge');
+    const badgeText     = document.getElementById('customer-badge-text');
     const vehicleSelect = document.getElementById('vehicle-id');
     const vehicleWrapper = document.getElementById('vehicle-wrapper');
-    const clearBtn     = document.getElementById('customer-clear-btn');
+    const clearBtn      = document.getElementById('customer-clear-btn');
     const vehicleAddBtn = document.getElementById('vehicle-add-btn');
 
     let debounceTimer;
@@ -1011,11 +1284,15 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     async function setCustomer(id, no, name, vehicleId = '') {
         idField.value   = id || '';
         nameField.value = name;
-        // Display name shows "Name (No.)" if registered, just name if walk-in
         badgeText.textContent = id ? `${name}  —  ${no}` : `Walk-in: ${name}`;
         badge.style.display = 'block';
         searchInput.style.display = 'none';
         suggestions.style.display = 'none';
+
+        // ── Loyalty: fetch eligibility for this customer ──────────────
+        // Only registered customers (with an id) get stamps.
+        // Walk-ins pass null and the banner stays hidden.
+        fetchLoyaltyEligibility(id || null);
 
         if (id) {
             await loadCustomerVehicles(id, vehicleId);
@@ -1033,6 +1310,9 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         searchInput.style.display = 'block';
         searchInput.focus();
         resetVehiclePicker();
+
+        // ── Loyalty: hide banner and clear pending redemptions ────────
+        fetchLoyaltyEligibility(null);
     }
 
     clearBtn.addEventListener('click', clearCustomer);
@@ -1048,7 +1328,6 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                 const data = await res.json();
                 suggestions.innerHTML = '';
 
-                // Always show "Add new customer" option at the top
                 const addBtn = document.createElement('button');
                 addBtn.type = 'button';
                 addBtn.className = 'list-group-item list-group-item-action';
@@ -1091,7 +1370,6 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         document.getElementById('new-cust-vehicle').value = '';
         document.getElementById('new-cust-error').textContent = '';
 
-        // Pre-fill: if prefill looks like a number, put in No. field, else Name field
         if (/^\d+$/.test(prefill)) {
             document.getElementById('new-cust-no').value = prefill;
         } else {
@@ -1103,10 +1381,10 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     }
 
     document.getElementById('save-new-customer-btn').addEventListener('click', async () => {
-        const name  = document.getElementById('new-cust-name').value.trim();
-        const no    = document.getElementById('new-cust-no').value.trim();
+        const name    = document.getElementById('new-cust-name').value.trim();
+        const no      = document.getElementById('new-cust-no').value.trim();
         const vehicle = document.getElementById('new-cust-vehicle').value.trim();
-        const errEl = document.getElementById('new-cust-error');
+        const errEl   = document.getElementById('new-cust-error');
         errEl.textContent = '';
 
         if (!name || !no || !vehicle) {
@@ -1115,24 +1393,24 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         }
 
         try {
-                const res  = await fetch('/api/customers/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customer_name: name, customer_no: no, vehicle_name: vehicle })
-                });
-                const data = await res.json();
+            const res  = await fetch('/api/customers/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_name: name, customer_no: no, vehicle_name: vehicle })
+            });
+            const data = await res.json();
 
-                if (data.status === 'success') {
-                    bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
-                    await setCustomer(
-                        data.customer.id,
-                        data.customer.customer_no,
-                        data.customer.customer_name,
-                        data.vehicle?.id
-                    );
-                } else {
-                    errEl.textContent = data.message || 'Could not save customer.';
-                }
+            if (data.status === 'success') {
+                bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
+                await setCustomer(
+                    data.customer.id,
+                    data.customer.customer_no,
+                    data.customer.customer_name,
+                    data.vehicle?.id
+                );
+            } else {
+                errEl.textContent = data.message || 'Could not save customer.';
+            }
         } catch (err) {
             errEl.textContent = 'Network error. Try again.';
         }
@@ -1141,19 +1419,13 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     document.getElementById('vehicle-add-btn').addEventListener('click', openAddVehicleModal);
 
     document.getElementById('save-vehicle-btn').addEventListener('click', async () => {
-        const customerId = idField.value;
+        const customerId  = idField.value;
         const vehicleName = document.getElementById('add-vehicle-name').value.trim();
-        const errEl = document.getElementById('add-vehicle-error');
+        const errEl       = document.getElementById('add-vehicle-error');
         errEl.textContent = '';
 
-        if (!customerId) {
-            errEl.textContent = 'No customer selected.';
-            return;
-        }
-        if (!vehicleName) {
-            errEl.textContent = 'Vehicle name is required.';
-            return;
-        }
+        if (!customerId) { errEl.textContent = 'No customer selected.'; return; }
+        if (!vehicleName) { errEl.textContent = 'Vehicle name is required.'; return; }
 
         try {
             const res = await fetch(`/api/customers/${customerId}/vehicles/add`, {
@@ -1177,9 +1449,8 @@ CUSTOMER SEARCH / AUTOCOMPLETE
 })();
 
 /* =========================================================
-EVENT LISTENERS
+   EVENT LISTENERS
 ========================================================= */
-// Payment category UI
 function isOthersPaymentCategory() {
     const selectedCatOption = document.getElementById('payment-category').selectedOptions[0];
     return selectedCatOption && selectedCatOption.textContent.trim().toLowerCase() === 'others';
@@ -1187,17 +1458,17 @@ function isOthersPaymentCategory() {
 
 function updatePaymentCategoryUI() {
     const paymentCategory = document.getElementById('payment-category');
-    const methodDiv = document.getElementById('method-options');
-    const methodSelect = document.getElementById('payment-method');
-    const providerLabel = document.getElementById('provider-label');
-    const submitBtn = document.getElementById('submit-btn');
-    const notesField = document.getElementById('trans-notes');
-    const notesRequired = document.getElementById('notes-required-indicator');
-    const notesHelper = document.getElementById('notes-helper');
+    const methodDiv       = document.getElementById('method-options');
+    const methodSelect    = document.getElementById('payment-method');
+    const providerLabel   = document.getElementById('provider-label');
+    const submitBtn       = document.getElementById('submit-btn');
+    const notesField      = document.getElementById('trans-notes');
+    const notesRequired   = document.getElementById('notes-required-indicator');
+    const notesHelper     = document.getElementById('notes-helper');
 
-    const selectedCat = paymentCategory.value;
+    const selectedCat  = paymentCategory.value;
     const needsProvider = (selectedCat === 'Online' || selectedCat === 'Bank');
-    const needsNotes = isOthersPaymentCategory();
+    const needsNotes   = isOthersPaymentCategory();
 
     if (needsProvider) {
         Array.from(methodSelect.options).forEach((opt, idx) => {
@@ -1230,7 +1501,7 @@ function updatePaymentCategoryUI() {
     }
 
     notesField.required = needsNotes;
-    notesHelper.style.display = needsNotes ? 'block' : 'none';
+    notesHelper.style.display  = needsNotes ? 'block' : 'none';
     notesRequired.style.display = needsNotes ? 'inline' : 'none';
 
     if (!needsNotes) {
@@ -1241,7 +1512,6 @@ function updatePaymentCategoryUI() {
 document.getElementById('payment-category').addEventListener('change', updatePaymentCategoryUI);
 updatePaymentCategoryUI();
 
-// Tracks all item_ids currently selected in the table
 const selectedItemIds = new Set();
 
 function rebuildSelectedItemIds() {
@@ -1280,6 +1550,7 @@ document.getElementById('mechanic-id').addEventListener('change', function () {
     const servicesSection = document.getElementById('services-section');
     if (this.value !== "") {
         servicesSection.style.display = 'block';
+        applyPendingRedeemedServices();
     } else {
         servicesSection.style.display = 'none';
         clearServices();
@@ -1291,10 +1562,7 @@ function clearServices() {
     const rows = tbody.querySelectorAll('.service-row');
     rows.forEach((row, index) => {
         if (index === 0) {
-            row.querySelector('.service-input').value = '';
-            row.querySelector('.service-id-input').value = '';
-            row.querySelector('.service-price-input').value = '';
-            row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+            clearServiceRow(row);
         } else {
             row.remove();
         }
@@ -1302,7 +1570,6 @@ function clearServices() {
     calculateGrandTotal();
 }
 
-// Table inputs
 document.addEventListener('input', (e) => {
     if (e.target.classList.contains('item-input')) {
         debounce(() => handleTableSearch(e.target), 300)();
@@ -1318,18 +1585,16 @@ document.addEventListener('input', (e) => {
     }
 });
 
-// Hide suggestions on outside click
 document.addEventListener('click', (e) => {
     if (!e.target.classList.contains('item-input') && !e.target.classList.contains('service-input')) {
         document.querySelectorAll('.search-suggestions').forEach(box => box.style.display = 'none');
     }
 });
 
-// Row removal
 document.addEventListener('click', (e) => {
     if (!e.target.classList.contains('remove-row-btn')) return;
 
-    const row = e.target.closest('tr');
+    const row  = e.target.closest('tr');
     const rows = document.querySelectorAll('.item-row');
 
     if (rows.length > 1) {
@@ -1343,24 +1608,19 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Remove service row
 document.addEventListener('click', (e) => {
     if (!e.target.classList.contains('remove-service-btn')) return;
-    const row = e.target.closest('tr');
+    const row  = e.target.closest('tr');
     const rows = document.querySelectorAll('.service-row');
     if (rows.length > 1) {
         row.remove();
         calculateGrandTotal();
     } else {
-        row.querySelector('.service-input').value = '';
-        row.querySelector('.service-id-input').value = '';
-        row.querySelector('.service-price-input').value = '';
-        row.querySelector('.service-subtotal-display').innerText = '₱0.00';
+        clearServiceRow(row);
         calculateGrandTotal();
     }
 });
 
-// Force qty >= 1
 document.addEventListener('change', (e) => {
     if (e.target.classList.contains('qty-input')) {
         const val = parseFloat(e.target.value);
@@ -1371,14 +1631,12 @@ document.addEventListener('change', (e) => {
     }
 });
 
-// Block decimals/minus/e in qty
 document.addEventListener('keydown', (e) => {
     if (e.target.classList.contains('qty-input')) {
         if (['.', '-', 'e', 'E'].includes(e.key)) e.preventDefault();
     }
 });
 
-// Clean pasted values in qty
 document.addEventListener('paste', (e) => {
     if (e.target.classList.contains('qty-input')) {
         const pasteData = (e.clipboardData || window.clipboardData).getData('text');
@@ -1390,10 +1648,9 @@ document.addEventListener('paste', (e) => {
     }
 });
 
-// Add item row
 document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
-    const tbody = document.getElementById('transaction-body');
+    const tbody  = document.getElementById('transaction-body');
     const newRow = tbody.querySelector('.item-row').cloneNode(true);
 
     newRow.querySelector('.item-id-input').value = '';
@@ -1423,19 +1680,9 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     rebuildSelectedItemIds();
 });
 
-// Add service row
 document.getElementById('add-service-btn').addEventListener('click', (e) => {
     e.preventDefault();
-    const tbody = document.getElementById('services-body');
-    const newRow = tbody.querySelector('.service-row').cloneNode(true);
-
-    newRow.querySelector('.service-input').value = '';
-    newRow.querySelector('.service-id-input').value = '';
-    newRow.querySelector('.service-price-input').value = '';
-    newRow.querySelector('.search-suggestions').style.display = 'none';
-    newRow.querySelector('.service-subtotal-display').innerText = '₱0.00';
-
-    tbody.appendChild(newRow);
+    appendBlankServiceRow();
 });
 
 /* =========================================================
@@ -1444,39 +1691,35 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
 document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
 
-    // —— Step 1: Clear previous errors ————————————————————————————
     clearFieldErrors();
 
-    // —— Step 2: Header field validation —————————————————————————
-    const salesNum = document.getElementById('sales-number').value.trim();
-    const customerName = document.getElementById('customer-name').value.trim();
-    const customerId = document.getElementById('customer-id').value.trim();
-    const customer = customerName; // used for validation check below
-    const paymentCat = document.getElementById('payment-category').value;
+    const salesNum      = document.getElementById('sales-number').value.trim();
+    const customerName  = document.getElementById('customer-name').value.trim();
+    const paymentCat    = document.getElementById('payment-category').value;
+    const mechanicId    = document.getElementById('mechanic-id').value;
     const selectedProvider = document.getElementById('payment-method').value;
-    const refNo = document.getElementById('ref-no').value.trim();
-    const notes = document.getElementById('trans-notes').value.trim();
+    const refNo         = document.getElementById('ref-no').value.trim();
+    const notes         = document.getElementById('trans-notes').value.trim();
     const needsProvider = (paymentCat === 'Online' || paymentCat === 'Bank');
-    const needsNotes = isOthersPaymentCategory();
-    const vehicleId = document.getElementById('vehicle-id').value;
+    const needsNotes    = isOthersPaymentCategory();
+    const vehicleId     = document.getElementById('vehicle-id').value;
     const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
-    const vehicleIsActive = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
-    const vehicleRequired = document.getElementById('vehicle-id').dataset.required === '1';
+    const vehicleIsActive  = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
+    const vehicleRequired  = document.getElementById('vehicle-id').dataset.required === '1';
 
     let firstErrorEl = null;
-
     function markError(el, message) {
         flagError(el, message);
         if (!firstErrorEl) firstErrorEl = el;
     }
 
-    if (!salesNum)                          markError(document.getElementById('sales-number'), 'OR No. is required.');
-    if (!customer)                          markError(document.getElementById('customer-search'), 'Customer is required.');
-    if (vehicleRequired && !vehicleId)       markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
+    if (!salesNum)                                markError(document.getElementById('sales-number'), 'OR No. is required.');
+    if (!customerName)                            markError(document.getElementById('customer-search'), 'Customer is required.');
+    if (vehicleRequired && !vehicleId)            markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
     if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
-    if (needsProvider && !selectedProvider) markError(document.getElementById('payment-method'), 'Please select a provider.');
-    if (needsProvider && !refNo)            markError(document.getElementById('ref-no'), 'Reference number is required.');
-    if (needsNotes && !notes)               markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
+    if (needsProvider && !selectedProvider)       markError(document.getElementById('payment-method'), 'Please select a provider.');
+    if (needsProvider && !refNo)                  markError(document.getElementById('ref-no'), 'Reference number is required.');
+    if (needsNotes && !notes)                     markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
 
     if (firstErrorEl) {
         firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1484,40 +1727,57 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    // —— Step 3: Must have at least one valid item OR one valid service ——
     const validItems = [];
     let hasUnconfirmedItem = false;
 
     document.querySelectorAll('.item-row').forEach(row => {
-        const id = row.querySelector('.item-id-input').value;
-        const qty = parseFloat(row.querySelector('.qty-input').value);
+        const id   = row.querySelector('.item-id-input').value;
+        const qty  = parseFloat(row.querySelector('.qty-input').value);
         const name = row.querySelector('.item-input').value.trim();
 
-        // User typed something but never selected from dropdown
         if (name && !id) hasUnconfirmedItem = true;
 
         if (id && qty > 0) {
             const discountPercent = parseFloat(row.querySelector('.discount-input').value) || 0;
-            const originalPrice = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
-            const finalPrice = parseFloat(row.querySelector('.price-input').value);
+            const originalPrice   = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
+            const finalPrice      = parseFloat(row.querySelector('.price-input').value);
             validItems.push({ item_id: id, quantity: qty, original_price: originalPrice, discount_percent: discountPercent, final_price: finalPrice });
         }
     });
 
     const validServices = [];
-    document.querySelectorAll('.service-row').forEach(row => {
-        const sId = row.querySelector('.service-id-input').value;
-        const sPrice = parseFloat(row.querySelector('.service-price-input').value) || 0;
-        if (sId) validServices.push({ service_id: sId, price: sPrice });
-    });
+    let hasUnconfirmedService = false;
+    let missingServicePriceInput = null;
+    let invalidServicePriceInput = null;
 
-    // Block submission if any row has a stock or qty error
+    for (const row of document.querySelectorAll('.service-row')) {
+        const sId = row.querySelector('.service-id-input').value;
+        const sName = row.querySelector('.service-input').value.trim();
+        const priceEl = row.querySelector('.service-price-input');
+        const rawPrice = priceEl.value.trim();
+
+        if (sName && !sId) hasUnconfirmedService = true;
+
+        if (sId) {
+            if (!rawPrice) {
+                missingServicePriceInput = priceEl;
+                break;
+            }
+
+            const parsedPrice = parseFloat(rawPrice);
+            if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+                invalidServicePriceInput = priceEl;
+                break;
+            }
+
+            validServices.push({ service_id: sId, price: parsedPrice });
+        }
+    }
+
     let hasStockError = false;
     document.querySelectorAll('.item-row').forEach(row => {
         const warning = row.querySelector('.stock-warning-text');
-        if (warning && warning.style.display !== 'none') {
-            hasStockError = true;
-        }
+        if (warning && warning.style.display !== 'none') hasStockError = true;
     });
 
     if (hasStockError) {
@@ -1535,13 +1795,36 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    // Must have at least one item OR at least one service
+    if (hasUnconfirmedService) {
+        showAlert('One or more services were typed but not selected from the search. Please select a service from the dropdown.', 'warning');
+        return;
+    }
+
+    if (missingServicePriceInput) {
+        showAlert('Please enter a price for every selected service before submitting.', 'warning');
+        missingServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        missingServicePriceInput.focus();
+        return;
+    }
+
+    if (invalidServicePriceInput) {
+        showAlert('Service price must be a valid non-negative amount.', 'warning');
+        invalidServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        invalidServicePriceInput.focus();
+        return;
+    }
+
+    if (mechanicId && validServices.length === 0) {
+        showAlert('Assigned mechanic requires at least one service entry.', 'warning');
+        document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+
     if (validItems.length === 0 && validServices.length === 0) {
         showAlert('Please add at least one item or service before submitting.', 'warning');
         return;
     }
 
-    // —— Step 4: All clear  —  submit ———————————————————————————————
     const btn = e.target;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
@@ -1568,35 +1851,66 @@ async function saveTransaction(items, services) {
     }
 
     const payload = {
-        sales_number: document.getElementById('sales-number').value,
-        customer_name: document.getElementById('customer-name').value,
-        customer_id: document.getElementById('customer-id').value || null,
-        mechanic_id: document.getElementById('mechanic-id').value || null,
-        vehicle_id: document.getElementById('vehicle-id').value || null,
+        sales_number:      document.getElementById('sales-number').value,
+        customer_name:     document.getElementById('customer-name').value,
+        customer_id:       document.getElementById('customer-id').value || null,
+        mechanic_id:       document.getElementById('mechanic-id').value || null,
+        vehicle_id:        document.getElementById('vehicle-id').value || null,
         payment_method_id: paymentId,
-        reference_no: refNo,
-        total_amount: parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
-        notes: document.getElementById('trans-notes').value,
-        transaction_date: finalDate,
+        reference_no:      refNo,
+        total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
+        notes:             document.getElementById('trans-notes').value,
+        transaction_date:  finalDate,
         items,
         services
     };
 
     try {
-        const res = await fetch('/transaction/out/save', {
-            method: 'POST',
+        const res    = await fetch('/transaction/out/save', {
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body:    JSON.stringify(payload)
         });
 
-        if (res.ok) {
-            window.location.href = '/transaction/out';
-        } else {
-            const result = await res.json();
+        const result = await res.json();
+
+        if (!res.ok) {
             showAlert(result.message);
             document.getElementById('submit-btn').disabled = false;
             document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
+            return;
         }
+
+        // ── Loyalty: process pending redemptions after sale is saved ──
+        // sale_id comes from the updated route (loyalty_patches.py).
+        // If no redemptions were toggled, this block is a no-op.
+        const saleId     = result.sale_id;
+        const customerId = payload.customer_id;
+
+        if (saleId && customerId && loyaltyPendingRedemptions.size > 0) {
+            const redeemPromises = [...loyaltyPendingRedemptions.keys()].map(programId =>
+                fetch('/api/loyalty/redeem', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({
+                        customer_id: parseInt(customerId),
+                        program_id:  programId,
+                        sale_id:     saleId,
+                    })
+                }).then(r => r.json())
+            );
+
+            // Fire all, don't block the redirect.
+            // The sale is already committed. A failed redemption here (e.g. race condition)
+            // does NOT roll back the sale — staff would need to retry manually.
+            // TODO: surface redemption errors via a flash message post-redirect in the future.
+            Promise.all(redeemPromises).catch(err => {
+                console.error('Loyalty redemption error:', err);
+            });
+        }
+
+        window.location.href = '/transaction/out';
+
     } catch (err) {
         console.error('Submission failed:', err);
         document.getElementById('submit-btn').disabled = false;
@@ -1605,9 +1919,3 @@ async function saveTransaction(items, services) {
 }
 </script>
 {% endblock %}
-
-
-
-
-
-

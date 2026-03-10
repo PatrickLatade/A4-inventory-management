@@ -201,6 +201,32 @@
         text-overflow: clip !important;
         text-align: left !important;
     }
+
+    /* Audit table column behavior */
+    #audit-trail-table {
+        table-layout: auto !important;
+        width: 100%;
+    }
+
+    #audit-trail-table th.audit-reference-head,
+    #audit-trail-table td.audit-reference-cell {
+        text-align: center !important;
+    }
+
+    #audit-trail-table td.audit-reason-cell {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        min-width: 170px;
+    }
+
+    #audit-trail-table td.audit-reference-cell .btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        white-space: nowrap;
+    }
 </style>
 {% endblock %}
 
@@ -247,6 +273,12 @@
     <li class="nav-item">
         <button class="nav-link {% if active_tab == 'audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
             <i class="bi bi-clock-history"></i> Audit Trail
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'loyalty-tab' %}active{% endif %}"
+                data-bs-toggle="tab" data-bs-target="#loyalty-tab" type="button">
+            <i class="bi bi-award-fill"></i> Loyalty
         </button>
     </li>
 </ul>
@@ -784,7 +816,7 @@
 
         <!-- Table -->
         <div class="table-responsive">
-            <table class="table table-dark table-hover align-middle" style="table-layout: fixed; width: 100%;">
+            <table class="table table-dark table-hover align-middle" id="audit-trail-table">
                 <thead>
                     <tr class="border-bottom border-secondary">
                         <th style="width: 13%;">Date & Time</th>
@@ -792,7 +824,7 @@
                         <th style="width: 10%; text-align:center;">Movement</th>  <!-- was 8% -->
                         <th style="width: 11%;">Reason</th>                       <!-- was 12% -->
                         <th style="width: 5%; text-align:center;">Qty</th>
-                        <th style="width: 13%;">Reference</th>
+                        <th class="audit-reference-head" style="width: 13%;">Reference</th>
                         <th style="width: 19%;">Notes</th>                        <!-- was 18% -->
                         <th style="width: 9%;">Staff</th>
                     </tr>
@@ -814,6 +846,137 @@
                     Next <i class="bi bi-chevron-right"></i>
                 </button>
             </div>
+        </div>
+
+    </div>
+    <!-- LOYALTY PROGRAMS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'loyalty-tab' %}show active{% endif %}" id="loyalty-tab">
+
+        <!-- CREATE FORM -->
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-3 text-white-50">Add Loyalty Program</h5>
+
+            <div class="row g-3" id="loyalty-form">
+
+                <!-- Program Name -->
+                <div class="col-md-4">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Program Name <span class="text-danger">*</span></label>
+                    <input type="text" id="lf-name" class="form-control bg-dark text-white border-secondary"
+                        placeholder="e.g. Oil Change Reward">
+                </div>
+
+                <!-- Program Type -->
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Type <span class="text-danger">*</span></label>
+                    <select id="lf-type" class="form-select bg-dark text-white border-secondary" onchange="loyaltyTypeChanged()">
+                        <option value="SERVICE">Service-based</option>
+                        <option value="ITEM">Item-based</option>
+                    </select>
+                </div>
+
+                <!-- Qualifying Service / Item (autocomplete) -->
+                <div class="col-md-4">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-qualifying-label">
+                        Qualifying Service <span class="text-danger">*</span>
+                    </label>
+                    <div class="position-relative">
+                        <input type="text" id="lf-qualifying-search" class="form-control bg-dark text-white border-secondary"
+                            placeholder="Search service..." autocomplete="off"
+                            oninput="loyaltyQualifyingSearch()">
+                        <div id="lf-qualifying-suggestions"
+                            class="list-group position-absolute w-100"
+                            style="display:none; z-index:9999; background:#1a1a1a; border:1px solid #444; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto;">
+                        </div>
+                        <input type="hidden" id="lf-qualifying-id">
+                    </div>
+                </div>
+
+                <!-- Threshold -->
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Stamps needed <span class="text-danger">*</span></label>
+                    <input type="number" id="lf-threshold" class="form-control bg-dark text-white border-secondary"
+                        min="1" value="10" placeholder="e.g. 10">
+                </div>
+
+                <!-- Reward Type -->
+                <div class="col-md-3">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Type <span class="text-danger">*</span></label>
+                    <select id="lf-reward-type" class="form-select bg-dark text-white border-secondary" onchange="loyaltyRewardTypeChanged()">
+                        <option value="FREE_SERVICE">Free Service</option>
+                        <option value="FREE_ITEM">Free Item</option>
+                        <option value="DISCOUNT_PERCENT">Discount %</option>
+                        <option value="DISCOUNT_AMOUNT">Discount ₱</option>
+                    </select>
+                </div>
+
+                <!-- Reward Value -->
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-reward-value-label">
+                        Reward Value
+                        <span class="text-warning" style="font-size:0.65rem;" id="lf-reward-value-hint">(leave 0 for free)</span>
+                    </label>
+                    <input type="number" id="lf-reward-value" class="form-control bg-dark text-white border-secondary"
+                        min="0" value="0" step="0.01">
+                </div>
+
+                <!-- Reward Description -->
+                <div class="col-md-4">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Description</label>
+                    <input type="text" id="lf-reward-desc" class="form-control bg-dark text-white border-secondary"
+                        placeholder="e.g. 1 free oil change on 10th visit">
+                </div>
+
+                <!-- Period Start -->
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Period Start <span class="text-danger">*</span></label>
+                    <input type="date" id="lf-period-start" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <!-- Period End -->
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Period End <span class="text-danger">*</span></label>
+                    <input type="date" id="lf-period-end" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <!-- Submit -->
+                <div class="col-12 d-flex align-items-end gap-2">
+                    <button type="button" class="btn btn-danger" onclick="loyaltySubmitProgram()">
+                        <i class="bi bi-plus-circle me-1"></i> Create Program
+                    </button>
+                    <span id="lf-error" style="color:#f87171; font-size:0.82rem;"></span>
+                    <span id="lf-status" class="small text-muted ms-2"></span>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- PROGRAMS TABLE -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="text-white-50 mb-0">
+                <i class="bi bi-list-ul me-2"></i>Existing Programs
+            </h6>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadLoyaltyPrograms()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Program Name</th>
+                        <th>Type</th>
+                        <th>Qualifies On</th>
+                        <th class="text-center">Stamps</th>
+                        <th>Reward</th>
+                        <th>Period</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="loyalty-programs-admin-body">
+                    <tr><td colspan="7" class="text-center text-muted py-3">Loading...</td></tr>
+                </tbody>
+            </table>
         </div>
 
     </div>
@@ -1353,7 +1516,7 @@ function renderAuditTrail(data) {
         const type    = (log.transaction_type || '').toUpperCase();
         const badge   = typeBadge[type] || `<span class="badge rounded-pill bg-secondary audit-badge">${log.transaction_type}</span>`;
         const reason  = log.change_reason
-            ? log.change_reason.replace(/_/g, ' ')
+            ? (log.change_reason === 'WALKIN_PURCHASE' ? 'WALK IN PURCHASE' : log.change_reason.replace(/_/g, ' '))
             : '<span class="text-muted fw-bold">—</span>';
         const summary = log.items_summary
             ? (log.items_summary.length > 40 ? log.items_summary.slice(0, 40) + '...' : log.items_summary)
@@ -1368,19 +1531,19 @@ function renderAuditTrail(data) {
         if (log.reference_id) {
             if (log.reference_type === 'PURCHASE_ORDER') {
                 refBtn = `<button class="btn btn-sm btn-outline-warning border-0" 
-                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;"
+                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                     onclick="viewOrder('${log.reference_id}')">
                     <i class="bi bi-box-seam me-1"></i>${log.po_number || log.reference_id}
                 </button>`;
             } else if (log.reference_type === 'ITEM_CATALOG') {
                 refBtn = `<button class="btn btn-sm btn-outline-success border-0"
-                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;"
+                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                     onclick="viewItemCreated('${log.reference_id}')">
                     <i class="bi bi-box-seam me-1"></i> New Item
                 </button>`;
             } else {
                 refBtn = `<button class="btn btn-sm btn-outline-danger border-0"
-                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block;"
+                    style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                     onclick="viewSaleDetails('${log.reference_id}', '${log.sales_number || log.reference_id}')">
                     <i class="bi bi-receipt-cutoff me-1"></i>${log.sales_number || log.reference_id}
                 </button>`;
@@ -1392,9 +1555,9 @@ function renderAuditTrail(data) {
                 <td class="text-white-50 small">${log.transaction_date}</td>
                 <td><div class="fw-bold text-white">${summary}</div></td>
                 <td class="text-center">${badge}</td>
-                <td><span class="text-white-50 small fst-italic fw-bold">${reason}</span></td>
+                <td class="audit-reason-cell"><span class="text-white-50 small fst-italic fw-bold">${reason}</span></td>
                 <td class="text-center fw-bold">${log.total_qty}</td>
-                <td>${refBtn}</td>
+                <td class="audit-reference-cell">${refBtn}</td>
                 <td class="text-white-50 small">${notes}</td>
                 <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
             </tr>`;
@@ -1726,6 +1889,294 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
         .catch(() => {
             body.innerHTML = '<div class="text-danger text-center py-2">Failed to load payment history.</div>';
         });
+}
+
+/* =========================================================
+LOYALTY PROGRAMS ADMIN TAB
+========================================================= */
+
+// Load programs when tab is clicked
+document.querySelector('[data-bs-target="#loyalty-tab"]').addEventListener('shown.bs.tab', function () {
+    loadLoyaltyPrograms();
+});
+
+function showLoyaltyFlash(message, type = 'success') {
+    const icons = {
+        warning: 'bi-exclamation-triangle-fill',
+        danger:  'bi-x-circle-fill',
+        success: 'bi-check-circle-fill',
+        info:    'bi-info-circle-fill'
+    };
+
+    const container = document.getElementById('flash-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} shadow-lg flash-alert`;
+    alert.innerHTML = `
+        <div class="flash-content">
+            <div class="flash-icon flash-icon-${type}">
+                <i class="bi ${icons[type] || icons.success}"></i>
+            </div>
+            <div class="flash-text">${message}</div>
+        </div>
+        <div class="flash-progress"></div>`;
+
+    container.appendChild(alert);
+    requestAnimationFrame(() => alert.classList.add('show'));
+    setTimeout(() => {
+        alert.classList.remove('show');
+        alert.classList.add('hide');
+        setTimeout(() => alert.remove(), 350);
+    }, 4000);
+}
+
+async function loadLoyaltyPrograms() {
+    const tbody = document.getElementById('loyalty-programs-admin-body');
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    try {
+        const res  = await fetch('/api/loyalty/programs');
+        const data = await res.json();
+        const programs = data.programs || [];
+
+        if (!programs.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No programs yet. Create one above.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = programs.map(p => {
+            const typeBadge = p.program_type === 'SERVICE'
+                ? `<span class="badge bg-dark border border-info text-info">Service</span>`
+                : `<span class="badge bg-dark border border-warning text-warning">Item</span>`;
+
+            const rewardLabel = {
+                FREE_SERVICE:     'Free Service',
+                FREE_ITEM:        'Free Item',
+                DISCOUNT_PERCENT: `${p.reward_value}% off`,
+                DISCOUNT_AMOUNT:  `₱${parseFloat(p.reward_value).toFixed(2)} off`,
+            }[p.reward_type] || p.reward_type;
+
+            const rewardDisplay = p.reward_description
+                ? `<span title="${rewardLabel}">${p.reward_description}</span>`
+                : `<span class="text-muted">${rewardLabel}</span>`;
+
+            const statusBtn = p.is_active
+                ? `<button class="toggle-btn text-success" onclick="toggleLoyaltyProgram(${p.id}, false)" title="Click to deactivate">
+                    <i class="bi bi-toggle-on fs-3"></i>
+                    <small class="d-block fw-bold" style="font-size:0.65rem;">ACTIVE</small>
+                </button>`
+                : `<button class="toggle-btn text-muted" onclick="toggleLoyaltyProgram(${p.id}, true)" title="Click to activate">
+                    <i class="bi bi-toggle-off fs-3"></i>
+                    <small class="d-block fw-bold" style="font-size:0.65rem;">INACTIVE</small>
+                </button>`;
+
+            // qualifying_name is joined in by the API (see note below)
+            const qualifyingDisplay = p.qualifying_name
+                ? p.qualifying_name
+                : `<span class="text-muted">ID: ${p.qualifying_id}</span>`;
+
+            return `
+                <tr>
+                    <td class="fw-bold">${p.name}</td>
+                    <td>${typeBadge}</td>
+                    <td>${qualifyingDisplay}</td>
+                    <td class="text-center">
+                        <span class="badge bg-dark border border-secondary text-warning">${p.threshold}</span>
+                    </td>
+                    <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        ${rewardDisplay}
+                    </td>
+                    <td class="text-white-50 small">
+                        ${p.period_start}<br>
+                        <span class="text-muted">to</span> ${p.period_end}
+                    </td>
+                    <td class="text-center">${statusBtn}</td>
+                </tr>`;
+        }).join('');
+
+    } catch (err) {
+        console.error('Loyalty programs load failed:', err);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-3">Failed to load programs.</td></tr>';
+    }
+}
+
+async function toggleLoyaltyProgram(programId, activate) {
+    try {
+        const res = await fetch(`/api/loyalty/programs/${programId}/toggle`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ is_active: activate })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            showLoyaltyFlash(data.message || 'Failed to update program status.', 'danger');
+            return;
+        }
+
+        showLoyaltyFlash(
+            data.message || `Program successfully ${activate ? 'activated' : 'deactivated'}.`,
+            activate ? 'success' : 'danger'
+        );
+        loadLoyaltyPrograms();
+    } catch (err) {
+        console.error('Toggle failed:', err);
+        showLoyaltyFlash('Network error while updating program status.', 'danger');
+    }
+}
+
+// ── Qualifying search (SERVICE or ITEM) ──────────────────────────
+let lfSearchTimer;
+
+function loyaltyTypeChanged() {
+    const type = document.getElementById('lf-type').value;
+    const label = document.getElementById('lf-qualifying-label');
+    const input = document.getElementById('lf-qualifying-search');
+
+    label.innerHTML = type === 'SERVICE'
+        ? 'Qualifying Service <span class="text-danger">*</span>'
+        : 'Qualifying Item <span class="text-danger">*</span>';
+    input.placeholder = type === 'SERVICE' ? 'Search service...' : 'Search item...';
+
+    // Clear selection on type change
+    input.value = '';
+    document.getElementById('lf-qualifying-id').value = '';
+    document.getElementById('lf-qualifying-suggestions').style.display = 'none';
+}
+
+function loyaltyQualifyingSearch() {
+    clearTimeout(lfSearchTimer);
+    lfSearchTimer = setTimeout(async () => {
+        const query       = document.getElementById('lf-qualifying-search').value.trim();
+        const type        = document.getElementById('lf-type').value;
+        const suggestions = document.getElementById('lf-qualifying-suggestions');
+
+        // Clear hidden id on new typing
+        document.getElementById('lf-qualifying-id').value = '';
+
+        if (query.length < 2) { suggestions.style.display = 'none'; return; }
+
+        try {
+            const url = type === 'SERVICE'
+                ? `/api/search/services?q=${encodeURIComponent(query)}`
+                : `/api/search?q=${encodeURIComponent(query)}`;
+
+            const res  = await fetch(url);
+            const data = await res.json();
+            const list = type === 'SERVICE' ? (data.services || []) : (data.items || []);
+
+            suggestions.innerHTML = '';
+            if (!list.length) { suggestions.style.display = 'none'; return; }
+
+            list.slice(0, 8).forEach(item => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'list-group-item list-group-item-action';
+                btn.style.cssText = 'background:#1a1a1a; color:#e0e6f0; font-size:0.83rem; padding:8px 12px;';
+                btn.textContent = item.name;
+                btn.addEventListener('mouseover', () => btn.style.background = '#2a2a2a');
+                btn.addEventListener('mouseout',  () => btn.style.background = '#1a1a1a');
+                btn.onclick = () => {
+                    document.getElementById('lf-qualifying-search').value = item.name;
+                    document.getElementById('lf-qualifying-id').value     = item.id;
+                    suggestions.style.display = 'none';
+                };
+                suggestions.appendChild(btn);
+            });
+
+            suggestions.style.display = 'block';
+        } catch (err) {
+            console.error('Qualifying search error:', err);
+        }
+    }, 250);
+}
+
+// Hide suggestions on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#lf-qualifying-search') && !e.target.closest('#lf-qualifying-suggestions')) {
+        document.getElementById('lf-qualifying-suggestions').style.display = 'none';
+    }
+});
+
+function loyaltyRewardTypeChanged() {
+    const type  = document.getElementById('lf-reward-type').value;
+    const hint  = document.getElementById('lf-reward-value-hint');
+    const label = document.getElementById('lf-reward-value-label');
+
+    const hints = {
+        FREE_SERVICE:     '(leave 0 — reward is the service itself)',
+        FREE_ITEM:        '(leave 0 — reward is the item itself)',
+        DISCOUNT_PERCENT: '(e.g. 10 = 10% off)',
+        DISCOUNT_AMOUNT:  '(peso amount off, e.g. 50)',
+    };
+    hint.textContent = hints[type] || '';
+}
+
+// ── Form submission ───────────────────────────────────────────────
+async function loyaltySubmitProgram() {
+    const errEl = document.getElementById('lf-error');
+    const statusEl = document.getElementById('lf-status');
+    errEl.textContent = '';
+    statusEl.textContent = '';
+
+    const name         = document.getElementById('lf-name').value.trim();
+    const programType  = document.getElementById('lf-type').value;
+    const qualifyingId = document.getElementById('lf-qualifying-id').value;
+    const threshold    = parseInt(document.getElementById('lf-threshold').value) || 0;
+    const rewardType   = document.getElementById('lf-reward-type').value;
+    const rewardValue  = parseFloat(document.getElementById('lf-reward-value').value) || 0;
+    const rewardDesc   = document.getElementById('lf-reward-desc').value.trim();
+    const periodStart  = document.getElementById('lf-period-start').value;
+    const periodEnd    = document.getElementById('lf-period-end').value;
+
+    // Client-side validation — mirrors server validation so errors appear instantly
+    if (!name)         { errEl.textContent = 'Program name is required.'; return; }
+    if (!qualifyingId) { errEl.textContent = `Select a qualifying ${programType === 'SERVICE' ? 'service' : 'item'} from the search.`; return; }
+    if (threshold < 1) { errEl.textContent = 'Stamps needed must be at least 1.'; return; }
+    if (!periodStart)  { errEl.textContent = 'Period start is required.'; return; }
+    if (!periodEnd)    { errEl.textContent = 'Period end is required.'; return; }
+    if (periodStart >= periodEnd) { errEl.textContent = 'Period end must be after period start.'; return; }
+
+    try {
+        const res  = await fetch('/api/loyalty/programs', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                name,
+                program_type:       programType,
+                qualifying_id:      parseInt(qualifyingId),
+                threshold,
+                reward_type:        rewardType,
+                reward_value:       rewardValue,
+                reward_description: rewardDesc,
+                period_start:       periodStart,
+                period_end:         periodEnd,
+                branch_id:          null,  // global; set to branch ID when multi-branch is live
+            })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            errEl.textContent = data.message || 'Failed to create program.';
+            return;
+        }
+
+        // Reset form
+        ['lf-name', 'lf-qualifying-search', 'lf-reward-desc', 'lf-period-start', 'lf-period-end'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('lf-qualifying-id').value = '';
+        document.getElementById('lf-threshold').value     = '10';
+        document.getElementById('lf-reward-value').value  = '0';
+
+        // Reload table
+        loadLoyaltyPrograms();
+        showLoyaltyFlash(data.message || `Program "${name}" created successfully.`, 'success');
+
+    } catch (err) {
+        errEl.textContent = 'Network error. Try again.';
+        showLoyaltyFlash(errEl.textContent, 'danger');
+    }
 }
 </script>
 {% endblock %}

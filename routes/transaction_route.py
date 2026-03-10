@@ -112,13 +112,13 @@ def process_transaction_in():
 def save_transaction_out():
     data = request.get_json()
     try:
-        sales_number = record_sale(
+        sales_number, sale_id = record_sale(          # <── unpack tuple
             data=data,
             user_id=session.get('user_id'),
             username=session.get('username')
         )
         flash(f"Sale #{sales_number} recorded successfully!", "success")
-        return jsonify({"status": "success"}), 200
+        return jsonify({"status": "success", "sale_id": sale_id}), 200   # <── add sale_id
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:

@@ -189,23 +189,85 @@ def init_db():
     )
     """)
 
-    # 14. LOYALTY PROGRAMS TABLE (Phase 2 â€” skeleton only, do not remove)
+    # 13. LOYALTY PROGRAMS TABLE
+    # program_type: 'SERVICE' = stamps earned per qualifying service visit
+    #               'ITEM'    = stamps earned per qualifying item purchase
+    #
+    # qualifying_id: points to services.id (SERVICE type) or items.id (ITEM type)
+    #   - enforced at app level; no composite FK at DB level (SQLite limitation)
+    #
+    # reward_type options:
+    #   FREE_SERVICE     → reward_value = services.id of the free service
+    #   FREE_ITEM        → reward_value = items.id of the free item
+    #   DISCOUNT_PERCENT → reward_value = percent off (e.g. 10 = 10%)
+    #   DISCOUNT_AMOUNT  → reward_value = flat peso off
+    #
+    # branch_id: NULL means the program applies to ALL branches (global)
+    #   When Branch 2 opens, set branch_id = that branch's ID for branch-specific promos.
+    #
+    # stamps_expire_with_period: enforced at query level (stamp must be within period dates).
     conn.execute("""
     CREATE TABLE IF NOT EXISTS loyalty_programs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        service_id INTEGER NOT NULL,
-        threshold INTEGER NOT NULL DEFAULT 10,
-        reward_description TEXT,
-        period_start DATE NOT NULL,
-        period_end DATE NOT NULL,
-        is_active INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
-        FOREIGN KEY (service_id) REFERENCES services(id)
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT    NOT NULL,
+        program_type        TEXT    NOT NULL CHECK(program_type IN ('SERVICE', 'ITEM')),
+        qualifying_id       INTEGER NOT NULL,
+        threshold           INTEGER NOT NULL DEFAULT 10,
+        reward_type         TEXT    NOT NULL CHECK(reward_type IN (
+                                'FREE_SERVICE', 'FREE_ITEM',
+                                'DISCOUNT_PERCENT', 'DISCOUNT_AMOUNT'
+                            )),
+        reward_value        REAL    NOT NULL DEFAULT 0,
+        reward_description  TEXT,
+        period_start        DATE    NOT NULL,
+        period_end          DATE    NOT NULL,
+        branch_id           INTEGER DEFAULT NULL,
+        is_active           INTEGER DEFAULT 1,
+        created_at          DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        created_by          INTEGER REFERENCES users(id)
     )
     """)
 
-    # 14. Debt Table
+    # 14. LOYALTY STAMPS TABLE
+    # One row = one qualifying transaction earned toward a program.
+    # redemption_id = NULL means the stamp is unconsumed / still active.
+    # redemption_id = set  means the stamp was consumed in that redemption.
+    #
+    # Eligibility count = COUNT(*) WHERE redemption_id IS NULL
+    #                     AND stamped_at BETWEEN program.period_start AND program.period_end
+    #
+    # The period date filter is what implements "stamps expire with the period."
+    # No backfilling to the next period is possible without a new stamp row.
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS loyalty_stamps (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id     INTEGER NOT NULL REFERENCES customers(id),
+        program_id      INTEGER NOT NULL REFERENCES loyalty_programs(id),
+        sale_id         INTEGER NOT NULL REFERENCES sales(id),
+        redemption_id   INTEGER DEFAULT NULL,
+        stamped_at      DATETIME DEFAULT (DATETIME('now', 'localtime'))
+    )
+    """)
+
+    # 15. LOYALTY REDEMPTIONS TABLE
+    # One row = one reward granted to a customer.
+    # reward_snapshot: frozen JSON of the reward at time of redemption.
+    #   Critical for history accuracy — program config can change later.
+    # applied_on_sale_id: the sale where the reward was applied (discount/free item).
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS loyalty_redemptions (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id         INTEGER NOT NULL REFERENCES customers(id),
+        program_id          INTEGER NOT NULL REFERENCES loyalty_programs(id),
+        applied_on_sale_id  INTEGER NOT NULL REFERENCES sales(id),
+        redeemed_by         INTEGER REFERENCES users(id),
+        reward_snapshot     TEXT    NOT NULL,
+        stamps_consumed     INTEGER NOT NULL,
+        redeemed_at         DATETIME DEFAULT (DATETIME('now', 'localtime'))
+    )
+    """)
+
+    # 16. Debt Table
     conn.execute("""
     CREATE TABLE IF NOT EXISTS debt_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -222,7 +284,7 @@ def init_db():
     )
     """)
 
-    # 13. CASH ENTRIES (Petty Cash Ledger)
+    # 17. CASH ENTRIES (Petty Cash Ledger)
     conn.execute("""
     CREATE TABLE IF NOT EXISTS cash_entries (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
