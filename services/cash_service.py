@@ -158,6 +158,7 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
 
     for row in manual_rows:
         unified.append({
+            'id':          row['id'],
             'entry_type':  row['entry_type'],
             'amount':      _money(row['amount']),
             'category':    row['category'],

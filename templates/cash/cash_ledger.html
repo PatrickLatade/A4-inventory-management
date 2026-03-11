@@ -134,6 +134,14 @@
         align-items: center;
     }
 
+    #ledger-section {
+        scroll-margin-top: 90px;
+    }
+
+    #ledger-title-anchor {
+        scroll-margin-top: 90px;
+    }
+
     .ledger-type-toggle .btn.active {
         box-shadow: none;
     }
@@ -242,6 +250,8 @@
 
     .reminder-body {
         padding: 10px 12px 12px;
+        max-height: 320px;
+        overflow-y: auto;
     }
 
     .reminder-date-segment {
@@ -496,12 +506,12 @@
     </div>
 
     <!-- LEDGER TABLE -->
-    <div class="col-lg-8">
+    <div class="col-lg-8" id="ledger-section">
         <div class="card p-4">
 
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
                 <div class="d-flex align-items-center gap-3 flex-wrap">
-                    <h6 class="fw-bold mb-0">
+                    <h6 class="fw-bold mb-0" id="ledger-title-anchor">
                         <i class="bi bi-journal-text me-2" style="color: var(--accent);"></i>
                         Ledger
                     </h6>
@@ -594,16 +604,18 @@
                             <td class="small date-cell">{{ entry.created_at }}</td>
                             {% if session.get('role') == 'admin' %}
                             <td>
+                                {% if entry.source == 'manual' and entry.id %}
                                 <button class="btn btn-sm btn-outline-danger delete-btn"
                                         onclick="deleteEntry({{ entry.id }}, this)">
                                     <i class="bi bi-trash3"></i>
                                 </button>
+                                {% endif %}
                             </td>
                             {% endif %}
                         </tr>
                         {% else %}
                         <tr id="empty-row">
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="{% if session.get('role') == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">
                                 No entries yet. Record the first cash movement above.
                             </td>
                         </tr>
@@ -613,31 +625,29 @@
                 </table>
             </div>
 
-            {% if total_pages > 1 %}
-            <nav class="mt-3" aria-label="Cash ledger pagination">
-                <ul class="pagination pagination-sm justify-content-end mb-0 ledger-pagination">
+            <nav class="mt-3 {% if total_pages <= 1 %}d-none{% endif %}" id="ledger-pagination-nav" aria-label="Cash ledger pagination">
+                <ul class="pagination pagination-sm justify-content-end mb-0 ledger-pagination" id="ledger-pagination-list">
                     <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                        {% if page > 1 %}
-                        <a class="page-link" href="{{ url_for('cash.cash_ledger', page=page - 1, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}" aria-label="Previous page">Previous</a>
-                        {% else %}
-                        <span class="page-link">Previous</span>
-                        {% endif %}
+                        <a class="page-link"
+                           href="{{ url_for('cash.cash_ledger', page=page - 1 if page > 1 else 1, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           data-page="{{ page - 1 if page > 1 else 1 }}"
+                           aria-label="Previous page">Previous</a>
                     </li>
                     {% for page_number in range(1, total_pages + 1) %}
                     <li class="page-item {% if page_number == page %}active{% endif %}">
-                        <a class="page-link" href="{{ url_for('cash.cash_ledger', page=page_number, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}">{{ page_number }}</a>
+                        <a class="page-link"
+                           href="{{ url_for('cash.cash_ledger', page=page_number, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           data-page="{{ page_number }}">{{ page_number }}</a>
                     </li>
                     {% endfor %}
                     <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                        {% if page < total_pages %}
-                        <a class="page-link" href="{{ url_for('cash.cash_ledger', page=page + 1, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}" aria-label="Next page">Next</a>
-                        {% else %}
-                        <span class="page-link">Next</span>
-                        {% endif %}
+                        <a class="page-link"
+                           href="{{ url_for('cash.cash_ledger', page=page + 1 if page < total_pages else total_pages, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           data-page="{{ page + 1 if page < total_pages else total_pages }}"
+                           aria-label="Next page">Next</a>
                     </li>
                 </ul>
             </nav>
-            {% endif %}
 
         </div>
     </div>
@@ -655,8 +665,12 @@ const TODAY_FOR_INPUT = CASH_LEDGER_TODAY;
 const LEDGER_SELECTED_TYPE = {{ selected_type | tojson }};
 const LEDGER_SELECTED_START_DATE = {{ selected_start_date | tojson }};
 const LEDGER_SELECTED_END_DATE = {{ selected_end_date | tojson }};
+const LEDGER_INITIAL_PAGE = {{ page | tojson }};
+const LEDGER_CAN_DELETE = {{ (session.get('role') == 'admin') | tojson }};
 let ledgerDateFlatpickr = null;
 let ledgerTypeFilter = LEDGER_SELECTED_TYPE || '';
+let ledgerCurrentPage = LEDGER_INITIAL_PAGE || 1;
+let ledgerRequestInFlight = false;
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -732,6 +746,7 @@ setPayoutDate(TODAY_FOR_INPUT);
 showPayoutDateIfNeeded();
     showPendingFlashAfterReload();
     initializeLedgerFilters();
+    initializeLedgerPagination();
     initializePendingPayoutRows();
 
 
@@ -943,8 +958,86 @@ function initializeLedgerFilters() {
     clearBtn.addEventListener('click', clearLedgerFilters);
 }
 
+function initializeLedgerPagination() {
+    const paginationList = document.getElementById('ledger-pagination-list');
+    if (!paginationList) return;
+
+    paginationList.addEventListener('click', (event) => {
+        const link = event.target.closest('a.page-link[data-page]');
+        if (!link) return;
+
+        const pageItem = link.closest('.page-item');
+        if (!pageItem || pageItem.classList.contains('disabled') || pageItem.classList.contains('active')) {
+            event.preventDefault();
+            return;
+        }
+
+        const targetPage = Number.parseInt(link.getAttribute('data-page') || '', 10);
+        if (!Number.isFinite(targetPage) || targetPage < 1) {
+            return;
+        }
+
+        event.preventDefault();
+        loadLedgerPage(targetPage);
+    });
+}
+
+async function loadLedgerPage(targetPage) {
+    if (ledgerRequestInFlight) return;
+    ledgerRequestInFlight = true;
+    setLedgerLoadingState();
+
+    try {
+        const apiParams = buildLedgerQueryParams(targetPage, true);
+        const res = await fetch(`/api/cash/ledger?${apiParams.toString()}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.message || 'Failed to load ledger entries.');
+        }
+
+        ledgerCurrentPage = data.page || 1;
+        renderLedgerRows(data.entries || []);
+        renderLedgerEntryCount(data.start_entry, data.end_entry, data.total_entries);
+        renderLedgerPagination(data.page, data.total_pages);
+        updateLedgerUrl(ledgerCurrentPage);
+    } catch (err) {
+        showFlash('Failed to load ledger page. Please try again.', 'danger');
+    } finally {
+        ledgerRequestInFlight = false;
+    }
+}
+
 function applyLedgerFilters() {
+    ledgerCurrentPage = 1;
+    loadLedgerPage(1);
+}
+
+function clearLedgerFilters() {
+    ledgerTypeFilter = '';
+    document.querySelectorAll('#ledger-type-toggle .btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('#ledger-type-toggle [data-filter=""]').classList.add('active');
+    if (ledgerDateFlatpickr) {
+        ledgerDateFlatpickr.clear();
+    }
+    ledgerCurrentPage = 1;
+    loadLedgerPage(1);
+}
+
+function setLedgerTypeFilter(filter, btn) {
+    ledgerTypeFilter = filter || '';
+    document.querySelectorAll('#ledger-type-toggle .btn').forEach(toggleBtn => toggleBtn.classList.remove('active'));
+    btn.classList.add('active');
+    applyLedgerFilters();
+}
+
+function buildLedgerQueryParams(page, includePage) {
     const params = new URLSearchParams();
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1;
+
+    if (includePage || safePage > 1) {
+        params.set('page', String(safePage));
+    }
 
     if (ledgerTypeFilter) {
         params.set('type', ledgerTypeFilter);
@@ -956,26 +1049,140 @@ function applyLedgerFilters() {
         params.set('end_date', endDate);
     }
 
-    window.location.href = params.toString()
-        ? `/cash-ledger?${params.toString()}`
-        : '/cash-ledger';
+    return params;
 }
 
-function clearLedgerFilters() {
-    ledgerTypeFilter = '';
-    document.querySelectorAll('#ledger-type-toggle .btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelector('#ledger-type-toggle [data-filter=""]').classList.add('active');
-    if (ledgerDateFlatpickr) {
-        ledgerDateFlatpickr.clear();
+function updateLedgerUrl(page) {
+    const params = buildLedgerQueryParams(page, false);
+    const url = params.toString() ? `/cash-ledger?${params.toString()}` : '/cash-ledger';
+    window.history.replaceState({ section: 'cash-ledger', page }, '', url);
+}
+
+function renderLedgerEntryCount(startEntry, endEntry, totalEntries) {
+    const countEl = document.getElementById('entry-count');
+    if (!countEl) return;
+
+    if (totalEntries > 0) {
+        countEl.textContent = `Showing ${startEntry}-${endEntry} of ${totalEntries} entries`;
+    } else {
+        countEl.textContent = '0 entries';
     }
-    window.location.href = '/cash-ledger';
 }
 
-function setLedgerTypeFilter(filter, btn) {
-    ledgerTypeFilter = filter || '';
-    document.querySelectorAll('#ledger-type-toggle .btn').forEach(toggleBtn => toggleBtn.classList.remove('active'));
-    btn.classList.add('active');
-    applyLedgerFilters();
+function renderLedgerRows(entries) {
+    const tbody = document.getElementById('ledger-body');
+    if (!tbody) return;
+
+    if (!entries.length) {
+        const emptyCols = LEDGER_CAN_DELETE ? 7 : 6;
+        tbody.innerHTML = `
+            <tr id="empty-row">
+                <td colspan="${emptyCols}" class="text-center text-muted py-4">
+                    No entries yet. Record the first cash movement above.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    tbody.innerHTML = entries.map((entry) => {
+        const isCashIn = entry.entry_type === 'CASH_IN';
+        const amountValue = Number(entry.amount || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+        const description = escapeHtml(entry.description || '—');
+        const category = escapeHtml(entry.category || '—');
+        const recordedBy = escapeHtml(entry.recorded_by || '—');
+        const createdAt = escapeHtml(entry.created_at || '—');
+        const entryTypeBadge = isCashIn
+            ? '<span class="type-badge badge-in"><i class="bi bi-arrow-down-circle me-1"></i>Cash In</span>'
+            : '<span class="type-badge badge-out"><i class="bi bi-arrow-up-circle me-1"></i>Cash Out</span>';
+        const amountClass = isCashIn ? 'entry-amount-in' : 'entry-amount-out';
+        const canDeleteThisRow = LEDGER_CAN_DELETE && entry.source === 'manual' && Number.isFinite(Number(entry.id));
+        const deleteCell = LEDGER_CAN_DELETE
+            ? (canDeleteThisRow
+                ? `<td>
+                        <button class="btn btn-sm btn-outline-danger delete-btn"
+                                onclick="deleteEntry(${Number(entry.id)}, this)">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </td>`
+                : '<td></td>')
+            : '';
+
+        return `
+            <tr>
+                <td>${entryTypeBadge}</td>
+                <td>${category}</td>
+                <td class="small">${description}</td>
+                <td class="text-end fw-semibold ${amountClass}">&#8369;${amountValue}</td>
+                <td class="small">${recordedBy}</td>
+                <td class="small date-cell">${createdAt}</td>
+                ${deleteCell}
+            </tr>`;
+    }).join('');
+}
+
+function renderLedgerPagination(page, totalPages) {
+    const nav = document.getElementById('ledger-pagination-nav');
+    const list = document.getElementById('ledger-pagination-list');
+    if (!nav || !list) return;
+
+    if (!totalPages || totalPages <= 1) {
+        nav.classList.add('d-none');
+        list.innerHTML = '';
+        return;
+    }
+
+    nav.classList.remove('d-none');
+
+    const previousPage = page > 1 ? page - 1 : 1;
+    const nextPage = page < totalPages ? page + 1 : totalPages;
+
+    let html = `
+        <li class="page-item ${page <= 1 ? 'disabled' : ''}">
+            <a class="page-link" href="${buildLedgerPageHref(previousPage)}" data-page="${previousPage}" aria-label="Previous page">Previous</a>
+        </li>`;
+
+    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+        html += `
+            <li class="page-item ${pageNumber === page ? 'active' : ''}">
+                <a class="page-link" href="${buildLedgerPageHref(pageNumber)}" data-page="${pageNumber}">${pageNumber}</a>
+            </li>`;
+    }
+
+    html += `
+        <li class="page-item ${page >= totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="${buildLedgerPageHref(nextPage)}" data-page="${nextPage}" aria-label="Next page">Next</a>
+        </li>`;
+
+    list.innerHTML = html;
+}
+
+function buildLedgerPageHref(page) {
+    const params = buildLedgerQueryParams(page, false);
+    return params.toString() ? `/cash-ledger?${params.toString()}` : '/cash-ledger';
+}
+
+function setLedgerLoadingState() {
+    const tbody = document.getElementById('ledger-body');
+    if (!tbody) return;
+    const cols = LEDGER_CAN_DELETE ? 7 : 6;
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="${cols}" class="text-center text-muted py-4">
+                <i class="bi bi-hourglass-split me-1"></i> Loading...
+            </td>
+        </tr>`;
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 }
 
 function formatDateForQuery(date) {

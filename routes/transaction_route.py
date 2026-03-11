@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify
 from services.inventory_service import get_unique_categories
+from utils.formatters import format_date
 from services.transactions_service import (
     add_item_to_db,
     normalize_item_category,
@@ -159,8 +160,15 @@ def list_orders():
 @transaction_bp.route("/api/order/<int:po_id>")
 def get_order_details(po_id):
     po, items = get_purchase_order_with_items(po_id)
+    if not po:
+        return jsonify({"error": "Order not found"}), 404
+
+    po_data = dict(po)
+    po_data["created_at"] = format_date(po_data.get("created_at"), show_time=True)
+    po_data["received_at"] = format_date(po_data.get("received_at"), show_time=True)
+
     return jsonify({
-        "po": dict(po),
+        "po": po_data,
         "items": [dict(ix) for ix in items]
     })
 

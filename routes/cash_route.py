@@ -183,6 +183,53 @@ def cash_entries_api():
     return jsonify({"entries": entries})
 
 
+@cash_bp.route("/api/cash/ledger")
+def cash_ledger_api():
+    branch_id  = _get_branch_id()
+    entry_type = request.args.get("type") or None
+    start_date = request.args.get("start_date") or None
+    end_date   = request.args.get("end_date") or None
+
+    if entry_type not in {"CASH_IN", "CASH_OUT", None}:
+        entry_type = None
+
+    total_entries = get_cash_entry_count(
+        branch_id=branch_id,
+        entry_type=entry_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    total_pages = max(1, (total_entries + LEDGER_PAGE_SIZE - 1) // LEDGER_PAGE_SIZE)
+
+    page = request.args.get("page", default=1, type=int) or 1
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * LEDGER_PAGE_SIZE
+
+    entries = get_cash_entries(
+        branch_id=branch_id,
+        limit=LEDGER_PAGE_SIZE,
+        offset=offset,
+        entry_type=entry_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    start_entry = offset + 1 if total_entries else 0
+    end_entry = offset + len(entries)
+
+    return jsonify({
+        "entries": entries,
+        "page": page,
+        "total_pages": total_pages,
+        "total_entries": total_entries,
+        "start_entry": start_entry,
+        "end_entry": end_entry,
+        "selected_type": entry_type,
+        "selected_start_date": start_date,
+        "selected_end_date": end_date,
+    })
+
+
 @cash_bp.route("/api/cash/add", methods=["POST"])
 def cash_add_api():
     data = request.get_json()
