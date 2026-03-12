@@ -195,10 +195,17 @@ def init_db():
     #   - enforced at app level; no composite FK at DB level
     #
     # reward_type options:
+    #   NONE             → earn-only campaign, no direct redemption payload
     #   FREE_SERVICE     → reward_value = services.id of the free service
     #   FREE_ITEM        → reward_value = items.id of the free item
     #   DISCOUNT_PERCENT → reward_value = percent off (e.g. 10 = 10%)
     #   DISCOUNT_AMOUNT  → reward_value = flat peso off
+    #   RAFFLE_ENTRY     → reward_value = number of raffle entries granted
+    #
+    # reward_basis options:
+    #   STAMPS           → redemption based on stamp threshold
+    #   POINTS           → redemption based on points threshold
+    #   STAMPS_OR_POINTS → redemption allowed if either threshold is reached
     #
     # branch_id: NULL means the program applies to ALL branches (global)
     #   When Branch 2 opens, set branch_id = that branch's ID for branch-specific promos.
@@ -211,19 +218,96 @@ def init_db():
         program_type        TEXT NOT NULL CHECK(program_type IN ('SERVICE', 'ITEM')),
         qualifying_id       INTEGER NOT NULL,
         threshold           INTEGER NOT NULL DEFAULT 10,
+        points_threshold    INTEGER NOT NULL DEFAULT 0,
+        reward_basis        TEXT NOT NULL DEFAULT 'STAMPS' CHECK(reward_basis IN (
+                                'STAMPS', 'POINTS', 'STAMPS_OR_POINTS'
+                            )),
+        program_mode        TEXT NOT NULL DEFAULT 'REDEEMABLE' CHECK(program_mode IN ('REDEEMABLE', 'EARN_ONLY')),
         reward_type         TEXT NOT NULL CHECK(reward_type IN (
+                                'NONE',
                                 'FREE_SERVICE', 'FREE_ITEM',
-                                'DISCOUNT_PERCENT', 'DISCOUNT_AMOUNT'
+                                'DISCOUNT_PERCENT', 'DISCOUNT_AMOUNT',
+                                'RAFFLE_ENTRY'
                             )),
         reward_value        NUMERIC(12,2) NOT NULL DEFAULT 0,
         reward_description  TEXT,
         period_start        DATE NOT NULL,
         period_end          DATE NOT NULL,
         branch_id           INTEGER DEFAULT NULL,
+        stamp_enabled       INTEGER NOT NULL DEFAULT 1,
+        points_enabled      INTEGER NOT NULL DEFAULT 0,
         is_active           INTEGER DEFAULT 1,
         created_at          TIMESTAMP DEFAULT NOW(),
         created_by          INTEGER REFERENCES users(id)
     )
+    """)
+    # Backward-compatible upgrades for existing databases.
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS stamp_enabled INTEGER NOT NULL DEFAULT 1")
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS points_enabled INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS points_threshold INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_basis TEXT NOT NULL DEFAULT 'STAMPS'")
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS program_mode TEXT NOT NULL DEFAULT 'REDEEMABLE'")
+    # Ensure reward_type constraint includes RAFFLE_ENTRY for existing DBs.
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE loyalty_programs DROP CONSTRAINT IF EXISTS loyalty_programs_reward_type_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE loyalty_programs
+            ADD CONSTRAINT loyalty_programs_reward_type_check
+            CHECK (reward_type IN (
+                'NONE',
+                'FREE_SERVICE', 'FREE_ITEM',
+                'DISCOUNT_PERCENT', 'DISCOUNT_AMOUNT',
+                'RAFFLE_ENTRY'
+            ));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    # Ensure program_mode constraint exists for existing DBs.
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE loyalty_programs DROP CONSTRAINT IF EXISTS loyalty_programs_program_mode_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE loyalty_programs
+            ADD CONSTRAINT loyalty_programs_program_mode_check
+            CHECK (program_mode IN ('REDEEMABLE', 'EARN_ONLY'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    # Ensure reward_basis constraint exists for existing DBs.
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE loyalty_programs DROP CONSTRAINT IF EXISTS loyalty_programs_reward_basis_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE loyalty_programs
+            ADD CONSTRAINT loyalty_programs_reward_basis_check
+            CHECK (reward_basis IN ('STAMPS', 'POINTS', 'STAMPS_OR_POINTS'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
     """)
 
     # 15. LOYALTY STAMPS TABLE
@@ -266,7 +350,49 @@ def init_db():
     )
     """)
 
-    # 17. DEBT PAYMENTS TABLE
+    # 17. LOYALTY POINT RULES TABLE
+    # Rules are evaluated in priority order for each sale.
+    # stop_on_match = 1 means stop evaluating next rules in that program after a match.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS loyalty_point_rules (
+        id                      SERIAL PRIMARY KEY,
+        program_id              INTEGER NOT NULL REFERENCES loyalty_programs(id) ON DELETE CASCADE,
+        rule_name               TEXT,
+        points                  INTEGER NOT NULL CHECK(points >= 0),
+        service_id              INTEGER REFERENCES services(id),
+        item_id                 INTEGER REFERENCES items(id),
+        requires_any_item       INTEGER NOT NULL DEFAULT 0,
+        requires_any_service    INTEGER NOT NULL DEFAULT 0,
+        priority                INTEGER NOT NULL DEFAULT 100,
+        stop_on_match           INTEGER NOT NULL DEFAULT 0,
+        is_active               INTEGER NOT NULL DEFAULT 1,
+        created_at              TIMESTAMP DEFAULT NOW()
+    )
+    """)
+
+    # 18. LOYALTY POINT LEDGER TABLE
+    # Immutable earning ledger for auditability and future recalculation.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS loyalty_point_ledger (
+        id              SERIAL PRIMARY KEY,
+        customer_id     INTEGER NOT NULL REFERENCES customers(id),
+        program_id      INTEGER NOT NULL REFERENCES loyalty_programs(id),
+        rule_id         INTEGER REFERENCES loyalty_point_rules(id),
+        sale_id         INTEGER NOT NULL REFERENCES sales(id),
+        redemption_id   INTEGER REFERENCES loyalty_redemptions(id),
+        points          INTEGER NOT NULL CHECK(points >= 0),
+        awarded_at      TIMESTAMP DEFAULT NOW(),
+        note            TEXT,
+        UNIQUE (customer_id, program_id, sale_id, rule_id)
+    )
+    """)
+    cur.execute("ALTER TABLE loyalty_point_ledger ADD COLUMN IF NOT EXISTS redemption_id INTEGER REFERENCES loyalty_redemptions(id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lpl_customer ON loyalty_point_ledger(customer_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lpl_program ON loyalty_point_ledger(program_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lpl_sale ON loyalty_point_ledger(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lpr_program_active ON loyalty_point_rules(program_id, is_active, priority)")
+
+    # 19. DEBT PAYMENTS TABLE
     # service_portion tracks how much of a payment went toward services vs items
     cur.execute("""
     CREATE TABLE IF NOT EXISTS debt_payments (
@@ -282,7 +408,7 @@ def init_db():
     )
     """)
 
-    # 18. CASH ENTRIES (Petty Cash Ledger)
+    # 20. CASH ENTRIES (Petty Cash Ledger)
     # branch_id: DEFAULT 1 = main branch. When Branch 2 opens, entries will use that branch's ID.
     # reference_type: 'MANUAL' for staff entries, 'MECHANIC_PAYOUT' for auto-generated payouts
     # payout_for_date: the date the payout is for (used for mechanic payout reconciliation)

@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify, session
 from db.database import get_db
 from services.loyalty_service import (
+    get_all_programs,
     create_program,
     toggle_program,
     get_customer_eligibility,
+    get_customer_earn_only,
     redeem_reward,
     get_customer_loyalty_summary,
 )
@@ -30,23 +32,8 @@ def list_programs():
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
 
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT
-            lp.*,
-            CASE lp.program_type
-                WHEN 'SERVICE' THEN sv.name
-                WHEN 'ITEM'    THEN it.name
-                ELSE NULL
-            END AS qualifying_name
-        FROM loyalty_programs lp
-        LEFT JOIN services sv ON lp.program_type = 'SERVICE' AND sv.id = lp.qualifying_id
-        LEFT JOIN items    it ON lp.program_type = 'ITEM'    AND it.id = lp.qualifying_id
-        ORDER BY lp.is_active DESC, lp.period_end DESC
-    """).fetchall()
-    conn.close()
-
-    return jsonify({"programs": [dict(r) for r in rows]})
+    programs = get_all_programs(include_rules=True)
+    return jsonify({"programs": programs})
 
 
 @loyalty_bp.route("/api/loyalty/programs", methods=["POST"])
@@ -122,7 +109,8 @@ def eligibility(customer_id):
     branch_id = request.args.get("branch_id", type=int)  # None until multi-branch
     try:
         programs = get_customer_eligibility(customer_id, branch_id=branch_id)
-        return jsonify({"programs": programs})
+        earn_only_programs = get_customer_earn_only(customer_id, branch_id=branch_id)
+        return jsonify({"programs": programs, "earn_only_programs": earn_only_programs})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

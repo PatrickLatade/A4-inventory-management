@@ -465,7 +465,7 @@
             <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
             <form action="{{ url_for('auth.add_service') }}" method="POST" class="row g-3">
                 <div class="col-md-4">
-                    <input name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
+                    <input id="add-service-name-input" name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
                 </div>
                 <div class="col-md-3">
                     <select name="existing_category" id="categorySelect" class="form-select bg-dark text-white border-secondary">
@@ -897,6 +897,14 @@
                     </select>
                 </div>
 
+                <div class="col-md-2">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Mode <span class="text-danger">*</span></label>
+                    <select id="lf-program-mode" class="form-select bg-dark text-white border-secondary" onchange="loyaltyModesChanged()">
+                        <option value="REDEEMABLE">Redeemable</option>
+                        <option value="EARN_ONLY">Earn Only</option>
+                    </select>
+                </div>
+
                 <!-- Qualifying Service / Item (autocomplete) -->
                 <div class="col-md-4">
                     <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-qualifying-label">
@@ -915,25 +923,55 @@
                 </div>
 
                 <!-- Threshold -->
-                <div class="col-md-2">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Stamps needed <span class="text-danger">*</span></label>
+                <div class="col-md-2" id="lf-threshold-group">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Stamps needed <span class="text-danger" id="lf-threshold-required">*</span></label>
                     <input type="number" id="lf-threshold" class="form-control bg-dark text-white border-secondary"
                         min="1" value="10" placeholder="e.g. 10">
                 </div>
 
-                <!-- Reward Type -->
+                <div class="col-md-2" id="lf-points-threshold-group" style="display:none;">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Points needed <span class="text-danger" id="lf-points-threshold-required">*</span></label>
+                    <input type="number" id="lf-points-threshold" class="form-control bg-dark text-white border-secondary"
+                        min="1" value="100" placeholder="e.g. 100">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label text-white-50 d-block" style="font-size:0.75rem;">Earning Modes</label>
+                    <div class="d-flex gap-3 align-items-center pt-1">
+                        <label class="form-check-label text-white-50" style="font-size:0.78rem;">
+                            <input class="form-check-input me-1" type="checkbox" id="lf-stamp-enabled" checked onchange="loyaltyModesChanged()">
+                            Stamps
+                        </label>
+                        <label class="form-check-label text-white-50" style="font-size:0.78rem;">
+                            <input class="form-check-input me-1" type="checkbox" id="lf-points-enabled" onchange="loyaltyModesChanged()">
+                            Points
+                        </label>
+                    </div>
+                </div>
+
                 <div class="col-md-3">
+                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Basis <span class="text-danger">*</span></label>
+                    <select id="lf-reward-basis" class="form-select bg-dark text-white border-secondary" onchange="loyaltyModesChanged()">
+                        <option value="STAMPS">Stamps Threshold</option>
+                        <option value="POINTS">Points Threshold</option>
+                        <option value="STAMPS_OR_POINTS">Stamps OR Points</option>
+                    </select>
+                </div>
+
+                <!-- Reward Type -->
+                <div class="col-md-3" id="lf-reward-type-group">
                     <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Type <span class="text-danger">*</span></label>
                     <select id="lf-reward-type" class="form-select bg-dark text-white border-secondary" onchange="loyaltyRewardTypeChanged()">
                         <option value="FREE_SERVICE">Free Service</option>
                         <option value="FREE_ITEM">Free Item</option>
                         <option value="DISCOUNT_PERCENT">Discount %</option>
                         <option value="DISCOUNT_AMOUNT">Discount ₱</option>
+                        <option value="RAFFLE_ENTRY">Raffle Entry</option>
                     </select>
                 </div>
 
                 <!-- Reward Value -->
-                <div class="col-md-2">
+                <div class="col-md-2" id="lf-reward-value-group">
                     <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-reward-value-label">
                         Reward Value
                         <span class="text-warning" style="font-size:0.65rem;" id="lf-reward-value-hint">(leave 0 for free)</span>
@@ -943,7 +981,7 @@
                 </div>
 
                 <!-- Reward Description -->
-                <div class="col-md-4">
+                <div class="col-md-4" id="lf-reward-desc-group">
                     <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Description</label>
                     <input type="text" id="lf-reward-desc" class="form-control bg-dark text-white border-secondary"
                         placeholder="e.g. 1 free oil change on 10th visit">
@@ -959,6 +997,19 @@
                 <div class="col-md-2">
                     <label class="form-label text-white-50" style="font-size:0.75rem;">Period End <span class="text-danger">*</span></label>
                     <input type="date" id="lf-period-end" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-12" id="lf-points-rules-card" style="display:none;">
+                    <div class="p-2 rounded border border-secondary" style="background:#171717;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <strong class="text-white-50" style="font-size:0.8rem;">Point Rules</strong>
+                            <button type="button" class="btn btn-sm btn-outline-info" onclick="loyaltyAddRuleRow()">
+                                <i class="bi bi-plus-lg me-1"></i>Add Rule
+                            </button>
+                        </div>
+                        <div id="lf-point-rules"></div>
+                        <small class="text-warning">Rules are checked by priority. Enable "Stop on match" for first-match wins.</small>
+                    </div>
                 </div>
 
                 <!-- Submit -->
@@ -990,7 +1041,7 @@
                         <th>Program Name</th>
                         <th>Type</th>
                         <th>Qualifies On</th>
-                        <th class="text-center">Stamps</th>
+                        <th class="text-center">Earning</th>
                         <th>Reward</th>
                         <th>Period</th>
                         <th class="text-center">Status</th>
@@ -1997,15 +2048,31 @@ async function loadLoyaltyPrograms() {
                 : `<span class="badge bg-dark border border-warning text-warning">Item</span>`;
 
             const rewardLabel = {
+                NONE:             'Earn-only campaign',
                 FREE_SERVICE:     'Free Service',
                 FREE_ITEM:        'Free Item',
                 DISCOUNT_PERCENT: `${p.reward_value}% off`,
                 DISCOUNT_AMOUNT:  `₱${parseFloat(p.reward_value).toFixed(2)} off`,
+                RAFFLE_ENTRY:     `${parseFloat(p.reward_value || 1).toFixed(0)} raffle entr${parseFloat(p.reward_value || 1).toFixed(0) === '1' ? 'y' : 'ies'}`,
             }[p.reward_type] || p.reward_type;
 
+            const isEarnOnly = String(p.program_mode || 'REDEEMABLE') === 'EARN_ONLY';
             const rewardDisplay = p.reward_description
                 ? `<span title="${rewardLabel}">${p.reward_description}</span>`
-                : `<span class="text-muted">${rewardLabel}</span>`;
+                : `<span class="text-muted">${isEarnOnly ? 'Earn-only (no direct redemption)' : rewardLabel}</span>`;
+
+            const stampEnabled = Number(p.stamp_enabled ?? 1) === 1;
+            const pointsEnabled = Number(p.points_enabled ?? 0) === 1;
+            const ruleCount = Array.isArray(p.point_rules) ? p.point_rules.length : 0;
+            const earningBadges = [
+                stampEnabled ? `<span class="badge bg-dark border border-success text-success me-1">Stamps ${p.threshold || 0}</span>` : '',
+                pointsEnabled ? `<span class="badge bg-dark border border-info text-info me-1">Points ${ruleCount} rule${ruleCount === 1 ? '' : 's'}</span>` : '',
+                pointsEnabled && Number(p.points_threshold || 0) > 0
+                    ? `<span class="badge bg-dark border border-primary text-primary me-1">Pts Target ${p.points_threshold}</span>`
+                    : '',
+                `<span class="badge bg-dark border border-secondary text-secondary me-1">${String(p.reward_basis || 'STAMPS').replaceAll('_', ' ')}</span>`,
+                `<span class="badge ${isEarnOnly ? 'bg-warning text-dark' : 'bg-dark border border-secondary text-secondary'}">${isEarnOnly ? 'Earn Only' : 'Redeemable'}</span>`
+            ].join('');
 
             const statusBtn = p.is_active
                 ? `<button class="toggle-btn text-success" onclick="toggleLoyaltyProgram(${p.id}, false)" title="Click to deactivate">
@@ -2028,7 +2095,7 @@ async function loadLoyaltyPrograms() {
                     <td>${typeBadge}</td>
                     <td>${qualifyingDisplay}</td>
                     <td class="text-center">
-                        <span class="badge bg-dark border border-secondary text-warning">${p.threshold}</span>
+                        ${earningBadges || '<span class="text-muted">None</span>'}
                     </td>
                     <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                         ${rewardDisplay}
@@ -2074,6 +2141,7 @@ async function toggleLoyaltyProgram(programId, activate) {
 
 // ── Qualifying search (SERVICE or ITEM) ──────────────────────────
 let lfSearchTimer;
+let lfRuleCounter = 0;
 
 function loyaltyTypeChanged() {
     const type = document.getElementById('lf-type').value;
@@ -2089,6 +2157,212 @@ function loyaltyTypeChanged() {
     input.value = '';
     document.getElementById('lf-qualifying-id').value = '';
     document.getElementById('lf-qualifying-suggestions').style.display = 'none';
+}
+
+function loyaltyModesChanged() {
+    const programMode = document.getElementById('lf-program-mode').value;
+    const isEarnOnly = programMode === 'EARN_ONLY';
+    const stampEnabled = document.getElementById('lf-stamp-enabled').checked;
+    const pointsEnabled = document.getElementById('lf-points-enabled').checked;
+    const threshold = document.getElementById('lf-threshold');
+    const thresholdGroup = document.getElementById('lf-threshold-group');
+    const thresholdRequired = document.getElementById('lf-threshold-required');
+    const pointsThreshold = document.getElementById('lf-points-threshold');
+    const pointsThresholdGroup = document.getElementById('lf-points-threshold-group');
+    const pointsThresholdRequired = document.getElementById('lf-points-threshold-required');
+    const rewardBasisSelect = document.getElementById('lf-reward-basis');
+    const pointsCard = document.getElementById('lf-points-rules-card');
+    const rewardTypeGroup = document.getElementById('lf-reward-type-group');
+    const rewardValueGroup = document.getElementById('lf-reward-value-group');
+    const rewardDescGroup = document.getElementById('lf-reward-desc-group');
+    const rewardTypeInput = document.getElementById('lf-reward-type');
+    const rewardValueInput = document.getElementById('lf-reward-value');
+    const basisUsesStamps = (basis) => basis === 'STAMPS' || basis === 'STAMPS_OR_POINTS';
+    const basisUsesPoints = (basis) => basis === 'POINTS' || basis === 'STAMPS_OR_POINTS';
+
+    rewardTypeGroup.style.display = isEarnOnly ? 'none' : '';
+    rewardValueGroup.style.display = isEarnOnly ? 'none' : '';
+    rewardDescGroup.style.display = isEarnOnly ? 'none' : '';
+    rewardTypeInput.required = !isEarnOnly;
+    rewardValueInput.required = !isEarnOnly;
+
+    if (isEarnOnly) {
+        rewardTypeInput.value = 'RAFFLE_ENTRY';
+        rewardValueInput.value = '0';
+    }
+
+    Array.from(rewardBasisSelect.options).forEach(opt => {
+        if (opt.value === 'STAMPS') opt.disabled = !stampEnabled;
+        if (opt.value === 'POINTS') opt.disabled = !pointsEnabled;
+        if (opt.value === 'STAMPS_OR_POINTS') opt.disabled = !(stampEnabled && pointsEnabled);
+    });
+
+    if ((!stampEnabled && rewardBasisSelect.value === 'STAMPS') ||
+        (!pointsEnabled && rewardBasisSelect.value === 'POINTS') ||
+        (!(stampEnabled && pointsEnabled) && rewardBasisSelect.value === 'STAMPS_OR_POINTS')) {
+        rewardBasisSelect.value = stampEnabled ? 'STAMPS' : (pointsEnabled ? 'POINTS' : 'STAMPS');
+    }
+
+    const rewardBasis = rewardBasisSelect.value;
+    const needsStampThreshold = !isEarnOnly && stampEnabled && basisUsesStamps(rewardBasis);
+    const needsPointsThreshold = !isEarnOnly && pointsEnabled && basisUsesPoints(rewardBasis);
+
+    thresholdGroup.style.display = needsStampThreshold ? '' : 'none';
+    threshold.required = needsStampThreshold;
+    thresholdRequired.style.display = needsStampThreshold ? '' : 'none';
+    threshold.disabled = !needsStampThreshold;
+
+    if (!needsStampThreshold) {
+        threshold.value = '0';
+    } else if (parseInt(threshold.value || '0', 10) < 1) {
+        threshold.value = '10';
+    }
+
+    pointsThresholdGroup.style.display = needsPointsThreshold ? '' : 'none';
+    pointsThreshold.required = needsPointsThreshold;
+    pointsThresholdRequired.style.display = needsPointsThreshold ? '' : 'none';
+    pointsThreshold.disabled = !needsPointsThreshold;
+    if (!needsPointsThreshold) {
+        pointsThreshold.value = '0';
+    } else if (parseInt(pointsThreshold.value || '0', 10) < 1) {
+        pointsThreshold.value = '100';
+    }
+
+    pointsCard.style.display = pointsEnabled ? '' : 'none';
+    if (pointsEnabled && !document.querySelector('.lf-point-rule-row')) {
+        loyaltyAddRuleRow();
+    }
+}
+
+function openServicesTabWithPrefill(serviceName) {
+    const tabBtn = document.querySelector('[data-bs-target="#manage-services-tab"]');
+    const serviceInput = document.getElementById('add-service-name-input');
+    if (!tabBtn || !serviceInput) return;
+
+    const tab = bootstrap.Tab.getOrCreateInstance(tabBtn);
+    tab.show();
+
+    // Wait for tab transition before focusing so the caret lands correctly.
+    window.setTimeout(() => {
+        serviceInput.value = serviceName || '';
+        serviceInput.focus();
+        serviceInput.setSelectionRange(serviceInput.value.length, serviceInput.value.length);
+    }, 120);
+}
+
+function openItemsPageWithPrefill(itemName) {
+    const q = encodeURIComponent(itemName || '');
+    window.location.href = `/transaction/items?return_to=in&prefill_name=${q}`;
+}
+
+function loyaltyBuildRuleRow(id) {
+    return `
+        <div class="row g-2 align-items-end mb-2 lf-point-rule-row" data-rule-id="${id}" style="border-bottom:1px dashed #333; padding-bottom:10px;">
+            <div class="col-md-2">
+                <label class="form-label text-white-50" style="font-size:0.7rem;">Rule Name</label>
+                <input type="text" class="form-control bg-dark text-white border-secondary lf-rule-name" placeholder="Optional">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label text-white-50" style="font-size:0.7rem;">Service Condition</label>
+                <div class="position-relative">
+                    <input type="text" class="form-control bg-dark text-white border-secondary lf-rule-service-search"
+                        placeholder="Search service..." autocomplete="off" oninput="loyaltyRuleServiceSearch(this)">
+                    <div class="list-group position-absolute w-100 lf-rule-service-suggestions"
+                        style="display:none; z-index:9999; background:#1a1a1a; border:1px solid #444; border-radius:0 0 8px 8px; max-height:160px; overflow-y:auto;"></div>
+                    <input type="hidden" class="lf-rule-service-id">
+                </div>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label text-white-50" style="font-size:0.7rem;">Points</label>
+                <input type="number" min="1" value="10" class="form-control bg-dark text-white border-secondary lf-rule-points">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label text-white-50" style="font-size:0.7rem;">Priority</label>
+                <input type="number" min="1" value="${id * 10}" class="form-control bg-dark text-white border-secondary lf-rule-priority">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label text-white-50 d-block" style="font-size:0.7rem;">Extra Conditions</label>
+                <div class="d-flex gap-3 flex-wrap">
+                    <label class="form-check-label text-white-50" style="font-size:0.73rem;">
+                        <input class="form-check-input me-1 lf-rule-any-item" type="checkbox"> requires any item
+                    </label>
+                    <label class="form-check-label text-white-50" style="font-size:0.73rem;">
+                        <input class="form-check-input me-1 lf-rule-stop-on-match" type="checkbox"> stop on match
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-2 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.lf-point-rule-row').remove()">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function loyaltyAddRuleRow() {
+    lfRuleCounter += 1;
+    const container = document.getElementById('lf-point-rules');
+    container.insertAdjacentHTML('beforeend', loyaltyBuildRuleRow(lfRuleCounter));
+}
+
+function loyaltyCollectRuleRows() {
+    return Array.from(document.querySelectorAll('.lf-point-rule-row')).map((row, idx) => {
+        const serviceId = row.querySelector('.lf-rule-service-id').value;
+        return {
+            rule_name: row.querySelector('.lf-rule-name').value.trim(),
+            service_id: serviceId ? parseInt(serviceId, 10) : null,
+            points: parseInt(row.querySelector('.lf-rule-points').value || '0', 10) || 0,
+            priority: parseInt(row.querySelector('.lf-rule-priority').value || String((idx + 1) * 10), 10),
+            requires_any_item: row.querySelector('.lf-rule-any-item').checked,
+            stop_on_match: row.querySelector('.lf-rule-stop-on-match').checked,
+        };
+    });
+}
+
+async function loyaltyRuleServiceSearch(inputEl) {
+    const query = inputEl.value.trim();
+    const row = inputEl.closest('.lf-point-rule-row');
+    const hiddenId = row.querySelector('.lf-rule-service-id');
+    const suggestions = row.querySelector('.lf-rule-service-suggestions');
+
+    hiddenId.value = '';
+
+    if (query.length < 2) {
+        suggestions.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/search/services?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        const list = data.services || [];
+        suggestions.innerHTML = '';
+
+        if (!list.length) {
+            suggestions.style.display = 'none';
+            return;
+        }
+
+        list.slice(0, 8).forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action';
+            btn.style.cssText = 'background:#1a1a1a; color:#e0e6f0; font-size:0.83rem; padding:8px 12px;';
+            btn.textContent = item.name;
+            btn.onclick = () => {
+                inputEl.value = item.name;
+                hiddenId.value = item.id;
+                suggestions.style.display = 'none';
+            };
+            suggestions.appendChild(btn);
+        });
+
+        suggestions.style.display = 'block';
+    } catch (err) {
+        console.error('Rule service search error:', err);
+        suggestions.style.display = 'none';
+    }
 }
 
 function loyaltyQualifyingSearch() {
@@ -2111,9 +2385,13 @@ function loyaltyQualifyingSearch() {
             const res  = await fetch(url);
             const data = await res.json();
             const list = type === 'SERVICE' ? (data.services || []) : (data.items || []);
+            const normalizedQuery = query.toLowerCase();
 
             suggestions.innerHTML = '';
-            if (!list.length) { suggestions.style.display = 'none'; return; }
+            if (!list.length && type !== 'SERVICE' && type !== 'ITEM') {
+                suggestions.style.display = 'none';
+                return;
+            }
 
             list.slice(0, 8).forEach(item => {
                 const btn = document.createElement('button');
@@ -2131,6 +2409,37 @@ function loyaltyQualifyingSearch() {
                 suggestions.appendChild(btn);
             });
 
+            if (type === 'SERVICE') {
+                const hasExactMatch = list.some(item => String(item.name || '').trim().toLowerCase() === normalizedQuery);
+                if (!hasExactMatch) {
+                    const addBtn = document.createElement('button');
+                    addBtn.type = 'button';
+                    addBtn.className = 'list-group-item list-group-item-action';
+                    addBtn.style.cssText = 'background:#1f2a1f; color:#9be28f; font-size:0.83rem; padding:8px 12px; border-top:1px dashed #3b4b3b;';
+                    addBtn.innerHTML = `<i class="bi bi-plus-circle me-2"></i>Add service: <strong>${query}</strong>`;
+                    addBtn.onclick = () => {
+                        suggestions.style.display = 'none';
+                        openServicesTabWithPrefill(query);
+                    };
+                    suggestions.appendChild(addBtn);
+                }
+            }
+            if (type === 'ITEM') {
+                const hasExactMatch = list.some(item => String(item.name || '').trim().toLowerCase() === normalizedQuery);
+                if (!hasExactMatch) {
+                    const addItemBtn = document.createElement('button');
+                    addItemBtn.type = 'button';
+                    addItemBtn.className = 'list-group-item list-group-item-action';
+                    addItemBtn.style.cssText = 'background:#1f2a1f; color:#9be28f; font-size:0.83rem; padding:8px 12px; border-top:1px dashed #3b4b3b;';
+                    addItemBtn.innerHTML = `<i class="bi bi-plus-circle me-2"></i>Add item: <strong>${query}</strong>`;
+                    addItemBtn.onclick = () => {
+                        suggestions.style.display = 'none';
+                        openItemsPageWithPrefill(query);
+                    };
+                    suggestions.appendChild(addItemBtn);
+                }
+            }
+
             suggestions.style.display = 'block';
         } catch (err) {
             console.error('Qualifying search error:', err);
@@ -2142,6 +2451,11 @@ function loyaltyQualifyingSearch() {
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#lf-qualifying-search') && !e.target.closest('#lf-qualifying-suggestions')) {
         document.getElementById('lf-qualifying-suggestions').style.display = 'none';
+    }
+    if (!e.target.closest('.lf-rule-service-search') && !e.target.closest('.lf-rule-service-suggestions')) {
+        document.querySelectorAll('.lf-rule-service-suggestions').forEach(el => {
+            el.style.display = 'none';
+        });
     }
 });
 
@@ -2155,6 +2469,7 @@ function loyaltyRewardTypeChanged() {
         FREE_ITEM:        '(leave 0 — reward is the item itself)',
         DISCOUNT_PERCENT: '(e.g. 10 = 10% off)',
         DISCOUNT_AMOUNT:  '(peso amount off, e.g. 50)',
+        RAFFLE_ENTRY:     '(number of raffle entries to grant, e.g. 1)',
     };
     hint.textContent = hints[type] || '';
 }
@@ -2166,39 +2481,88 @@ async function loyaltySubmitProgram() {
     errEl.textContent = '';
     statusEl.textContent = '';
 
-    const name         = document.getElementById('lf-name').value.trim();
-    const programType  = document.getElementById('lf-type').value;
+    const name = document.getElementById('lf-name').value.trim();
+    const programType = document.getElementById('lf-type').value;
+    const programMode = document.getElementById('lf-program-mode').value;
     const qualifyingId = document.getElementById('lf-qualifying-id').value;
-    const threshold    = parseInt(document.getElementById('lf-threshold').value) || 0;
-    const rewardType   = document.getElementById('lf-reward-type').value;
-    const rewardValue  = parseFloat(document.getElementById('lf-reward-value').value) || 0;
-    const rewardDesc   = document.getElementById('lf-reward-desc').value.trim();
-    const periodStart  = document.getElementById('lf-period-start').value;
-    const periodEnd    = document.getElementById('lf-period-end').value;
+    const qualifyingName = document.getElementById('lf-qualifying-search').value.trim();
+    const threshold = parseInt(document.getElementById('lf-threshold').value || '0', 10) || 0;
+    const pointsThreshold = parseInt(document.getElementById('lf-points-threshold').value || '0', 10) || 0;
+    const stampEnabled = document.getElementById('lf-stamp-enabled').checked;
+    const pointsEnabled = document.getElementById('lf-points-enabled').checked;
+    const rewardBasis = document.getElementById('lf-reward-basis').value;
+    const rewardType = document.getElementById('lf-reward-type').value;
+    const rewardValue = parseFloat(document.getElementById('lf-reward-value').value) || 0;
+    const rewardDesc = document.getElementById('lf-reward-desc').value.trim();
+    const periodStart = document.getElementById('lf-period-start').value;
+    const periodEnd = document.getElementById('lf-period-end').value;
+    const pointRules = loyaltyCollectRuleRows().filter(r => r.points > 0);
 
-    // Client-side validation — mirrors server validation so errors appear instantly
-    if (!name)         { errEl.textContent = 'Program name is required.'; return; }
+    if (!name) { errEl.textContent = 'Program name is required.'; return; }
     if (!qualifyingId) { errEl.textContent = `Select a qualifying ${programType === 'SERVICE' ? 'service' : 'item'} from the search.`; return; }
-    if (threshold < 1) { errEl.textContent = 'Stamps needed must be at least 1.'; return; }
-    if (!periodStart)  { errEl.textContent = 'Period start is required.'; return; }
-    if (!periodEnd)    { errEl.textContent = 'Period end is required.'; return; }
+    if (programType === 'SERVICE' && !qualifyingName) {
+        errEl.textContent = 'Qualifying service is required.';
+        return;
+    }
+    if (!/^\d+$/.test(String(qualifyingId))) {
+        errEl.textContent = 'Select a valid qualifying service/item from the search list.';
+        return;
+    }
+    if (!stampEnabled && !pointsEnabled) { errEl.textContent = 'Enable stamps and/or points.'; return; }
+    if (programMode === 'REDEEMABLE') {
+        if (rewardBasis === 'STAMPS' && !stampEnabled) { errEl.textContent = 'Stamps reward basis requires Stamps mode.'; return; }
+        if (rewardBasis === 'POINTS' && !pointsEnabled) { errEl.textContent = 'Points reward basis requires Points mode.'; return; }
+        if (rewardBasis === 'STAMPS_OR_POINTS' && (!stampEnabled || !pointsEnabled)) {
+            errEl.textContent = 'Stamps OR Points basis requires both earning modes.';
+            return;
+        }
+        if ((rewardBasis === 'STAMPS' || rewardBasis === 'STAMPS_OR_POINTS') && threshold < 1) {
+            errEl.textContent = 'Stamps needed must be at least 1 for this reward basis.';
+            return;
+        }
+        if ((rewardBasis === 'POINTS' || rewardBasis === 'STAMPS_OR_POINTS') && pointsThreshold < 1) {
+            errEl.textContent = 'Points needed must be at least 1 for this reward basis.';
+            return;
+        }
+    }
+    if (pointsEnabled && pointRules.length < 1) { errEl.textContent = 'Add at least one valid point rule.'; return; }
+    if (pointsEnabled) {
+        const invalidRule = pointRules.find(r => !r.service_id && !r.requires_any_item);
+        if (invalidRule) {
+            errEl.textContent = 'Each point rule needs a service condition or "requires any item".';
+            return;
+        }
+        const invalidRuleService = pointRules.find(r => r.service_id !== null && !Number.isInteger(r.service_id));
+        if (invalidRuleService) {
+            errEl.textContent = 'Each point rule service must be selected from existing services.';
+            return;
+        }
+    }
+    if (!periodStart) { errEl.textContent = 'Period start is required.'; return; }
+    if (!periodEnd) { errEl.textContent = 'Period end is required.'; return; }
     if (periodStart >= periodEnd) { errEl.textContent = 'Period end must be after period start.'; return; }
 
     try {
-        const res  = await fetch('/api/loyalty/programs', {
-            method:  'POST',
+        const res = await fetch('/api/loyalty/programs', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
+            body: JSON.stringify({
                 name,
-                program_type:       programType,
-                qualifying_id:      parseInt(qualifyingId),
+                program_type: programType,
+                program_mode: programMode,
+                qualifying_id: parseInt(qualifyingId, 10),
                 threshold,
-                reward_type:        rewardType,
-                reward_value:       rewardValue,
-                reward_description: rewardDesc,
-                period_start:       periodStart,
-                period_end:         periodEnd,
-                branch_id:          null,  // global; set to branch ID when multi-branch is live
+                points_threshold: pointsThreshold,
+                reward_basis: rewardBasis,
+                stamp_enabled: stampEnabled,
+                points_enabled: pointsEnabled,
+                point_rules: pointRules,
+                reward_type: programMode === 'EARN_ONLY' ? 'NONE' : rewardType,
+                reward_value: programMode === 'EARN_ONLY' ? 0 : rewardValue,
+                reward_description: programMode === 'EARN_ONLY' ? (rewardDesc || 'Earn-only campaign') : rewardDesc,
+                period_start: periodStart,
+                period_end: periodEnd,
+                branch_id: null,
             })
         });
 
@@ -2209,15 +2573,21 @@ async function loyaltySubmitProgram() {
             return;
         }
 
-        // Reset form
         ['lf-name', 'lf-qualifying-search', 'lf-reward-desc', 'lf-period-start', 'lf-period-end'].forEach(id => {
             document.getElementById(id).value = '';
         });
         document.getElementById('lf-qualifying-id').value = '';
-        document.getElementById('lf-threshold').value     = '10';
-        document.getElementById('lf-reward-value').value  = '0';
+        document.getElementById('lf-threshold').value = '10';
+        document.getElementById('lf-points-threshold').value = '100';
+        document.getElementById('lf-reward-value').value = '0';
+        document.getElementById('lf-program-mode').value = 'REDEEMABLE';
+        document.getElementById('lf-reward-basis').value = 'STAMPS';
+        document.getElementById('lf-stamp-enabled').checked = true;
+        document.getElementById('lf-points-enabled').checked = false;
+        document.getElementById('lf-point-rules').innerHTML = '';
+        lfRuleCounter = 0;
+        loyaltyModesChanged();
 
-        // Reload table
         loadLoyaltyPrograms();
         showLoyaltyFlash(data.message || `Program "${name}" created successfully.`, 'success');
 
@@ -2226,6 +2596,8 @@ async function loyaltySubmitProgram() {
         showLoyaltyFlash(errEl.textContent, 'danger');
     }
 }
+loyaltyModesChanged();
 </script>
 {% endblock %}
+
 

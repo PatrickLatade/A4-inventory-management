@@ -22,6 +22,28 @@
     #customers-table td.loyalty-cell {
         text-align: center;
     }
+    #customers-table td.vehicles-cell {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: help;
+    }
+    #customers-table td.vehicles-cell:hover {
+        white-space: normal !important;
+        word-break: break-word;
+        background: #1a1d26 !important;
+        z-index: 10;
+        position: relative;
+        overflow: visible;
+    }
+    .loyalty-highlight-pulse {
+        animation: loyaltyPulse 1.05s ease-in-out 1;
+    }
+    @keyframes loyaltyPulse {
+        0%   { box-shadow: 0 0 0 0 rgba(103,194,228,0.00); }
+        30%  { box-shadow: 0 0 0 6px rgba(103,194,228,0.22); }
+        100% { box-shadow: 0 0 0 0 rgba(103,194,228,0.00); }
+    }
 </style>
 
 <div class="form-card">
@@ -50,12 +72,13 @@
             <thead>
                 <tr>
                     <th style="width:5%;"></th>
-                    <th style="width:22%;">Customer Name</th>
-                    <th style="width:13%;">Mobile No.</th>
+                    <th style="width:21%;">Customer Name</th>
+                    <th style="width:12%;">Mobile No.</th>
                     <th style="width:9%;">Total Visits</th>
+                    <th style="width:8%;">Points</th>
                     <th style="width:12%;">Last Visit</th>
-                    <th style="width:28%;">Loyalty</th>
-                    <th>Vehicles</th>
+                    <th style="width:21%;">Loyalty</th>
+                    <th style="width:12%;">Vehicles</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,49 +100,61 @@
                             {{ c.total_visits }}
                         </span>
                     </td>
+                    <td>
+                        <span class="badge" style="background:#1f2d1f; color:#9be28f;">
+                            {{ c.loyalty_points }}
+                        </span>
+                    </td>
                     <td style="color:#aaa; font-size:0.85rem;">
-                        {{ c.last_visit_display or '—' }}
+                        {{ c.last_visit_display or '-' }}
                     </td>
                     <td class="loyalty-cell">
                         {% if c.loyalty_preview and c.loyalty_preview.has_programs %}
-                        {% set max_preview_programs = 2 %}
-                        {% set preview_programs = c.loyalty_preview.programs[:max_preview_programs] %}
-                        {% set hidden_programs = (c.loyalty_preview.programs | length) - (preview_programs | length) %}
-                        <div class="loyalty-capsules">
-                            {% for p in preview_programs %}
-                            {% set capsule_class = 'bg-info text-dark' %}
-                            {% if p.is_eligible %}
-                            {% set capsule_class = 'bg-success' %}
-                            {% elif p.stamp_count <= 0 %}
-                            {% set capsule_class = 'bg-secondary' %}
-                            {% elif p.remaining <= 3 %}
-                            {% set capsule_class = 'bg-warning text-dark' %}
+                        {% set ns = namespace(active=0, ready=0, earn_only=0) %}
+                        {% for p in c.loyalty_preview.programs %}
+                            {% if p.is_earn_only %}
+                                {% set ns.earn_only = ns.earn_only + 1 %}
+                            {% else %}
+                                {% set ns.active = ns.active + 1 %}
+                                {% if p.is_eligible %}
+                                    {% set ns.ready = ns.ready + 1 %}
+                                {% endif %}
                             {% endif %}
-                            <span class="badge {{ capsule_class }}"
-                                title="{{ p.name }} ({{ p.stamp_count }}/{{ p.threshold }}) · Redeemed {{ p.redemption_count }}"
-                                style="font-size:0.66rem; padding:5px 8px;">
-                                {{ p.name }} · {{ p.stamp_count }}/{{ p.threshold }}
-                                {% if p.is_eligible %} · Ready{% endif %}
-                                · R{{ p.redemption_count }}
-                            </span>
-                            {% endfor %}
-                            {% if hidden_programs > 0 %}
-                            <span class="badge bg-secondary" style="font-size:0.66rem; padding:5px 8px;">
-                                +{{ hidden_programs }} more
-                            </span>
-                            {% endif %}
-                        </div>
+                        {% endfor %}
+                        <button type="button"
+                                class="btn btn-link p-0 text-decoration-none loyalty-summary-trigger"
+                                style="color:inherit;"
+                                title="Open row and jump to loyalty details">
+                            <div class="d-flex justify-content-center align-items-center flex-wrap gap-1">
+                                <span class="badge bg-dark border border-info text-info" style="font-size:0.66rem;">
+                                    {{ ns.active }} redeemable
+                                </span>
+                                {% if ns.ready > 0 %}
+                                <span class="badge bg-success" style="font-size:0.66rem;">
+                                    {{ ns.ready }} ready
+                                </span>
+                                {% endif %}
+                                {% if ns.earn_only > 0 %}
+                                <span class="badge bg-primary" style="font-size:0.66rem;">
+                                    {{ ns.earn_only }} earn-only
+                                </span>
+                                {% endif %}
+                                <span class="badge bg-secondary" style="font-size:0.66rem;">
+                                    View loyalty details
+                                </span>
+                            </div>
+                        </button>
                         {% else %}
                         <span style="color:#555; font-size:0.72rem;">No active</span>
                         {% endif %}
                     </td>
-                    <td style="color:#aaa; font-size:0.85rem;">
-                        {{ c.vehicles or '—' }}
+                    <td class="vehicles-cell" style="color:#aaa; font-size:0.85rem;" title="{{ c.vehicles or '-' }}">
+                        {{ c.vehicles or '-' }}
                     </td>
                 </tr>
                 <!-- Detail row (lazy loaded) -->
                 <tr class="detail-row" id="detail-{{ c.id }}" style="display:none;">
-                    <td colspan="7" style="padding:0;">
+                    <td colspan="8" style="padding:0;">
                         <div class="detail-inner" style="
                             background:#131820;
                             border-left:3px solid #67c2e4;
@@ -135,7 +170,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="text-center" style="color:#aaa; padding:40px;">
+                    <td colspan="8" class="text-center" style="color:#aaa; padding:40px;">
                         No customers yet.
                     </td>
                 </tr>
@@ -166,35 +201,38 @@ document.getElementById('customer-filter').addEventListener('input', function ()
 });
 
 /* ─── Expand / Collapse ──────────────────────────────── */
-document.querySelectorAll('.customer-row').forEach(row => {
-    row.addEventListener('click', async function () {
-        const id         = this.dataset.id;
-        const detailRow  = document.getElementById(`detail-${id}`);
-        const icon       = this.querySelector('.expand-icon');
-        const isOpen     = detailRow.style.display !== 'none';
+function closeAllCustomerRows() {
+    document.querySelectorAll('.detail-row').forEach(r => r.style.display = 'none');
+    document.querySelectorAll('.expand-icon').forEach(i => {
+        i.classList.remove('bi-chevron-down');
+        i.classList.add('bi-chevron-right');
+    });
+}
 
-        // Close all open rows first
-        document.querySelectorAll('.detail-row').forEach(r => r.style.display = 'none');
-        document.querySelectorAll('.expand-icon').forEach(i => {
-            i.classList.remove('bi-chevron-down');
-            i.classList.add('bi-chevron-right');
-        });
+async function openCustomerRow(row, focusLoyalty = false) {
+    const id = row.dataset.id;
+    const detailRow = document.getElementById(`detail-${id}`);
+    const icon = row.querySelector('.expand-icon');
+    const isOpen = detailRow.style.display !== 'none';
 
-        if (isOpen) return; // clicking open row = just close it
+    if (isOpen && !focusLoyalty) {
+        closeAllCustomerRows();
+        return;
+    }
 
-        // Open this row
+    if (!isOpen) {
+        closeAllCustomerRows();
         detailRow.style.display = '';
         icon.classList.remove('bi-chevron-right');
         icon.classList.add('bi-chevron-down');
+    }
 
-        // Lazy load if not already loaded
-        const content = detailRow.querySelector('.transaction-content');
-        const spinner = detailRow.querySelector('.loading-spinner');
+    const content = detailRow.querySelector('.transaction-content');
+    const spinner = detailRow.querySelector('.loading-spinner');
 
-        if (content.dataset.loaded) return;
-
+    if (!content.dataset.loaded) {
         try {
-            const res  = await fetch(`/api/customers/${id}/transactions`);
+            const res = await fetch(`/api/customers/${id}/transactions`);
             const data = await res.json();
 
             content.innerHTML = buildCustomerLoyaltyHTML(data);
@@ -203,7 +241,37 @@ document.querySelectorAll('.customer-row').forEach(row => {
             content.style.display = 'block';
         } catch (err) {
             spinner.innerHTML = '<span style="color:#e74c3c;">Failed to load. Try again.</span>';
+            return;
         }
+    }
+
+    if (focusLoyalty) {
+        const loyaltySection = detailRow.querySelector('[data-section="loyalty-status"]');
+        if (loyaltySection) {
+            loyaltySection.classList.remove('loyalty-highlight-pulse');
+            void loyaltySection.offsetWidth;
+            loyaltySection.classList.add('loyalty-highlight-pulse');
+            window.setTimeout(() => {
+                loyaltySection.classList.remove('loyalty-highlight-pulse');
+            }, 1200);
+            loyaltySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+}
+
+document.querySelectorAll('.customer-row').forEach(row => {
+    row.addEventListener('click', async function () {
+        await openCustomerRow(this, false);
+    });
+});
+
+document.querySelectorAll('.loyalty-summary-trigger').forEach(trigger => {
+    trigger.addEventListener('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const row = this.closest('.customer-row');
+        if (!row) return;
+        await openCustomerRow(row, true);
     });
 });
 
@@ -213,8 +281,13 @@ function buildTransactionHTML(data) {
     let html = `
         <div class="mb-2" style="font-size:0.85rem; color:#aaa;">
             <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${c.customer_name}</strong>
-            &nbsp;·&nbsp; ${c.customer_no}
-            &nbsp;·&nbsp; Member since ${c.created_at_display || '—'}
+            &nbsp;&middot;&nbsp; ${c.customer_no}
+            &nbsp;&middot;&nbsp; Member since ${c.created_at_display || '&mdash;'}
+        </div>
+        <div class="mb-3">
+            <span class="badge" style="background:#1f2d1f; color:#9be28f; font-size:0.78rem;">
+                Total Points: ${pointsTotal}
+            </span>
         </div>
     `;
 
@@ -238,23 +311,23 @@ function buildTransactionHTML(data) {
 
     data.transactions.forEach(t => {
         const services = t.services.map(s =>
-            `${s.name} <span style="color:#aaa;">(₱${Number(s.price).toLocaleString('en-PH', {minimumFractionDigits:2})})</span>`
-        ).join(', ') || '—';
+            `${s.name} <span style="color:#aaa;">(&#8369;${Number(s.price).toLocaleString('en-PH', {minimumFractionDigits:2})})</span>`
+        ).join(', ') || '&mdash;';
 
         const items = t.items.map(i =>
-            `${i.name} ×${i.quantity}`
-        ).join(', ') || '—';
+            `${i.name} x${i.quantity}`
+        ).join(', ') || '&mdash;';
 
         const statusColor = t.status === 'Paid' ? '#2ecc71' : t.status === 'Partial' ? '#f4c430' : '#e74c3c';
 
         html += `
             <tr>
                 <td><strong>#${t.sales_number || t.id}</strong></td>
-                <td style="color:#aaa;">${t.transaction_date || '—'}</td>
-                <td style="color:#67c2e4;">${t.vehicle_name || '—'}</td>
+                <td style="color:#aaa;">${t.transaction_date || '&mdash;'}</td>
+                <td style="color:#67c2e4;">${t.vehicle_name || '&mdash;'}</td>
                 <td>${services}</td>
                 <td style="color:#aaa;">${items}</td>
-                <td>₱${Number(t.total_amount).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                <td>&#8369;${Number(t.total_amount).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
                 <td><span style="color:${statusColor}; font-weight:600;">${t.status}</span></td>
             </tr>`;
     });
@@ -265,18 +338,25 @@ function buildTransactionHTML(data) {
 
 function buildCustomerLoyaltyHTML(data) {
     const c = data.customer;
+    const pointsTotal = Number((data.loyalty_summary && data.loyalty_summary.points_total) || 0);
     const programs = (data.loyalty_summary && data.loyalty_summary.programs) || [];
+    const earnOnlyPrograms = (data.loyalty_summary && data.loyalty_summary.earn_only_programs) || [];
     const redemptionHistory = (data.loyalty_summary && data.loyalty_summary.redemption_history) || [];
 
     let html = `
         <div class="mb-2" style="font-size:0.85rem; color:#aaa;">
             <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${c.customer_name}</strong>
             &nbsp;&middot;&nbsp; ${c.customer_no}
-            &nbsp;&middot;&nbsp; Member since ${c.created_at_display || '—'}
+            &nbsp;&middot;&nbsp; Member since ${c.created_at_display || '&mdash;'}
+        </div>
+        <div class="mb-3">
+            <span class="badge" style="background:#1f2d1f; color:#9be28f; font-size:0.78rem;">
+                Total Points: ${pointsTotal}
+            </span>
         </div>
     `;
 
-    html += `<div class="mb-3">
+    html += `<div class="mb-3" data-section="loyalty-status">
         <h6 style="color:#67c2e4; margin-bottom:0.45rem; font-size:0.9rem;">
             <i class="bi bi-award-fill me-1"></i> Loyalty Status
         </h6>`;
@@ -285,9 +365,10 @@ function buildCustomerLoyaltyHTML(data) {
         html += `<div style="font-size:0.8rem; color:#aaa;">No active loyalty programs at the moment.</div>`;
     } else {
         programs.forEach(p => {
-            const current = Number(p.stamp_count || 0);
-            const threshold = Number(p.threshold || 0);
-            const remaining = Math.max(0, threshold - current);
+            const current = Number(p.progress_current || p.stamp_count || 0);
+            const threshold = Number(p.progress_threshold || p.threshold || 0);
+            const unit = String(p.progress_unit || 'stamps');
+            const remaining = Math.max(0, Number(p.progress_remaining || (threshold - current)));
             const pct = threshold > 0 ? Math.min(100, Math.round((Math.min(current, threshold) / threshold) * 100)) : 0;
             const ready = p.is_eligible;
             const redemptionCount = Number(p.redemption_count || 0);
@@ -301,8 +382,8 @@ function buildCustomerLoyaltyHTML(data) {
                             <span class="badge bg-secondary ms-2" style="font-size:0.68rem;">Redeemed ${redemptionCount}x</span>
                         </div>
                         <div>
-                            <span class="badge ${ready ? 'bg-success' : 'bg-warning'}" style="font-size:0.72rem;">
-                                ${ready ? 'Eligible next visit' : `${remaining}/${threshold} stamps`}
+                            <span class="badge ${ready ? 'bg-success' : 'bg-dark border border-warning text-warning'}" style="font-size:0.72rem;">
+                                ${ready ? 'Eligible now' : `${remaining} ${unit} to go`}
                             </span>
                         </div>
                     </div>
@@ -310,8 +391,8 @@ function buildCustomerLoyaltyHTML(data) {
                         <div style="position:absolute; left:0; top:0; bottom:0; width:${pct}%; background:${ready ? '#2ecc71' : '#67c2e4'};"></div>
                     </div>
                     <div style="font-size:0.72rem; color:#aaa; margin-top:0.2rem;">
-                        ${current}/${threshold} stamps collected
-                        ${remaining ? ` · ${remaining} more to redeem` : ''}
+                        ${current}/${threshold} ${unit}
+                        ${remaining ? ` &middot; ${remaining} more to redeem` : ''}
                     </div>
                 </div>
             `;
@@ -330,12 +411,33 @@ function buildCustomerLoyaltyHTML(data) {
             html += `
                 <div style="font-size:0.76rem; color:#c9d3e1; padding:4px 0; border-bottom:1px dashed rgba(255,255,255,0.07);">
                     <strong style="color:#e0e6f0;">${r.program_name || 'Program'}</strong>
-                    · Redeemed ${r.redeemed_at_display || r.redeemed_at || '—'}
-                    · OR #${r.sales_number || '—'}
-                    ${r.stamps_consumed ? `· ${r.stamps_consumed} stamp(s)` : ''}
+                    &middot; Redeemed ${r.redeemed_at_display || r.redeemed_at || '&mdash;'}
+                    &middot; OR #${r.sales_number || '&mdash;'}
+                    ${r.stamps_consumed ? `&middot; ${r.stamps_consumed} stamp(s)` : ''}
+                    ${r.points_consumed ? `&middot; ${r.points_consumed} point(s)` : ''}
                 </div>
             `;
         });
+    }
+
+    if (earnOnlyPrograms.length) {
+        html += `
+            <div style="margin-top:0.55rem; padding-top:0.45rem; border-top:1px dashed rgba(255,255,255,0.12);">
+                <div style="font-size:0.73rem; color:#9ab7ff; margin-bottom:0.35rem;">Earn-only campaigns</div>
+        `;
+        earnOnlyPrograms.forEach(p => {
+            const points = Number(p.points_balance || 0);
+            const stamps = Number(p.stamp_count || 0);
+            const metric = p.points_enabled ? `${points} points` : `${stamps} stamps`;
+            html += `
+                <div style="font-size:0.74rem; color:#c9d3e1; margin-bottom:0.25rem;">
+                    <span class="badge bg-primary me-2" style="font-size:0.68rem;">Earn only</span>
+                    <strong style="color:#e0e6f0;">${p.name}</strong>
+                    <span style="color:#9aa7bd;">&middot; ${metric}</span>
+                </div>
+            `;
+        });
+        html += `</div>`;
     }
 
     html += `</div>`;
@@ -355,7 +457,7 @@ function buildCustomerLoyaltyHTML(data) {
             <th>Services</th>
             <th>Items</th>
             <th>Total</th>
-            <th>Loyalty Stamps</th>
+            <th>Loyalty Earned</th>
             <th>Status</th>
             </tr>
         </thead>
@@ -364,24 +466,24 @@ function buildCustomerLoyaltyHTML(data) {
     data.transactions.forEach(t => {
         const services = t.services.map(s =>
             `${s.name} <span style="color:#aaa;">(&#8369;${Number(s.price).toLocaleString('en-PH', {minimumFractionDigits:2})})</span>`
-        ).join(', ') || '—';
+        ).join(', ') || '&mdash;';
 
         const items = t.items.map(i =>
             `${i.name} x${i.quantity}`
-        ).join(', ') || '—';
+        ).join(', ') || '&mdash;';
 
         const statusColor = t.status === 'Paid' ? '#2ecc71' : t.status === 'Partial' ? '#f4c430' : '#e74c3c';
         const stampBadges = (t.loyalty_stamps || []).map(s => {
             const badgeClass = s.is_active ? 'bg-success' : 'bg-secondary';
             const label = s.is_active ? s.program_name : `${s.program_name} (used)`;
             return `<span class="badge ${badgeClass} me-1" style="font-size:0.72rem;">${label}</span>`;
-        }).join(' ') || '<span style="color:#666;">—</span>';
+        }).join(' ') || '<span style="color:#666;">&mdash;</span>';
 
         html += `
             <tr>
                 <td><strong>#${t.sales_number || t.id}</strong></td>
-                <td style="color:#aaa;">${t.transaction_date || '—'}</td>
-                <td style="color:#67c2e4;">${t.vehicle_name || '—'}</td>
+                <td style="color:#aaa;">${t.transaction_date || '&mdash;'}</td>
+                <td style="color:#67c2e4;">${t.vehicle_name || '&mdash;'}</td>
                 <td>${services}</td>
                 <td style="color:#aaa;">${items}</td>
                 <td>&#8369;${Number(t.total_amount).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>

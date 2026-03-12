@@ -1,7 +1,12 @@
 from flask import Blueprint, request, jsonify, render_template
 from db.database import get_db
 from utils.formatters import format_date
-from services.loyalty_service import get_customer_loyalty_summary, get_customer_eligibility_bulk
+from services.loyalty_service import (
+    get_customer_loyalty_summary,
+    get_customer_eligibility_bulk,
+    get_customer_earn_only_bulk,
+    get_customer_points_bulk,
+)
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -171,30 +176,68 @@ def customer_list():
 
     customer_ids = [int(c["id"]) for c in customers]
     loyalty_by_customer = get_customer_eligibility_bulk(customer_ids)
+    earn_only_by_customer = get_customer_earn_only_bulk(customer_ids)
+    points_by_customer = get_customer_points_bulk(customer_ids)
 
     customers_with_loyalty = []
     for c in customers:
         c_dict = dict(c)
         c_dict["last_visit_display"] = format_date(c_dict["last_visit"])
+        c_dict["loyalty_points"] = int(points_by_customer.get(int(c_dict["id"]), 0) or 0)
 
         loyalty_programs = loyalty_by_customer.get(int(c_dict["id"]), [])
+        earn_only_programs = earn_only_by_customer.get(int(c_dict["id"]), [])
         preview_programs = []
         for program in loyalty_programs:
             stamp_count = int(program.get("stamp_count", 0) or 0)
             threshold = int(program.get("threshold", 0) or 0)
+            progress_current = int(program.get("progress_current", stamp_count) or 0)
+            progress_threshold = int(program.get("progress_threshold", threshold) or 0)
+            progress_unit = str(program.get("progress_unit") or "stamps")
             preview_programs.append({
                 "program_id": program["program_id"],
                 "name": program["name"],
                 "program_type": program.get("program_type"),
                 "stamp_count": stamp_count,
                 "threshold": threshold,
+                "points_balance": int(program.get("points_balance", 0) or 0),
+                "points_threshold": int(program.get("points_threshold", 0) or 0),
+                "reward_basis": program.get("reward_basis", "STAMPS"),
+                "progress_current": progress_current,
+                "progress_threshold": progress_threshold,
+                "progress_unit": progress_unit,
                 "remaining": max(0, threshold - stamp_count),
+                "progress_remaining": int(program.get("progress_remaining", 0) or 0),
                 "is_eligible": bool(program.get("is_eligible")),
                 "redemption_count": int(program.get("redemption_count", 0) or 0),
                 "pct": (
-                    min(100, int((min(stamp_count, threshold) / threshold * 100)))
-                    if threshold > 0 else 0
+                    min(100, int((min(progress_current, progress_threshold) / progress_threshold * 100)))
+                    if progress_threshold > 0 else 0
                 ),
+            })
+        for program in earn_only_programs:
+            points_balance = int(program.get("points_balance", 0) or 0)
+            stamp_count = int(program.get("stamp_count", 0) or 0)
+            progress_unit = "points" if bool(program.get("points_enabled")) else "stamps"
+            progress_current = points_balance if progress_unit == "points" else stamp_count
+            preview_programs.append({
+                "program_id": program["program_id"],
+                "name": program["name"],
+                "program_type": program.get("program_type"),
+                "stamp_count": stamp_count,
+                "threshold": 0,
+                "points_balance": points_balance,
+                "points_threshold": 0,
+                "reward_basis": "POINTS",
+                "progress_current": progress_current,
+                "progress_threshold": 0,
+                "progress_unit": progress_unit,
+                "remaining": 0,
+                "progress_remaining": 0,
+                "is_eligible": False,
+                "is_earn_only": True,
+                "redemption_count": 0,
+                "pct": 0,
             })
 
         c_dict["loyalty_preview"] = {

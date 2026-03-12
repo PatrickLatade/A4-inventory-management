@@ -34,7 +34,13 @@ def transaction_in():
 def manage_items():
     categories = get_unique_categories()
     return_to = request.args.get('return_to', 'in')
-    return render_template("transactions/items.html", categories=categories, return_to=return_to)
+    prefill_name = (request.args.get('prefill_name') or '').strip()
+    return render_template(
+        "transactions/items.html",
+        categories=categories,
+        return_to=return_to,
+        prefill_name=prefill_name
+    )
 
 
 @transaction_bp.route("/items/add", methods=["POST"])
