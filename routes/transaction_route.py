@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
+from auth.utils import admin_required, login_required
 from services.inventory_service import get_unique_categories
 from utils.formatters import format_date
 from services.transactions_service import (
@@ -13,10 +14,16 @@ from services.transactions_service import (
     create_purchase_order,
     get_all_purchase_orders,
     get_purchase_order_with_items,
+    get_purchase_order_details,
     get_po_for_receive_page,
+    approve_purchase_order,
+    cancel_purchase_order,
     receive_purchase_order,
     get_po_details_for_api,
     get_purchase_order_export_data,
+    request_po_revisions,
+    update_purchase_order,
+    get_purchase_order_review_context,
 )
 
 transaction_bp = Blueprint('transaction', __name__)
@@ -142,26 +149,32 @@ def save_transaction_out():
 # ─────────────────────────────────────────────
 
 @transaction_bp.route("/transaction/order")
+@login_required
 def create_order_page():
     return render_template("transactions/order.html")
 
 
 @transaction_bp.route("/transaction/order/save", methods=["POST"])
+@login_required
 def save_purchase_order():
     data = request.get_json()
     try:
         po_number, po_id = create_purchase_order(
             data=data,
             user_id=session.get('user_id'),
-            username=session.get('username')
+            username=session.get('username'),
+            user_role=session.get('role'),
         )
         flash(f"Purchase Order {po_number} saved and logged!", "success")
         return jsonify({"status": "success", "po_id": po_id}), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @transaction_bp.route("/transaction/orders/list")
+@login_required
 def list_orders():
     orders = get_all_purchase_orders()
     completed_groups_map = {}
@@ -204,23 +217,111 @@ def list_orders():
     )
 
 
+@transaction_bp.route("/transaction/order/<int:po_id>/review")
+@admin_required
+def review_purchase_order(po_id):
+    context = get_purchase_order_review_context(
+        po_id,
+        current_user_id=session.get("user_id"),
+        current_role=session.get("role"),
+    )
+    if not context:
+        flash("Purchase order not found.", "danger")
+        return redirect(url_for("transaction.list_orders"))
+    return render_template("order/review.html", **context)
+
+
 @transaction_bp.route("/api/order/<int:po_id>")
+@login_required
 def get_order_details(po_id):
-    po, items = get_purchase_order_with_items(po_id)
-    if not po:
+    details = get_purchase_order_details(
+        po_id,
+        current_user_id=session.get("user_id"),
+        current_role=session.get("role"),
+    )
+    if not details:
         return jsonify({"error": "Order not found"}), 404
+    return jsonify(details)
 
-    po_data = dict(po)
-    po_data["created_at"] = format_date(po_data.get("created_at"), show_time=True)
-    po_data["received_at"] = format_date(po_data.get("received_at"), show_time=True)
 
-    return jsonify({
-        "po": po_data,
-        "items": [dict(ix) for ix in items]
-    })
+@transaction_bp.route("/api/order/<int:po_id>/update", methods=["POST"])
+@login_required
+def update_order(po_id):
+    data = request.get_json()
+    try:
+        details = update_purchase_order(
+            po_id=po_id,
+            data=data,
+            user_id=session.get("user_id"),
+            username=session.get("username"),
+            user_role=session.get("role"),
+        )
+        flash("Purchase order updated and resubmitted.", "success")
+        return jsonify({"status": "success", "details": details})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@transaction_bp.route("/api/order/<int:po_id>/cancel", methods=["POST"])
+@login_required
+def cancel_order(po_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        details = cancel_purchase_order(
+            po_id=po_id,
+            user_id=session.get("user_id"),
+            user_role=session.get("role"),
+            notes=(data.get("notes") or "").strip() or None,
+        )
+        flash("Purchase order cancelled.", "success")
+        return jsonify({"status": "success", "details": details})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@transaction_bp.route("/api/order/<int:po_id>/approval/approve", methods=["POST"])
+@admin_required
+def approve_order(po_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        details = approve_purchase_order(
+            po_id=po_id,
+            admin_user_id=session.get("user_id"),
+            notes=(data.get("notes") or "").strip() or None,
+        )
+        flash("Purchase order approved.", "success")
+        return jsonify({"status": "success", "details": details})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@transaction_bp.route("/api/order/<int:po_id>/approval/revisions", methods=["POST"])
+@admin_required
+def revise_order(po_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        details = request_po_revisions(
+            po_id=po_id,
+            admin_user_id=session.get("user_id"),
+            notes=(data.get("notes") or "").strip(),
+            revision_items=data.get("revision_items") or [],
+        )
+        flash("Purchase order returned for revisions.", "success")
+        return jsonify({"status": "success", "details": details})
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @transaction_bp.route("/export/purchase-order/<int:po_id>/csv")
+@login_required
 def export_purchase_order_csv(po_id):
     po, items = get_purchase_order_export_data(po_id)
     if not po:
@@ -284,6 +385,7 @@ def export_purchase_order_csv(po_id):
 
 
 @transaction_bp.route("/transaction/receive/<int:po_id>")
+@login_required
 def receive_order_page(po_id):
     po, items = get_po_for_receive_page(po_id)
 
@@ -294,11 +396,15 @@ def receive_order_page(po_id):
     if po['status'] == 'COMPLETED':
         flash("This order is already completed.", "info")
         return redirect(url_for('transaction.list_orders'))
+    if po['status'] not in {'PENDING', 'PARTIAL'}:
+        flash("This order is not approved for receiving yet.", "warning")
+        return redirect(url_for('transaction.list_orders'))
 
     return render_template("transactions/receive.html", po=po, items=items)
 
 
 @transaction_bp.route("/transaction/receive/confirm", methods=["POST"])
+@login_required
 def confirm_reception():
     data = request.get_json()
     try:
@@ -317,6 +423,7 @@ def confirm_reception():
 
 
 @transaction_bp.route("/purchase-order/details/<int:po_id>")
+@login_required
 def get_po_details(po_id):
     details = get_po_details_for_api(po_id)
     if not details:

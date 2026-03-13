@@ -166,13 +166,31 @@ def init_db():
         id              SERIAL PRIMARY KEY,
         po_number       TEXT UNIQUE,
         vendor_name     TEXT,
-        status          TEXT CHECK(status IN ('PENDING', 'PARTIAL', 'COMPLETED', 'CANCELLED')) DEFAULT 'PENDING',
+        status          TEXT CHECK(status IN ('FOR_APPROVAL', 'PENDING', 'PARTIAL', 'COMPLETED', 'CANCELLED')) DEFAULT 'FOR_APPROVAL',
         total_amount    NUMERIC(12,2) DEFAULT 0,
         created_at      TIMESTAMP DEFAULT NOW(),
         received_at     TIMESTAMP,
         created_by      INTEGER REFERENCES users(id),
         notes           TEXT
     )
+    """)
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE purchase_orders DROP CONSTRAINT IF EXISTS purchase_orders_status_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE purchase_orders
+            ADD CONSTRAINT purchase_orders_status_check
+            CHECK (status IN ('FOR_APPROVAL', 'PENDING', 'PARTIAL', 'COMPLETED', 'CANCELLED'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
     """)
 
     # 13. PURCHASE ORDER ITEMS (The Details)
@@ -427,6 +445,126 @@ def init_db():
         created_at      TIMESTAMP DEFAULT NOW()
     )
     """)
+
+    # 21. APPROVAL REQUESTS TABLE
+    # Generic approval workflow table reusable by multiple business modules.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS approval_requests (
+        id                  SERIAL PRIMARY KEY,
+        approval_type       TEXT NOT NULL,
+        entity_type         TEXT NOT NULL,
+        entity_id           INTEGER NOT NULL,
+        status              TEXT NOT NULL CHECK(status IN (
+                                'PENDING',
+                                'REVISIONS_NEEDED',
+                                'APPROVED',
+                                'CANCELLED'
+                            )),
+        requested_by        INTEGER NOT NULL REFERENCES users(id),
+        requested_at        TIMESTAMP DEFAULT NOW(),
+        last_submitted_at   TIMESTAMP DEFAULT NOW(),
+        decision_by         INTEGER REFERENCES users(id),
+        decision_at         TIMESTAMP,
+        decision_notes      TEXT,
+        is_locked           INTEGER NOT NULL DEFAULT 0,
+        current_revision_no INTEGER NOT NULL DEFAULT 0,
+        metadata            JSONB NOT NULL DEFAULT '{}'::jsonb,
+        UNIQUE (approval_type, entity_type, entity_id)
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_type ON approval_requests(approval_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_requester ON approval_requests(requested_by)")
+
+    # 22. APPROVAL ACTIONS TABLE
+    # Immutable history of workflow actions for auditability.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS approval_actions (
+        id                  SERIAL PRIMARY KEY,
+        approval_request_id INTEGER NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+        action_type         TEXT NOT NULL CHECK(action_type IN (
+                                'SUBMITTED',
+                                'AUTO_APPROVED',
+                                'APPROVED',
+                                'REVISIONS_REQUESTED',
+                                'RESUBMITTED',
+                                'EDITED_AFTER_APPROVAL',
+                                'REOPENED_AFTER_EDIT',
+                                'CANCELLED_BY_REQUESTER',
+                                'CANCELLED_BY_ADMIN'
+                            )),
+        from_status         TEXT,
+        to_status           TEXT,
+        action_by           INTEGER REFERENCES users(id),
+        action_at           TIMESTAMP DEFAULT NOW(),
+        notes               TEXT
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_actions_request ON approval_actions(approval_request_id, action_at DESC)")
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE approval_actions DROP CONSTRAINT IF EXISTS approval_actions_action_type_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE approval_actions
+            ADD CONSTRAINT approval_actions_action_type_check
+            CHECK (action_type IN (
+                'SUBMITTED',
+                'AUTO_APPROVED',
+                'APPROVED',
+                'REVISIONS_REQUESTED',
+                'RESUBMITTED',
+                'EDITED_AFTER_APPROVAL',
+                'REOPENED_AFTER_EDIT',
+                'CANCELLED_BY_REQUESTER',
+                'CANCELLED_BY_ADMIN'
+            ));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+
+    # 23. APPROVAL REVISION ITEMS
+    # Structured per-item revision requests tied to a specific approval action.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS approval_revision_items (
+        id                  SERIAL PRIMARY KEY,
+        approval_request_id INTEGER NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+        approval_action_id  INTEGER NOT NULL REFERENCES approval_actions(id) ON DELETE CASCADE,
+        item_id             INTEGER REFERENCES items(id),
+        item_name           TEXT NOT NULL,
+        quantity_ordered    INTEGER,
+        quantity_received   INTEGER DEFAULT 0,
+        revision_note       TEXT NOT NULL,
+        created_at          TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_revision_items_request ON approval_revision_items(approval_request_id, approval_action_id)")
+
+    # 24. APPROVAL RESUBMISSION CHANGES
+    # Structured before/after diff captured whenever a requester resubmits.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS approval_resubmission_changes (
+        id                  SERIAL PRIMARY KEY,
+        approval_request_id INTEGER NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+        approval_action_id  INTEGER NOT NULL REFERENCES approval_actions(id) ON DELETE CASCADE,
+        change_scope        TEXT NOT NULL CHECK(change_scope IN ('HEADER', 'ITEM')),
+        item_id             INTEGER REFERENCES items(id),
+        item_name           TEXT,
+        field_name          TEXT NOT NULL,
+        before_value        TEXT,
+        after_value         TEXT,
+        change_label        TEXT NOT NULL,
+        created_at          TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_resubmission_changes_request ON approval_resubmission_changes(approval_request_id, approval_action_id)")
 
     # --- SEEDING ---
 

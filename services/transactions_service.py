@@ -2,6 +2,15 @@ from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date
 from services.loyalty_service import log_stamps_for_sale
+from services.approval_service import (
+    approve_request,
+    cancel_request,
+    create_approval_request,
+    get_approval_request_by_entity,
+    get_approval_request_with_history,
+    request_revisions,
+    resubmit_request,
+)
 
 
 # ─────────────────────────────────────────────
@@ -463,7 +472,372 @@ def record_sale(data, user_id, username):
 # PURCHASE ORDERS
 # ─────────────────────────────────────────────
 
-def create_purchase_order(data, user_id, username):
+PO_APPROVAL_TYPE = "PURCHASE_ORDER"
+PO_ENTITY_TYPE = "purchase_order"
+PO_EDITABLE_APPROVAL_STATUSES = {"REVISIONS_NEEDED", "APPROVED"}
+PO_RECEIVABLE_STATUSES = {"PENDING", "PARTIAL"}
+
+
+def _coerce_positive_int(value, field_name):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a whole number.")
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be at least 1.")
+    return parsed
+
+
+def _coerce_nonnegative_float(value, field_name):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be a valid amount.")
+    if parsed < 0:
+        raise ValueError(f"{field_name} cannot be negative.")
+    return parsed
+
+
+def _normalize_po_payload(data):
+    payload = data or {}
+    vendor_name = str(payload.get("vendor_name") or "").strip()
+    notes = str(payload.get("notes") or "").strip() or None
+    raw_items = payload.get("items") or []
+
+    if not vendor_name:
+        raise ValueError("Vendor / supplier is required.")
+    if not raw_items:
+        raise ValueError("Add at least one item to the purchase order.")
+
+    normalized_items = []
+    seen_item_ids = set()
+    for item in raw_items:
+        try:
+            item_id = int(item.get("id") or item.get("item_id"))
+        except (TypeError, ValueError):
+            raise ValueError("Every purchase order item must have a valid item ID.")
+
+        if item_id in seen_item_ids:
+            raise ValueError("Duplicate items are not allowed in the same purchase order.")
+        seen_item_ids.add(item_id)
+
+        normalized_items.append(
+            {
+                "item_id": item_id,
+                "name": str(item.get("name") or "").strip() or None,
+                "qty": _coerce_positive_int(item.get("qty"), "Quantity"),
+                "cost": _coerce_nonnegative_float(item.get("cost"), "Unit cost"),
+            }
+        )
+
+    return {
+        "vendor_name": vendor_name,
+        "notes": notes,
+        "items": normalized_items,
+    }
+
+
+def _build_po_approval_metadata(po_row, items):
+    return {
+        "po_number": po_row["po_number"],
+        "vendor_name": po_row["vendor_name"] or "",
+        "total_amount": float(po_row["total_amount"] or 0),
+        "item_count": len(items),
+        "status": po_row["status"],
+        "items": [
+            {
+                "item_id": int(item["item_id"]),
+                "qty": int(item["quantity_ordered"]),
+                "cost": float(item["unit_cost"]),
+            }
+            for item in items
+        ],
+    }
+
+
+def _get_po_row(conn, po_id):
+    return conn.execute(
+        """
+        SELECT po.*, u.username AS created_by_username
+        FROM purchase_orders po
+        LEFT JOIN users u ON u.id = po.created_by
+        WHERE po.id = %s
+        """,
+        (po_id,),
+    ).fetchone()
+
+
+def _get_po_items(conn, po_id):
+    return conn.execute(
+        """
+        SELECT pi.*, i.name, i.pack_size
+        FROM po_items pi
+        JOIN items i ON pi.item_id = i.id
+        WHERE pi.po_id = %s
+        ORDER BY i.name ASC, pi.id ASC
+        """,
+        (po_id,),
+    ).fetchall()
+
+
+def _get_po_approval(conn, po_id):
+    return get_approval_request_by_entity(
+        PO_APPROVAL_TYPE,
+        PO_ENTITY_TYPE,
+        po_id,
+        external_conn=conn,
+    )
+
+
+def _total_received_quantity(items):
+    return sum(int(item["quantity_received"] or 0) for item in items)
+
+
+def _normalize_po_revision_items(current_items, revision_items):
+    item_lookup = {}
+    for item in current_items:
+        item_lookup[int(item["item_id"])] = item
+
+    normalized = []
+    seen_item_ids = set()
+    for raw_item in revision_items or []:
+        note = str(raw_item.get("revision_note") or "").strip()
+        if not note:
+            continue
+
+        try:
+            item_id = int(raw_item.get("item_id"))
+        except (TypeError, ValueError):
+            raise ValueError("Each item revision must reference a valid purchase order item.")
+
+        if item_id not in item_lookup:
+            raise ValueError("One or more revised items do not belong to this purchase order.")
+        if item_id in seen_item_ids:
+            raise ValueError("Duplicate item revisions are not allowed.")
+        seen_item_ids.add(item_id)
+
+        po_item = item_lookup[item_id]
+        normalized.append(
+            {
+                "item_id": item_id,
+                "item_name": po_item["name"],
+                "quantity_ordered": int(po_item["quantity_ordered"] or 0),
+                "quantity_received": int(po_item["quantity_received"] or 0),
+                "revision_note": note,
+            }
+        )
+
+    return normalized
+
+
+def _replace_po_items_and_order_transactions(conn, po_id, items, user_id, username, clean_time):
+    conn.execute(
+        """
+        DELETE FROM inventory_transactions
+        WHERE reference_type = 'PURCHASE_ORDER'
+          AND reference_id = %s
+          AND transaction_type = 'ORDER'
+        """,
+        (po_id,),
+    )
+    conn.execute("DELETE FROM po_items WHERE po_id = %s", (po_id,))
+
+    total_order_amount = 0.0
+    for item in items:
+        qty = item["qty"]
+        cost = item["cost"]
+        total_order_amount += qty * cost
+
+        conn.execute(
+            """
+            INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (po_id, item["item_id"], qty, cost),
+        )
+
+        add_transaction(
+            item_id=item["item_id"],
+            quantity=qty,
+            transaction_type='ORDER',
+            user_id=user_id,
+            user_name=username,
+            reference_id=po_id,
+            reference_type='PURCHASE_ORDER',
+            change_reason='ORDER_PLACEMENT',
+            unit_price=cost,
+            transaction_date=clean_time,
+            external_conn=conn
+        )
+
+    return total_order_amount
+
+
+def _fmt_change_value(value, value_type=None):
+    if value is None:
+        return None
+    if value_type == "money":
+        return f"{float(value):.2f}"
+    return str(value)
+
+
+def _build_po_change_entries(previous_po, previous_items, normalized_payload):
+    change_entries = []
+
+    previous_vendor = str(previous_po.get("vendor_name") or "").strip()
+    next_vendor = str(normalized_payload.get("vendor_name") or "").strip()
+    if previous_vendor != next_vendor:
+        change_entries.append(
+            {
+                "change_scope": "HEADER",
+                "field_name": "vendor_name",
+                "before_value": _fmt_change_value(previous_vendor or None),
+                "after_value": _fmt_change_value(next_vendor or None),
+                "change_label": "Vendor updated",
+            }
+        )
+
+    previous_notes = str(previous_po.get("notes") or "").strip()
+    next_notes = str(normalized_payload.get("notes") or "").strip()
+    if previous_notes != next_notes:
+        change_entries.append(
+            {
+                "change_scope": "HEADER",
+                "field_name": "notes",
+                "before_value": _fmt_change_value(previous_notes or None),
+                "after_value": _fmt_change_value(next_notes or None),
+                "change_label": "PO notes updated",
+            }
+        )
+
+    previous_by_item = {int(item["item_id"]): item for item in previous_items}
+    next_by_item = {int(item["item_id"]): item for item in normalized_payload["items"]}
+
+    all_item_ids = sorted(set(previous_by_item) | set(next_by_item))
+    for item_id in all_item_ids:
+        previous_item = previous_by_item.get(item_id)
+        next_item = next_by_item.get(item_id)
+
+        if previous_item and not next_item:
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": previous_item["name"],
+                    "field_name": "item_status",
+                    "before_value": "present",
+                    "after_value": "removed",
+                    "change_label": "Item removed",
+                }
+            )
+            continue
+
+        if next_item and not previous_item:
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": next_item.get("name") or f"Item #{item_id}",
+                    "field_name": "item_status",
+                    "before_value": "missing",
+                    "after_value": "added",
+                    "change_label": "Item added",
+                }
+            )
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": next_item.get("name") or f"Item #{item_id}",
+                    "field_name": "quantity_ordered",
+                    "before_value": None,
+                    "after_value": _fmt_change_value(next_item["qty"]),
+                    "change_label": "Ordered quantity set",
+                }
+            )
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": next_item.get("name") or f"Item #{item_id}",
+                    "field_name": "unit_cost",
+                    "before_value": None,
+                    "after_value": _fmt_change_value(next_item["cost"], value_type="money"),
+                    "change_label": "Unit cost set",
+                }
+            )
+            continue
+
+        previous_qty = int(previous_item["quantity_ordered"] or 0)
+        next_qty = int(next_item["qty"] or 0)
+        if previous_qty != next_qty:
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": previous_item["name"],
+                    "field_name": "quantity_ordered",
+                    "before_value": _fmt_change_value(previous_qty),
+                    "after_value": _fmt_change_value(next_qty),
+                    "change_label": "Ordered quantity updated",
+                }
+            )
+
+        previous_cost = float(previous_item["unit_cost"] or 0)
+        next_cost = float(next_item["cost"] or 0)
+        if previous_cost != next_cost:
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": previous_item["name"],
+                    "field_name": "unit_cost",
+                    "before_value": _fmt_change_value(previous_cost, value_type="money"),
+                    "after_value": _fmt_change_value(next_cost, value_type="money"),
+                    "change_label": "Unit cost updated",
+                }
+            )
+
+    return change_entries
+
+
+def _serialize_po_permissions(po_row, approval_data, total_received, current_user_id, current_role):
+    approval_status = (approval_data or {}).get("status")
+    is_creator = int(po_row["created_by"] or 0) == int(current_user_id or 0)
+    is_admin = str(current_role or "").strip().lower() == "admin"
+    po_status = (po_row["status"] or "").upper()
+    is_review_only = po_status in {"PARTIAL", "COMPLETED", "CANCELLED"} or total_received > 0
+
+    can_edit = (
+        is_creator
+        and po_status not in {"PARTIAL", "COMPLETED", "CANCELLED"}
+        and total_received == 0
+        and approval_status in PO_EDITABLE_APPROVAL_STATUSES
+    )
+    can_receive = po_status in PO_RECEIVABLE_STATUSES
+
+    if is_admin:
+        can_cancel = po_status not in {"PARTIAL", "COMPLETED", "CANCELLED"} and total_received == 0
+    else:
+        can_cancel = (
+            is_creator
+            and po_status not in {"PARTIAL", "COMPLETED", "CANCELLED"}
+            and total_received == 0
+            and approval_status not in {"APPROVED", "CANCELLED"}
+        )
+
+    return {
+        "can_edit": can_edit,
+        "can_cancel": can_cancel,
+        "can_receive": can_receive,
+        "can_admin_approve": is_admin and not is_review_only and approval_status in {"PENDING", "REVISIONS_NEEDED"},
+        "can_admin_request_revisions": is_admin and not is_review_only and approval_status in {"PENDING", "APPROVED"},
+        "can_admin_cancel": is_admin and can_cancel,
+        "is_creator": is_creator,
+    }
+
+
+def create_purchase_order(data, user_id, username, user_role):
     """
     Creates a new purchase order and logs ORDER transactions.
     Returns the new po_number and po_id.
@@ -473,6 +847,7 @@ def create_purchase_order(data, user_id, username):
     now_obj = datetime.now()
     clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
     today_str = now_obj.strftime("%Y%m%d")
+    normalized = _normalize_po_payload(data)
 
     try:
         conn.execute("BEGIN")
@@ -483,43 +858,45 @@ def create_purchase_order(data, user_id, username):
         ).fetchone()[0]
 
         po_number = f"PO-{today_str}-{str(count + 1).zfill(3)}"
+        initial_status = 'PENDING' if str(user_role or '').strip().lower() == 'admin' else 'FOR_APPROVAL'
 
         po_row = conn.execute("""
             INSERT INTO purchase_orders (po_number, vendor_name, notes, status, created_by, created_at)
-            VALUES (%s, %s, %s, 'PENDING', %s, %s)
-            RETURNING id
-        """, (po_number, data.get('vendor_name'), data.get('notes'), user_id, clean_time)).fetchone()
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id, po_number, vendor_name, notes, status, total_amount, created_by
+        """, (po_number, normalized['vendor_name'], normalized['notes'], initial_status, user_id, clean_time)).fetchone()
 
         new_po_id = po_row["id"]
-        total_order_amount = 0
-
-        for item in data.get('items', []):
-            qty = int(item['qty'])
-            cost = float(item['cost'])
-            total_order_amount += qty * cost
-
-            conn.execute("""
-                INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
-                VALUES (%s, %s, %s, %s)
-            """, (new_po_id, item['id'], qty, cost))
-
-            add_transaction(
-                item_id=item['id'],
-                quantity=qty,
-                transaction_type='ORDER',
-                user_id=user_id,
-                user_name=username,
-                reference_id=new_po_id,
-                reference_type='PURCHASE_ORDER',
-                change_reason='ORDER_PLACEMENT',
-                unit_price=cost,
-                transaction_date=clean_time,
-                external_conn=conn
-            )
+        total_order_amount = _replace_po_items_and_order_transactions(
+            conn=conn,
+            po_id=new_po_id,
+            items=normalized["items"],
+            user_id=user_id,
+            username=username,
+            clean_time=clean_time,
+        )
 
         conn.execute(
             "UPDATE purchase_orders SET total_amount = %s WHERE id = %s",
             (total_order_amount, new_po_id)
+        )
+        po_row = conn.execute(
+            """
+            SELECT id, po_number, vendor_name, notes, status, total_amount, created_by
+            FROM purchase_orders
+            WHERE id = %s
+            """,
+            (new_po_id,),
+        ).fetchone()
+        po_items = _get_po_items(conn, new_po_id)
+        create_approval_request(
+            approval_type=PO_APPROVAL_TYPE,
+            entity_type=PO_ENTITY_TYPE,
+            entity_id=new_po_id,
+            requested_by=user_id,
+            requester_role=user_role,
+            metadata=_build_po_approval_metadata(po_row, po_items),
+            external_conn=conn,
         )
 
         conn.commit()
@@ -537,10 +914,18 @@ def get_all_purchase_orders():
     conn = get_db()
     orders = conn.execute("""
         SELECT po.*,
+            ar.id AS approval_request_id,
+            ar.status AS approval_status,
+            ar.decision_notes AS approval_decision_notes,
+            ar.current_revision_no,
             (SELECT COUNT(*) FROM po_items WHERE po_id = po.id) as item_count
         FROM purchase_orders po
+        LEFT JOIN approval_requests ar
+            ON ar.approval_type = %s
+           AND ar.entity_type = %s
+           AND ar.entity_id = po.id
         ORDER BY created_at DESC
-    """).fetchall()
+    """, (PO_APPROVAL_TYPE, PO_ENTITY_TYPE)).fetchall()
     conn.close()
     return orders
 
@@ -548,13 +933,8 @@ def get_all_purchase_orders():
 def get_purchase_order_with_items(po_id):
     """Returns a PO and its items. Used by the API detail endpoint."""
     conn = get_db()
-    po = conn.execute("SELECT * FROM purchase_orders WHERE id = %s", (po_id,)).fetchone()
-    items = conn.execute("""
-        SELECT pi.*, i.name
-        FROM po_items pi
-        JOIN items i ON pi.item_id = i.id
-        WHERE pi.po_id = %s
-    """, (po_id,)).fetchall()
+    po = _get_po_row(conn, po_id)
+    items = _get_po_items(conn, po_id)
     conn.close()
     return po, items
 
@@ -591,19 +971,296 @@ def get_purchase_order_export_data(po_id):
 def get_po_for_receive_page(po_id):
     """Returns PO + items needed for the receive page. Returns None if not found."""
     conn = get_db()
-    po = conn.execute("SELECT * FROM purchase_orders WHERE id = %s", (po_id,)).fetchone()
+    po = _get_po_row(conn, po_id)
     if not po:
         conn.close()
         return None, None
 
-    items = conn.execute("""
-        SELECT pi.*, i.name, i.pack_size
-        FROM po_items pi
-        JOIN items i ON pi.item_id = i.id
-        WHERE pi.po_id = %s
-    """, (po_id,)).fetchall()
+    items = _get_po_items(conn, po_id)
     conn.close()
     return po, items
+
+
+def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
+    conn = get_db()
+    try:
+        po = _get_po_row(conn, po_id)
+        if not po:
+            return None
+
+        items = _get_po_items(conn, po_id)
+        approval_stub = _get_po_approval(conn, po_id)
+        approval = (
+            get_approval_request_with_history(approval_stub["id"], external_conn=conn)
+            if approval_stub else None
+        )
+        total_received = _total_received_quantity(items)
+        permissions = _serialize_po_permissions(
+            po_row=po,
+            approval_data=approval,
+            total_received=total_received,
+            current_user_id=current_user_id,
+            current_role=current_role,
+        )
+
+        po_data = dict(po)
+        po_data["created_at"] = format_date(po_data.get("created_at"), show_time=True)
+        po_data["received_at"] = format_date(po_data.get("received_at"), show_time=True)
+        po_data["status_class"] = get_status_class(po_data.get("status"))
+
+        return {
+            "po": po_data,
+            "items": [dict(item) for item in items],
+            "approval": approval,
+            "permissions": permissions,
+        }
+    finally:
+        conn.close()
+
+
+def get_purchase_order_review_context(po_id, current_user_id=None, current_role=None):
+    details = get_purchase_order_details(
+        po_id,
+        current_user_id=current_user_id,
+        current_role=current_role,
+    )
+    if not details:
+        return None
+
+    review_timeline = []
+    for action in details["approval"].get("actions", []) if details.get("approval") else []:
+        grouped_item_changes = {}
+        header_changes = []
+
+        for entry in action.get("change_entries", []) or []:
+            if entry.get("change_scope") == "HEADER":
+                header_changes.append(entry)
+            else:
+                item_key = str(entry.get("item_id") or entry.get("item_name") or "unknown")
+                bucket = grouped_item_changes.setdefault(
+                    item_key,
+                    {
+                        "item_name": entry.get("item_name") or "Unknown Item",
+                        "entries": [],
+                    },
+                )
+                bucket["entries"].append(entry)
+
+        review_timeline.append(
+            {
+                **action,
+                "header_changes": header_changes,
+                "item_change_groups": list(grouped_item_changes.values()),
+            }
+        )
+
+    return {
+        "po": details["po"],
+        "items": details["items"],
+        "approval": details["approval"],
+        "permissions": details["permissions"],
+        "review_timeline": review_timeline,
+    }
+
+
+def update_purchase_order(po_id, data, user_id, username, user_role):
+    normalized = _normalize_po_payload(data)
+    conn = get_db()
+    clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        conn.execute("BEGIN")
+        po = _get_po_row(conn, po_id)
+        if not po:
+            raise ValueError("Purchase order not found.")
+
+        approval = _get_po_approval(conn, po_id)
+        if not approval:
+            raise ValueError("Approval request not found for this purchase order.")
+        if int(po["created_by"] or 0) != int(user_id):
+            raise ValueError("Only the creator can edit this purchase order.")
+
+        current_items = _get_po_items(conn, po_id)
+        if _total_received_quantity(current_items) > 0 or (po["status"] or "").upper() in {"PARTIAL", "COMPLETED", "CANCELLED"}:
+            raise ValueError("This purchase order can no longer be edited.")
+        if approval["status"] not in PO_EDITABLE_APPROVAL_STATUSES:
+            raise ValueError("This purchase order is not currently editable.")
+
+        change_entries = _build_po_change_entries(po, current_items, normalized)
+
+        total_order_amount = _replace_po_items_and_order_transactions(
+            conn=conn,
+            po_id=po_id,
+            items=normalized["items"],
+            user_id=user_id,
+            username=username,
+            clean_time=clean_time,
+        )
+
+        conn.execute(
+            """
+            UPDATE purchase_orders
+            SET vendor_name = %s,
+                notes = %s,
+                total_amount = %s,
+                status = %s
+            WHERE id = %s
+            """,
+            (
+                normalized["vendor_name"],
+                normalized["notes"],
+                total_order_amount,
+                "FOR_APPROVAL",
+                po_id,
+            ),
+        )
+
+        refreshed_po = conn.execute(
+            """
+            SELECT id, po_number, vendor_name, notes, status, total_amount, created_by
+            FROM purchase_orders
+            WHERE id = %s
+            """,
+            (po_id,),
+        ).fetchone()
+        refreshed_items = _get_po_items(conn, po_id)
+        approval = resubmit_request(
+            approval_request_id=approval["id"],
+            requester_id=user_id,
+            metadata=_build_po_approval_metadata(refreshed_po, refreshed_items),
+            notes="Purchase order updated and resubmitted.",
+            change_entries=change_entries,
+            external_conn=conn,
+        )
+
+        if str(user_role or "").strip().lower() == "admin":
+            approve_request(
+                approval_request_id=approval["id"],
+                admin_user_id=user_id,
+                notes="Auto-approved after admin edit.",
+                external_conn=conn,
+            )
+            conn.execute(
+                "UPDATE purchase_orders SET status = %s WHERE id = %s",
+                ("PENDING", po_id),
+            )
+
+        conn.commit()
+        return get_purchase_order_details(po_id, current_user_id=user_id, current_role=user_role)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def cancel_purchase_order(po_id, user_id, user_role, notes=None):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        po = _get_po_row(conn, po_id)
+        if not po:
+            raise ValueError("Purchase order not found.")
+
+        approval = _get_po_approval(conn, po_id)
+        if not approval:
+            raise ValueError("Approval request not found for this purchase order.")
+
+        po_items = _get_po_items(conn, po_id)
+        total_received = _total_received_quantity(po_items)
+        po_status = (po["status"] or "").upper()
+        role = str(user_role or "").strip().lower()
+
+        if po_status in {"PARTIAL", "COMPLETED", "CANCELLED"} or total_received > 0:
+            raise ValueError("Only unreceived purchase orders can be cancelled.")
+
+        if role != "admin":
+            if int(po["created_by"] or 0) != int(user_id):
+                raise ValueError("Only the creator can cancel this purchase order.")
+            if approval["status"] in {"APPROVED", "CANCELLED"}:
+                raise ValueError("Approved or cancelled purchase orders cannot be cancelled by staff.")
+
+        cancel_request(
+            approval_request_id=approval["id"],
+            actor_id=user_id,
+            actor_role=role,
+            notes=notes,
+            external_conn=conn,
+        )
+        conn.execute(
+            "UPDATE purchase_orders SET status = %s WHERE id = %s",
+            ("CANCELLED", po_id),
+        )
+        conn.commit()
+        return get_purchase_order_details(po_id, current_user_id=user_id, current_role=user_role)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def approve_purchase_order(po_id, admin_user_id, notes=None):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        approval = _get_po_approval(conn, po_id)
+        if not approval:
+            raise ValueError("Approval request not found for this purchase order.")
+        if not _get_po_row(conn, po_id):
+            raise ValueError("Purchase order not found.")
+        if _total_received_quantity(_get_po_items(conn, po_id)) > 0:
+            raise ValueError("This purchase order already has received quantities and cannot be re-approved.")
+
+        approve_request(
+            approval_request_id=approval["id"],
+            admin_user_id=admin_user_id,
+            notes=notes,
+            external_conn=conn,
+        )
+        conn.execute(
+            "UPDATE purchase_orders SET status = %s WHERE id = %s",
+            ("PENDING", po_id),
+        )
+        conn.commit()
+        return get_purchase_order_details(po_id, current_user_id=admin_user_id, current_role="admin")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def request_po_revisions(po_id, admin_user_id, notes, revision_items=None):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        approval = _get_po_approval(conn, po_id)
+        if not approval:
+            raise ValueError("Approval request not found for this purchase order.")
+        if not _get_po_row(conn, po_id):
+            raise ValueError("Purchase order not found.")
+        po_items = _get_po_items(conn, po_id)
+        normalized_revision_items = _normalize_po_revision_items(po_items, revision_items)
+
+        request_revisions(
+            approval_request_id=approval["id"],
+            admin_user_id=admin_user_id,
+            notes=notes,
+            revision_items=normalized_revision_items,
+            external_conn=conn,
+        )
+        conn.execute(
+            "UPDATE purchase_orders SET status = %s WHERE id = %s",
+            ("FOR_APPROVAL", po_id),
+        )
+        conn.commit()
+        return get_purchase_order_details(po_id, current_user_id=admin_user_id, current_role="admin")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def receive_purchase_order(po_id, received_items, user_id, username):
@@ -618,6 +1275,11 @@ def receive_purchase_order(po_id, received_items, user_id, username):
 
     try:
         conn.execute("BEGIN")
+        po = _get_po_row(conn, po_id)
+        if not po:
+            raise ValueError("Purchase order not found.")
+        if (po["status"] or "").upper() not in PO_RECEIVABLE_STATUSES:
+            raise ValueError("This purchase order is not approved for receiving.")
         all_completed = True
 
         for entry in received_items:
@@ -750,6 +1412,8 @@ def get_po_details_for_api(po_id):
     """, (po_id,)).fetchall()
     conn.close()
 
+    approval = get_approval_request_by_entity(PO_APPROVAL_TYPE, PO_ENTITY_TYPE, po_id)
+
     return {
         "po_number": po['po_number'],
         "vendor_name": po['vendor_name'],
@@ -759,6 +1423,7 @@ def get_po_details_for_api(po_id):
         "mode": 'IN' if po['received_at'] else 'ORDER',
         "created_at": format_date(po['created_at'], show_time=True),
         "received_at": format_date(po['received_at'], show_time=True),
+        "approval_status": approval["status"] if approval else None,
         "items": [
             {
                 "name": item['name'],
@@ -782,6 +1447,8 @@ def get_status_class(status):
         return "bg-success"
     elif status == "PARTIAL":
         return "bg-info text-dark"
+    elif status == "FOR_APPROVAL":
+        return "bg-secondary"
     elif status == "PENDING":
         return "bg-warning text-dark"
     elif status == "CANCELLED":

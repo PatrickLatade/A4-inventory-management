@@ -327,8 +327,12 @@
         <div class="meta">Status</div>
         {% if po.status|upper == 'COMPLETED' %}
             <span class="status-pill completed">Completed</span>
+        {% elif po.status|upper == 'CANCELLED' %}
+            <span class="status-pill pending">Cancelled</span>
         {% elif po.status|upper == 'PARTIAL' %}
             <span class="status-pill partial">Partial</span>
+        {% elif po.status|upper == 'FOR_APPROVAL' %}
+            <span class="status-pill pending">For Approval</span>
         {% else %}
             <span class="status-pill pending">Pending</span>
         {% endif %}

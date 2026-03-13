@@ -31,6 +31,8 @@ Status:
   - `/transaction/order/save`
   - `/transaction/orders/list`
   - `/api/order/<po_id>`
+  - `/api/order/<po_id>/update`
+  - `/api/order/<po_id>/cancel`
   - `/export/purchase-order/<po_id>/csv`
   - `/transaction/receive/<po_id>`
   - `/transaction/receive/confirm`
@@ -59,6 +61,9 @@ Status:
   - `/api/loyalty/eligibility/<customer_id>`
   - `/api/loyalty/redeem`
   - `/api/loyalty/customer/<customer_id>/summary`
+  - `/api/approvals/<approval_request_id>`
+  - `/api/approvals/<approval_request_id>/cancel`
+  - `/api/approvals/<approval_request_id>/resubmit`
   - `/cash-ledger`
   - `/api/cash/summary`
   - `/api/cash/entries`
@@ -87,6 +92,13 @@ Status:
   - `/api/item/<item_id>`
   - `/api/loyalty/programs`
   - `/api/loyalty/programs/<program_id>/toggle`
+  - `/api/admin/approvals`
+  - `/api/admin/approvals/<approval_request_id>`
+  - `/api/admin/approvals/<approval_request_id>/approve`
+  - `/api/admin/approvals/<approval_request_id>/revisions`
+  - `/api/admin/approvals/<approval_request_id>/cancel`
+  - `/api/order/<po_id>/approval/approve`
+  - `/api/order/<po_id>/approval/revisions`
   - `/api/cash/delete/<entry_id>`
 
 Notes:
@@ -94,3 +106,4 @@ Notes:
 - Global authentication is enforced in `app.py` for every non-public route.
 - The entire `auth` blueprint is admin-only except `/login` and `/logout`.
 - `Flask-WTF` CSRF protection applies to all unsafe methods globally.
+- Purchase orders now use PO-specific JSON approval endpoints so PO status and approval status stay synchronized.

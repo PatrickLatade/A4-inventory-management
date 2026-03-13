@@ -1,9 +1,27 @@
 {% extends "base.html" %}
 {% block styles %}
 <style>
-    /* =====================
-       PAGE HEADER
-    ===================== */
+    :root {
+        --po-amber: #f59e0b;
+        --po-amber-soft: rgba(245, 158, 11, 0.16);
+        --po-amber-border: rgba(245, 158, 11, 0.38);
+        --po-revisions: #ea580c;
+        --po-revisions-soft: rgba(234, 88, 12, 0.16);
+        --po-revisions-border: rgba(234, 88, 12, 0.42);
+        --po-ready: #0d6efd;
+        --po-ready-soft: rgba(13, 110, 253, 0.14);
+        --po-ready-border: rgba(13, 110, 253, 0.38);
+        --po-partial: #ffc107;
+        --po-partial-soft: rgba(255, 193, 7, 0.14);
+        --po-partial-border: rgba(255, 193, 7, 0.38);
+        --po-completed: #198754;
+        --po-completed-soft: rgba(25, 135, 84, 0.14);
+        --po-completed-border: rgba(25, 135, 84, 0.34);
+        --po-cancelled: #dc3545;
+        --po-cancelled-soft: rgba(220, 53, 69, 0.14);
+        --po-cancelled-border: rgba(220, 53, 69, 0.34);
+    }
+
     .page-header {
         display: flex;
         align-items: center;
@@ -23,9 +41,6 @@
         margin-right: 10px;
     }
 
-    /* =====================
-       TABS
-    ===================== */
     .po-tabs {
         display: flex;
         gap: 4px;
@@ -35,6 +50,7 @@
         padding: 6px;
         margin-bottom: 28px;
         width: fit-content;
+        flex-wrap: wrap;
     }
 
     .po-tab {
@@ -51,7 +67,6 @@
         cursor: pointer;
         transition: all 0.18s ease;
         letter-spacing: 0.2px;
-        position: relative;
     }
 
     .po-tab:hover {
@@ -65,9 +80,12 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
 
-    .po-tab.active.tab-pending  { color: #f87171; }
-    .po-tab.active.tab-partial  { color: #fcd34d; }
-    .po-tab.active.tab-completed { color: #86efac; }
+    .po-tab.active.tab-for-approval { color: var(--po-amber); }
+    .po-tab.active.tab-revisions { color: var(--po-revisions); }
+    .po-tab.active.tab-pending { color: var(--po-ready); }
+    .po-tab.active.tab-partial { color: var(--po-partial); }
+    .po-tab.active.tab-completed { color: var(--po-completed); }
+    .po-tab.active.tab-cancelled { color: var(--po-cancelled); }
 
     .tab-dot {
         width: 7px;
@@ -76,9 +94,12 @@
         flex-shrink: 0;
     }
 
-    .tab-pending  .tab-dot { background: var(--accent); }
-    .tab-partial  .tab-dot { background: #f4c430; }
-    .tab-completed .tab-dot { background: #4ade80; }
+    .tab-for-approval .tab-dot { background: var(--po-amber); }
+    .tab-revisions .tab-dot { background: var(--po-revisions); }
+    .tab-pending .tab-dot { background: var(--po-ready); }
+    .tab-partial .tab-dot { background: var(--po-partial); }
+    .tab-completed .tab-dot { background: var(--po-completed); }
+    .tab-cancelled .tab-dot { background: var(--po-cancelled); }
 
     .tab-count {
         font-size: 0.7rem;
@@ -88,19 +109,16 @@
         line-height: 1.6;
     }
 
-    .tab-pending  .tab-count { background: rgba(193,18,31,0.2);  color: #f87171; }
-    .tab-partial  .tab-count { background: rgba(244,196,48,0.15); color: #fcd34d; }
-    .tab-completed .tab-count { background: rgba(74,222,128,0.1);  color: #86efac; }
+    .tab-for-approval .tab-count { background: var(--po-amber-soft); color: var(--po-amber); }
+    .tab-revisions .tab-count { background: var(--po-revisions-soft); color: var(--po-revisions); }
+    .tab-pending .tab-count { background: var(--po-ready-soft); color: var(--po-ready); }
+    .tab-partial .tab-count { background: var(--po-partial-soft); color: var(--po-partial); }
+    .tab-completed .tab-count { background: var(--po-completed-soft); color: var(--po-completed); }
+    .tab-cancelled .tab-count { background: var(--po-cancelled-soft); color: var(--po-cancelled); }
 
-    /* =====================
-       TAB PANELS
-    ===================== */
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* =====================
-       PO CARDS
-    ===================== */
     .po-box {
         background: var(--bg-card);
         border: 1px solid var(--border-soft);
@@ -116,26 +134,41 @@
     .po-box::before {
         content: '';
         position: absolute;
-        left: 0; top: 0; bottom: 0;
+        left: 0;
+        top: 0;
+        bottom: 0;
         width: 4px;
         border-radius: 14px 0 0 14px;
     }
 
-    .status-pending::before   { background: var(--accent); }
-    .status-partial::before   { background: #f4c430; }
-    .status-completed::before { background: #4ade80; }
+    .status-for-approval::before { background: var(--po-amber); }
+    .status-revisions::before { background: var(--po-revisions); }
+    .status-pending::before { background: var(--po-ready); }
+    .status-partial::before { background: var(--po-partial); }
+    .status-completed::before { background: var(--po-completed); }
+    .status-cancelled::before { background: var(--po-cancelled); }
 
     .po-box:hover {
         transform: translateY(-4px);
         box-shadow: 0 14px 36px rgba(0,0,0,0.45);
     }
 
-    .status-pending:hover   { border-color: rgba(193,18,31,0.45); }
-    .status-partial:hover   { border-color: rgba(244,196,48,0.45); }
-    .status-completed:hover { border-color: rgba(74,222,128,0.3); }
+    .status-for-approval:hover { border-color: var(--po-amber-border); }
+    .status-revisions:hover { border-color: var(--po-revisions-border); }
+    .status-pending:hover { border-color: var(--po-ready-border); }
+    .status-partial:hover { border-color: var(--po-partial-border); }
+    .status-completed:hover { border-color: var(--po-completed-border); }
+    .status-cancelled:hover { border-color: var(--po-cancelled-border); }
 
-    .status-completed { opacity: 0.75; }
-    .status-completed:hover { opacity: 1; }
+    .status-completed,
+    .status-cancelled {
+        opacity: 0.8;
+    }
+
+    .status-completed:hover,
+    .status-cancelled:hover {
+        opacity: 1;
+    }
 
     .month-group {
         border: 1px solid var(--border-soft);
@@ -173,9 +206,9 @@
     }
 
     .month-count {
-        background: rgba(74,222,128,0.1);
-        color: #86efac;
-        border: 1px solid rgba(74,222,128,0.35);
+        background: var(--po-completed-soft);
+        color: var(--po-completed);
+        border: 1px solid var(--po-completed-border);
         border-radius: 999px;
         font-size: 0.7rem;
         padding: 2px 8px;
@@ -218,48 +251,56 @@
         color: var(--text-primary);
     }
 
-    /* =====================
-       STATUS BADGES
-    ===================== */
-    .badge-pending {
-        background: rgba(193,18,31,0.18);
-        color: #f87171;
-        border: 1px solid rgba(193,18,31,0.4);
+    .badge-for-approval,
+    .badge-revisions,
+    .badge-pending,
+    .badge-partial,
+    .badge-completed,
+    .badge-cancelled {
         font-size: 0.65rem;
         padding: 3px 9px;
         border-radius: 20px;
         font-weight: 700;
         letter-spacing: 0.8px;
         text-transform: uppercase;
+    }
+
+    .badge-for-approval {
+        background: var(--po-amber-soft);
+        color: var(--po-amber);
+        border: 1px solid var(--po-amber-border);
+    }
+
+    .badge-revisions {
+        background: var(--po-revisions-soft);
+        color: var(--po-revisions);
+        border: 1px solid var(--po-revisions-border);
+    }
+
+    .badge-pending {
+        background: var(--po-ready-soft);
+        color: var(--po-ready);
+        border: 1px solid var(--po-ready-border);
     }
 
     .badge-partial {
-        background: rgba(244,196,48,0.12);
-        color: #fcd34d;
-        border: 1px solid rgba(244,196,48,0.35);
-        font-size: 0.65rem;
-        padding: 3px 9px;
-        border-radius: 20px;
-        font-weight: 700;
-        letter-spacing: 0.8px;
-        text-transform: uppercase;
+        background: var(--po-partial-soft);
+        color: var(--po-partial);
+        border: 1px solid var(--po-partial-border);
     }
 
     .badge-completed {
-        background: rgba(74,222,128,0.1);
-        color: #86efac;
-        border: 1px solid rgba(74,222,128,0.3);
-        font-size: 0.65rem;
-        padding: 3px 9px;
-        border-radius: 20px;
-        font-weight: 700;
-        letter-spacing: 0.8px;
-        text-transform: uppercase;
+        background: var(--po-completed-soft);
+        color: var(--po-completed);
+        border: 1px solid var(--po-completed-border);
     }
 
-    /* =====================
-       EMPTY STATE
-    ===================== */
+    .badge-cancelled {
+        background: var(--po-cancelled-soft);
+        color: var(--po-cancelled);
+        border: 1px solid var(--po-cancelled-border);
+    }
+
     .empty-state {
         color: var(--text-muted);
         font-size: 0.82rem;
@@ -273,9 +314,6 @@
         border-radius: 14px;
     }
 
-    /* =====================
-       MODAL
-    ===================== */
     .modal-content {
         background-color: var(--bg-card) !important;
         border: 1px solid var(--border-soft);
@@ -300,7 +338,9 @@
         padding: 16px 24px;
     }
 
-    .modal-body { padding: 24px; }
+    .modal-body {
+        padding: 24px;
+    }
 
     .modal-meta-label {
         font-size: 0.7rem;
@@ -334,11 +374,6 @@
         padding: 10px 14px;
     }
 
-    .table-po-items tbody tr {
-        background: transparent !important;
-        border-color: var(--border-soft);
-    }
-
     .table-po-items tbody td {
         color: var(--text-primary);
         background: transparent !important;
@@ -347,8 +382,6 @@
         vertical-align: middle;
         border-color: var(--border-soft);
     }
-
-    .table-po-items tbody tr:hover { background: #1a1d26 !important; }
 
     .qty-badge {
         display: inline-block;
@@ -369,15 +402,343 @@
         background: rgba(74,222,128,0.08);
     }
 
+    .approval-history {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .approval-history li {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-soft);
+        background: #141821;
+    }
+
+    .approval-history li:last-child {
+        border-bottom: none;
+    }
+
+    .history-toggle {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #141821;
+        color: var(--text-primary);
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-align: left;
+    }
+
+    .history-toggle:hover {
+        background: #171c27;
+    }
+
+    .history-toggle-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+
+    .history-toggle-count {
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border-soft);
+        background: rgba(255,255,255,0.03);
+    }
+
+    #approvalHistoryCollapse {
+        margin-top: 10px;
+    }
+
+    .history-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .history-meta {
+        color: var(--text-muted);
+        font-size: 0.76rem;
+    }
+
+    .history-notes {
+        color: var(--text-primary);
+        font-size: 0.82rem;
+        margin-top: 6px;
+        white-space: pre-wrap;
+    }
+
     .btn-close-white {
         filter: invert(1) grayscale(100%) brightness(200%);
+    }
+
+    .modal-action-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        flex-wrap: nowrap;
+    }
+
+    .modal-action-slot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+    }
+
+    #workflowActionGroup {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .modal-action-slot-middle {
+        justify-content: center;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .modal-action-slot-right {
+        margin-left: auto;
+        justify-content: flex-end;
+    }
+
+    .modal-action-separator {
+        width: 1px;
+        height: 28px;
+        background: rgba(148, 163, 184, 0.22);
+        flex-shrink: 0;
+    }
+
+    .btn-modal-neutral {
+        border-radius: 10px;
+        padding: 0.5rem 0.85rem;
+    }
+
+    .btn-modal-secondary {
+        border-radius: 10px;
+        border-color: #475569;
+        color: #e5e7eb;
+        padding: 0.5rem 0.85rem;
+    }
+
+    .btn-modal-secondary:hover {
+        background: rgba(148, 163, 184, 0.12);
+        color: #ffffff;
+        border-color: #64748b;
+    }
+
+    .btn-modal-edit {
+        border-radius: 10px;
+        background: #facc15;
+        color: #111827;
+        border: none;
+        font-weight: 700;
+        padding: 0.5rem 0.85rem;
+    }
+
+    .btn-modal-edit:hover {
+        background: #eab308;
+        color: #111827;
+    }
+
+    .btn-modal-revisions {
+        border-radius: 10px;
+        background: #f59e0b;
+        color: #111827;
+        border: none;
+        font-weight: 700;
+        padding: 0.5rem 0.85rem;
+    }
+
+    .btn-modal-revisions:hover {
+        background: #d97706;
+        color: #111827;
+    }
+
+    .btn-modal-approve {
+        border-radius: 10px;
+        background: #198754;
+        border: none;
+        font-weight: 700;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .btn-modal-approve:hover {
+        background: #157347;
+    }
+
+    .btn-modal-cancel {
+        border-radius: 10px;
+        background: #dc3545;
+        border: none;
+        color: #ffffff;
+        font-weight: 700;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .btn-modal-cancel:hover {
+        background: #bb2d3b;
+        color: #ffffff;
+    }
+
+    .btn-modal-receive {
+        border-radius: 10px;
+        background: var(--po-ready);
+        border: none;
+        font-weight: 700;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .btn-modal-receive:hover {
+        background: #0b5ed7;
+    }
+
+    .action-modal .modal-dialog {
+        max-width: 980px;
+    }
+
+    .action-modal .modal-content {
+        border-radius: 18px;
+    }
+
+    .action-modal .modal-body {
+        padding: 22px 24px;
+        max-height: 72vh;
+        overflow-y: auto;
+    }
+
+    .action-helper {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+    }
+
+    .action-textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .action-error {
+        display: none;
+        margin-top: 10px;
+        color: #f87171;
+        font-size: 0.82rem;
+    }
+
+    .revision-items-preview {
+        margin-top: 18px;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        overflow: hidden;
+        overflow-x: auto;
+    }
+
+    .revision-items-preview .table {
+        margin-bottom: 0;
+        table-layout: auto;
+        min-width: 860px;
+    }
+
+    .revision-items-preview th,
+    .revision-items-preview td {
+        font-size: 0.82rem;
+        text-align: left !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+
+    .revision-items-preview th:nth-child(2),
+    .revision-items-preview td:nth-child(2),
+    .revision-items-preview th:nth-child(3),
+    .revision-items-preview td:nth-child(3) {
+        text-align: center !important;
+    }
+
+    .revision-item-note {
+        width: 100%;
+        min-width: 280px;
+        min-height: 74px;
+        resize: vertical;
+    }
+
+    .revision-modal-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+        margin-bottom: 10px;
+    }
+
+    .revision-count-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--po-revisions);
+        background: var(--po-revisions-soft);
+        border: 1px solid var(--po-revisions-border);
+    }
+
+    .revision-scaffold-note {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px dashed var(--po-revisions-border);
+        background: rgba(234, 88, 12, 0.08);
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .history-revision-items {
+        margin-top: 10px;
+        border-top: 1px dashed rgba(255,255,255,0.08);
+        padding-top: 10px;
+    }
+
+    .history-revision-item {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+        margin-bottom: 8px;
+    }
+
+    .history-revision-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .history-revision-name {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .history-revision-note {
+        margin-top: 4px;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        white-space: pre-wrap;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-
-<!-- PAGE HEADER -->
 <div class="page-header">
     <div class="page-title">
         <i class="bi bi-box-arrow-in-down"></i>Purchase Orders
@@ -394,38 +755,95 @@
     </div>
 </div>
 
-<!-- COUNT HELPERS FOR TAB BADGES -->
-{% set pending_orders   = orders | selectattr("status", "equalto", "PENDING")   | list %}
-{% set partial_orders   = orders | selectattr("status", "equalto", "PARTIAL")   | list %}
+{% set for_approval_orders = orders | selectattr("status", "equalto", "FOR_APPROVAL") | rejectattr("approval_status", "equalto", "REVISIONS_NEEDED") | list %}
+{% set revision_orders = orders | selectattr("status", "equalto", "FOR_APPROVAL") | selectattr("approval_status", "equalto", "REVISIONS_NEEDED") | list %}
+{% set pending_orders = orders | selectattr("status", "equalto", "PENDING") | list %}
+{% set partial_orders = orders | selectattr("status", "equalto", "PARTIAL") | list %}
 {% set completed_orders = orders | selectattr("status", "equalto", "COMPLETED") | list %}
+{% set cancelled_orders = orders | selectattr("status", "equalto", "CANCELLED") | list %}
 
-<!-- TABS -->
 <div class="po-tabs">
-    <button class="po-tab tab-pending active" onclick="switchTab('pending', this)">
+    <button class="po-tab tab-for-approval active" onclick="switchTab('for-approval', this)">
         <span class="tab-dot"></span>
-        Pending
-        {% if pending_orders %}
-        <span class="tab-count">{{ pending_orders | length }}</span>
-        {% endif %}
+        For Approval
+        {% if for_approval_orders %}<span class="tab-count">{{ for_approval_orders | length }}</span>{% endif %}
+    </button>
+    <button class="po-tab tab-revisions" onclick="switchTab('revisions', this)">
+        <span class="tab-dot"></span>
+        For Revisions
+        {% if revision_orders %}<span class="tab-count">{{ revision_orders | length }}</span>{% endif %}
+    </button>
+    <button class="po-tab tab-pending" onclick="switchTab('pending', this)">
+        <span class="tab-dot"></span>
+        Ready to Receive
+        {% if pending_orders %}<span class="tab-count">{{ pending_orders | length }}</span>{% endif %}
     </button>
     <button class="po-tab tab-partial" onclick="switchTab('partial', this)">
         <span class="tab-dot"></span>
         Partial
-        {% if partial_orders %}
-        <span class="tab-count">{{ partial_orders | length }}</span>
-        {% endif %}
+        {% if partial_orders %}<span class="tab-count">{{ partial_orders | length }}</span>{% endif %}
     </button>
     <button class="po-tab tab-completed" onclick="switchTab('completed', this)">
         <span class="tab-dot"></span>
         Completed
-        {% if completed_orders %}
-        <span class="tab-count">{{ completed_orders | length }}</span>
-        {% endif %}
+        {% if completed_orders %}<span class="tab-count">{{ completed_orders | length }}</span>{% endif %}
+    </button>
+    <button class="po-tab tab-cancelled" onclick="switchTab('cancelled', this)">
+        <span class="tab-dot"></span>
+        Cancelled
+        {% if cancelled_orders %}<span class="tab-count">{{ cancelled_orders | length }}</span>{% endif %}
     </button>
 </div>
 
-<!-- PENDING PANEL -->
-<div class="tab-panel active" id="panel-pending">
+<div class="tab-panel active" id="panel-for-approval">
+    {% if for_approval_orders %}
+    <div class="row g-3">
+        {% for order in for_approval_orders %}
+        <div class="col-md-4">
+            <div class="po-box status-for-approval" onclick="openOrderDetails({{ order.id }})">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="po-number">{{ order.po_number }}</div>
+                    <span class="badge-for-approval">For Approval</span>
+                </div>
+                <div class="po-vendor">{{ order.vendor_name }}</div>
+                <div class="po-meta">
+                    <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
+                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-inbox"></i> No purchase orders waiting for approval.</div>
+    {% endif %}
+</div>
+
+<div class="tab-panel" id="panel-revisions">
+    {% if revision_orders %}
+    <div class="row g-3">
+        {% for order in revision_orders %}
+        <div class="col-md-4">
+            <div class="po-box status-revisions" onclick="openOrderDetails({{ order.id }})">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="po-number">{{ order.po_number }}</div>
+                    <span class="badge-revisions">For Revisions</span>
+                </div>
+                <div class="po-vendor">{{ order.vendor_name }}</div>
+                <div class="po-meta">
+                    <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
+                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-inbox"></i> No purchase orders waiting for revisions.</div>
+    {% endif %}
+</div>
+
+<div class="tab-panel" id="panel-pending">
     {% if pending_orders %}
     <div class="row g-3">
         {% for order in pending_orders %}
@@ -433,25 +851,22 @@
             <div class="po-box status-pending" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-pending">Pending</span>
+                    <span class="badge-pending">Ready to Receive</span>
                 </div>
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
                     <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
-                    <span class="po-amount">₱{{ "{:,.2f}".format(order.total_amount) }}</span>
+                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
-        <i class="bi bi-inbox"></i> No pending orders.
-    </div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No approved purchase orders waiting for receiving.</div>
     {% endif %}
 </div>
 
-<!-- PARTIAL PANEL -->
 <div class="tab-panel" id="panel-partial">
     {% if partial_orders %}
     <div class="row g-3">
@@ -465,20 +880,17 @@
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
                     <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
-                    <span class="po-amount">₱{{ "{:,.2f}".format(order.total_amount) }}</span>
+                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state">
-        <i class="bi bi-inbox"></i> No partial orders.
-    </div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No partially received purchase orders.</div>
     {% endif %}
 </div>
 
-<!-- COMPLETED PANEL -->
 <div class="tab-panel" id="panel-completed">
     {% if completed_orders %}
     {% for month in completed_month_groups %}
@@ -501,11 +913,11 @@
                         <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                                <i class="bi bi-check-circle-fill" style="color:#4ade80; font-size:0.85rem;"></i>
+                                <span class="badge-completed">Completed</span>
                             </div>
                             <div class="po-vendor">{{ order.vendor_name }}</div>
                             <div class="po-meta">
-                                <span class="po-amount" style="font-size:0.8rem;">₱{{ "{:,.2f}".format(order.total_amount) }}</span>
+                                <span class="po-amount" style="font-size:0.8rem;">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
                             </div>
                         </div>
                     </div>
@@ -516,13 +928,34 @@
     </div>
     {% endfor %}
     {% else %}
-    <div class="empty-state">
-        <i class="bi bi-inbox"></i> No completed orders yet.
-    </div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No completed orders yet.</div>
     {% endif %}
 </div>
 
-<!-- ORDER DETAILS MODAL -->
+<div class="tab-panel" id="panel-cancelled">
+    {% if cancelled_orders %}
+    <div class="row g-3">
+        {% for order in cancelled_orders %}
+        <div class="col-md-4">
+            <div class="po-box status-cancelled" onclick="openOrderDetails({{ order.id }})">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="po-number">{{ order.po_number }}</div>
+                    <span class="badge-cancelled">Cancelled</span>
+                </div>
+                <div class="po-vendor">{{ order.vendor_name }}</div>
+                <div class="po-meta">
+                    <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
+                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="bi bi-inbox"></i> No cancelled purchase orders.</div>
+    {% endif %}
+</div>
+
 <div class="modal fade" id="orderModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -530,18 +963,11 @@
                 <h5 class="modal-title d-flex align-items-center gap-2 mb-0">
                     <span>PO</span>
                     <span id="modalPONumber">-</span>
-                    <a id="exportPoCsvBtn"
-                       href="#"
-                       class="btn btn-sm btn-outline-success py-0 px-2"
-                       target="_blank"
-                       title="Download CSV">
+                    <span id="modalStatusBadge"></span>
+                    <a id="exportPoCsvBtn" href="#" class="btn btn-sm btn-outline-success py-0 px-2" target="_blank" title="Download CSV">
                         <i class="bi bi-filetype-csv"></i>
                     </a>
-                    <a id="exportPoPdfBtn"
-                            href="#"
-                            class="btn btn-sm btn-outline-danger py-0 px-2"
-                            target="_blank"
-                            title="Open printable PDF view">
+                    <a id="exportPoPdfBtn" href="#" class="btn btn-sm btn-outline-danger py-0 px-2" target="_blank" title="Open printable PDF view">
                         <i class="bi bi-filetype-pdf"></i>
                     </a>
                 </h5>
@@ -549,58 +975,215 @@
             </div>
             <div class="modal-body">
                 <div class="row mb-4">
-                    <div class="col-6">
+                    <div class="col-md-4">
                         <span class="modal-meta-label">Vendor</span>
                         <span id="modalVendor" class="modal-meta-value"></span>
                     </div>
-                    <div class="col-6 text-end">
+                    <div class="col-md-4">
+                        <span class="modal-meta-label">Created By</span>
+                        <span id="modalCreator" class="modal-meta-value"></span>
+                    </div>
+                    <div class="col-md-4 text-md-end">
                         <span class="modal-meta-label">Created At</span>
                         <span id="modalDate" class="modal-meta-value"></span>
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-po-items mb-0">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th class="text-center">Ordered</th>
-                                <th class="text-center">Received</th>
-                            </tr>
-                        </thead>
-                        <tbody id="modalItemsBody"></tbody>
-                    </table>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <span class="modal-meta-label">Approval Status</span>
+                        <span id="modalApprovalStatus" class="modal-meta-value"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <span class="modal-meta-label">Notes</span>
+                        <span id="modalApprovalNotes" class="modal-meta-value"></span>
+                    </div>
+                    <div class="col-md-4"></div>
+                </div>
+
+                <div class="mb-4">
+                    <span class="modal-meta-label">Items</span>
+                    <div class="table-responsive">
+                        <table class="table table-po-items mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="text-center">Ordered</th>
+                                    <th class="text-center">Received</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalItemsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="modal-meta-label">Approval History</span>
+                    <button
+                        type="button"
+                        class="history-toggle"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#approvalHistoryCollapse"
+                        aria-expanded="false"
+                        aria-controls="approvalHistoryCollapse"
+                    >
+                        <span>Show History</span>
+                        <span class="history-toggle-meta">
+                            <span id="modalApprovalHistoryCount" class="history-toggle-count">0 entries</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </span>
+                    </button>
+                    <div id="approvalHistoryCollapse" class="collapse">
+                        <ul id="modalApprovalHistory" class="approval-history"></ul>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius:10px;">Close</button>
-                <a id="receiveBtn" href="#" class="btn btn-danger">
-                    <i class="bi bi-truck me-1"></i> Go to Receiving
-                </a>
+                <div class="modal-action-bar">
+                    <div class="modal-action-slot" id="workflowActionGroup">
+                        <div class="modal-action-slot">
+                            <div id="adminPrimaryActionGroup" class="modal-action-slot"></div>
+                            <button id="cancelBtn" type="button" class="btn btn-danger btn-modal-cancel" style="display:none;">
+                                <i class="bi bi-x-circle me-1"></i> Cancel PO
+                            </button>
+                            <a id="editBtn" href="#" class="btn btn-warning btn-modal-edit" style="display:none;">
+                                <i class="bi bi-pencil-square me-1"></i> Edit
+                            </a>
+                        </div>
+                        <div id="actionSeparatorOne" class="modal-action-separator" style="display:none;"></div>
+                        <div class="modal-action-slot modal-action-slot-middle">
+                            <div id="adminSecondaryActionGroup" class="modal-action-slot"></div>
+                            <a id="receiveBtn" href="#" class="btn btn-primary btn-modal-receive" style="display:none;">
+                                <i class="bi bi-truck me-1"></i> Receive
+                            </a>
+                        </div>
+                    </div>
+                    <div class="modal-action-slot modal-action-slot-right">
+                        <div id="actionSeparatorTwo" class="modal-action-separator" style="display:none;"></div>
+                        <a id="reviewPageBtn" href="#" class="btn btn-outline-light btn-modal-secondary">
+                            <i class="bi bi-layout-text-window-reverse me-1"></i> Full Review
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary btn-modal-neutral" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
+<div class="modal fade action-modal" id="revisionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title mb-0">Request Revisions</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="action-helper">
+                    Add an optional summary note, then write item-level revision notes only for the lines that need changes.
+                </div>
+                <label class="modal-meta-label" for="revisionsNotesInput">Notes</label>
+                <textarea id="revisionsNotesInput" class="form-control action-textarea" placeholder="Optional summary for the requester"></textarea>
+
+                <div class="revision-modal-meta">
+                    <span class="modal-meta-label mb-0">Item Revisions</span>
+                    <span class="revision-count-pill" id="revisionItemCount">0 items marked</span>
+                </div>
+                <div class="revision-items-preview">
+                    <table class="table table-po-items">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Ordered</th>
+                                <th class="text-center">Received</th>
+                                <th>Revision Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="revisionsItemsPreviewBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="revision-scaffold-note">Leave an item blank if it does not need changes.</div>
+                <div id="revisionsNotesError" class="action-error">Add a summary note or at least one item revision.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="btn btn-warning" id="confirmRevisionsBtn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Send for Revisions
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade action-modal" id="cancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title mb-0">Cancel Purchase Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="action-helper">
+                    Cancellation requires a reason for the approval audit trail.
+                </div>
+                <label class="modal-meta-label" for="cancelNotesInput">Reason</label>
+                <textarea id="cancelNotesInput" class="form-control action-textarea" placeholder="Explain why this PO is being cancelled"></textarea>
+                <div id="cancelNotesError" class="action-error">Cancellation reason is required.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="btn btn-danger" id="confirmCancelBtn">
+                    <i class="bi bi-x-circle me-1"></i> Confirm Cancel PO
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 let orderModal;
+let revisionsModal;
+let cancelModal;
+let activeOrderId = null;
+let activeOrderDetails = null;
+let approvalHistoryCollapse;
+const currentRole = {{ session.get('role')|tojson }};
 
 document.addEventListener('DOMContentLoaded', function () {
     const modalEl = document.getElementById('orderModal');
-    if (modalEl) orderModal = new bootstrap.Modal(modalEl);
+    if (modalEl) {
+        orderModal = new bootstrap.Modal(modalEl);
+    }
+
+    const revisionsModalEl = document.getElementById('revisionsModal');
+    if (revisionsModalEl) {
+        revisionsModal = new bootstrap.Modal(revisionsModalEl);
+        revisionsModalEl.addEventListener('hidden.bs.modal', handleActionModalHidden);
+    }
+
+    const cancelModalEl = document.getElementById('cancelModal');
+    if (cancelModalEl) {
+        cancelModal = new bootstrap.Modal(cancelModalEl);
+        cancelModalEl.addEventListener('hidden.bs.modal', handleActionModalHidden);
+    }
+
+    const approvalHistoryEl = document.getElementById('approvalHistoryCollapse');
+    if (approvalHistoryEl) {
+        approvalHistoryCollapse = new bootstrap.Collapse(approvalHistoryEl, { toggle: false });
+    }
+
+    document.getElementById('confirmRevisionsBtn')?.addEventListener('click', submitRevisions);
+    document.getElementById('confirmCancelBtn')?.addEventListener('click', submitCancellation);
 });
 
 function switchTab(name, btn) {
-    // Deactivate all tabs and panels
-    document.querySelectorAll('.po-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-
-    // Activate clicked tab and matching panel
+    document.querySelectorAll('.po-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('panel-' + name).classList.add('active');
+    document.getElementById(`panel-${name}`).classList.add('active');
 }
 
 async function openOrderDetails(poId) {
@@ -610,46 +1193,379 @@ async function openOrderDetails(poId) {
 
     try {
         const response = await fetch(`/api/order/${poId}`);
-        if (!response.ok) throw new Error("Failed to fetch PO details");
-
         const data = await response.json();
-
-        document.getElementById('modalPONumber').innerText = data.po.po_number;
-        document.getElementById('modalVendor').innerText = data.po.vendor_name;
-        document.getElementById('modalDate').innerText = data.po.created_at;
-        document.getElementById('exportPoCsvBtn').href = `/export/purchase-order/${poId}/csv`;
-        document.getElementById('exportPoPdfBtn').href = `/reports/purchase-order/${poId}`;
-
-        const receiveBtn = document.getElementById('receiveBtn');
-        if (data.po.status === 'COMPLETED') {
-            receiveBtn.style.display = 'none';
-        } else {
-            receiveBtn.style.display = 'inline-block';
-            receiveBtn.href = `/transaction/receive/${poId}`;
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to fetch PO details');
         }
 
-        const itemsBody = document.getElementById('modalItemsBody');
-        itemsBody.innerHTML = '';
-        data.items.forEach(item => {
-            const isFullyReceived = item.quantity_received >= item.quantity_ordered;
-            itemsBody.innerHTML += `
+        activeOrderId = poId;
+        activeOrderDetails = data;
+        document.getElementById('modalPONumber').innerText = data.po.po_number;
+        document.getElementById('modalStatusBadge').innerHTML = renderStatusBadge(data.po.status, data.approval?.status);
+        document.getElementById('modalVendor').innerText = data.po.vendor_name || '-';
+        document.getElementById('modalCreator').innerText = data.po.created_by_username || '-';
+        document.getElementById('modalDate').innerText = data.po.created_at || '-';
+        document.getElementById('modalApprovalStatus').innerText = formatApprovalStatus(data.approval?.status);
+        document.getElementById('modalApprovalNotes').innerText = data.approval?.decision_notes || 'None';
+        document.getElementById('exportPoCsvBtn').href = `/export/purchase-order/${poId}/csv`;
+        document.getElementById('exportPoPdfBtn').href = `/reports/purchase-order/${poId}`;
+        const reviewPageBtn = document.getElementById('reviewPageBtn');
+        if (currentRole === 'admin') {
+            reviewPageBtn.style.display = 'inline-flex';
+            reviewPageBtn.href = `/transaction/order/${poId}/review`;
+        } else {
+            reviewPageBtn.style.display = 'none';
+            reviewPageBtn.removeAttribute('href');
+        }
+
+        renderAdminActions(data.permissions);
+
+        const workflowActionGroup = document.getElementById('workflowActionGroup');
+        const actionSeparatorOne = document.getElementById('actionSeparatorOne');
+        const actionSeparatorTwo = document.getElementById('actionSeparatorTwo');
+        const currentPoStatus = String(data.po.status || '').toUpperCase();
+        const isReviewOnlyState = ['COMPLETED', 'CANCELLED'].includes(currentPoStatus);
+
+        const editBtn = document.getElementById('editBtn');
+        editBtn.style.display = data.permissions?.can_edit ? 'inline-flex' : 'none';
+        editBtn.href = `/transaction/order?po_id=${poId}`;
+
+        const cancelBtn = document.getElementById('cancelBtn');
+        cancelBtn.style.display = data.permissions?.can_cancel ? 'inline-flex' : 'none';
+        cancelBtn.onclick = () => cancelOrder(Boolean(data.permissions?.can_admin_cancel));
+
+        const receiveBtn = document.getElementById('receiveBtn');
+        if (data.permissions?.can_receive) {
+            receiveBtn.style.display = 'inline-flex';
+            receiveBtn.href = `/transaction/receive/${poId}`;
+        } else {
+            receiveBtn.style.display = 'none';
+        }
+
+        const primaryGroup = document.getElementById('adminPrimaryActionGroup');
+        const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
+        const hasLeadingActions = primaryGroup.childElementCount > 0 || cancelBtn.style.display !== 'none' || editBtn.style.display !== 'none';
+        const hasMiddleActions = primaryGroup.childElementCount > 0 || secondaryGroup.childElementCount > 0 || receiveBtn.style.display !== 'none';
+        const usesSingleRowWorkflow = ['PARTIAL', 'PENDING'].includes(currentPoStatus);
+
+        workflowActionGroup.style.display = isReviewOnlyState ? 'none' : 'flex';
+        actionSeparatorOne.style.display = !isReviewOnlyState && usesSingleRowWorkflow && hasLeadingActions && hasMiddleActions ? 'block' : 'none';
+        actionSeparatorTwo.style.display = !isReviewOnlyState && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
+
+        document.getElementById('modalItemsBody').innerHTML = (data.items || []).map(item => {
+            const isFullyReceived = Number(item.quantity_received || 0) >= Number(item.quantity_ordered || 0);
+            return `
                 <tr>
-                    <td>${item.name}</td>
+                    <td>${escapeHtml(item.name)}</td>
                     <td class="text-center">
-                        <span class="qty-badge">${item.quantity_ordered}</span>
+                        <span class="qty-badge">${escapeHtml(String(item.quantity_ordered ?? 0))}</span>
                     </td>
                     <td class="text-center">
-                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${item.quantity_received}</span>
+                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(item.quantity_received ?? 0))}</span>
                     </td>
                 </tr>
             `;
-        });
+        }).join('');
 
+        document.getElementById('modalApprovalHistoryCount').innerText = formatHistoryCount((data.approval?.actions || []).length);
+        document.getElementById('modalApprovalHistory').innerHTML = renderApprovalHistory(data.approval?.actions || []);
+        approvalHistoryCollapse?.hide();
         orderModal.show();
     } catch (err) {
-        console.error("Modal Error:", err);
-        alert("Could not load order details.");
+        console.error('Modal Error:', err);
+        alert(err.message || 'Could not load order details.');
     }
+}
+
+function formatApprovalStatus(status) {
+    return String(status || 'N/A').replaceAll('_', ' ');
+}
+
+function renderStatusBadge(poStatus, approvalStatus) {
+    if (poStatus === 'FOR_APPROVAL') {
+        if (approvalStatus === 'REVISIONS_NEEDED') {
+            return '<span class="badge-revisions">For Revisions</span>';
+        }
+        return '<span class="badge-for-approval">For Approval</span>';
+    }
+    if (poStatus === 'PENDING') {
+        return '<span class="badge-pending">Ready to Receive</span>';
+    }
+    if (poStatus === 'PARTIAL') {
+        return '<span class="badge-partial">Partial</span>';
+    }
+    if (poStatus === 'COMPLETED') {
+        return '<span class="badge-completed">Completed</span>';
+    }
+    if (poStatus === 'CANCELLED') {
+        return '<span class="badge-cancelled">Cancelled</span>';
+    }
+    return `<span class="badge-for-approval">${escapeHtml(String(poStatus || 'Unknown'))}</span>`;
+}
+
+function renderApprovalHistory(actions) {
+    if (!actions.length) {
+        return '<li><div class="history-meta">No approval history yet.</div></li>';
+    }
+
+    return actions.map(action => `
+        <li>
+            <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
+            <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
+            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+        </li>
+    `).join('');
+}
+
+function formatHistoryCount(count) {
+    return count === 1 ? '1 entry' : `${count} entries`;
+}
+
+function renderAdminActions(permissions) {
+    const primaryGroup = document.getElementById('adminPrimaryActionGroup');
+    const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
+    primaryGroup.innerHTML = '';
+    secondaryGroup.innerHTML = '';
+
+    if (currentRole !== 'admin') {
+        return;
+    }
+
+    if (permissions?.can_admin_approve) {
+        primaryGroup.innerHTML += `
+            <button type="button" class="btn btn-success btn-modal-approve" onclick="approveOrder()">
+                <i class="bi bi-check2-circle me-1"></i> Approve
+            </button>
+        `;
+    }
+
+    if (permissions?.can_admin_request_revisions) {
+        secondaryGroup.innerHTML += `
+            <button type="button" class="btn btn-warning btn-modal-revisions" onclick="requestRevisions()">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Revise
+            </button>
+        `;
+    }
+}
+
+async function approveOrder() {
+    await postOrderAction(`/api/order/${activeOrderId}/approval/approve`, {}, 'Purchase order approved.');
+}
+
+async function cancelOrder(requireNotes) {
+    if (!activeOrderDetails) {
+        return;
+    }
+
+    document.getElementById('cancelNotesInput').value = '';
+    document.getElementById('cancelNotesError').style.display = 'none';
+    orderModal.hide();
+    cancelModal.show();
+}
+
+async function submitCancellation() {
+    const notes = document.getElementById('cancelNotesInput').value.trim();
+    if (!notes) {
+        document.getElementById('cancelNotesError').style.display = 'block';
+        return;
+    }
+
+    document.getElementById('cancelNotesError').style.display = 'none';
+    await postOrderAction(`/api/order/${activeOrderId}/cancel`, { notes }, cancelModal);
+}
+
+function renderRevisionItemsPreview(items) {
+    if (!items.length) {
+        return '<tr><td colspan="3" class="text-center text-muted">No items found for this purchase order.</td></tr>';
+    }
+
+    return items.map(item => `
+        <tr>
+            <td>${escapeHtml(item.name || '-')}</td>
+            <td class="text-center">${escapeHtml(String(item.quantity_ordered ?? 0))}</td>
+            <td class="text-center">${escapeHtml(String(item.quantity_received ?? 0))}</td>
+        </tr>
+    `).join('');
+}
+
+function renderApprovalHistory(actions) {
+    if (!actions.length) {
+        return '<li><div class="history-meta">No approval history yet.</div></li>';
+    }
+
+    return actions.map(action => `
+        <li>
+            <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
+            <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
+            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+            ${renderHistoryRevisionItems(action.revision_items || [])}
+        </li>
+    `).join('');
+}
+
+function renderHistoryRevisionItems(items) {
+    if (!items.length) {
+        return '';
+    }
+
+    return `
+        <div class="history-revision-items">
+            ${items.map(item => `
+                <div class="history-revision-item">
+                    <div class="history-revision-name">${escapeHtml(item.item_name || 'Unknown Item')}</div>
+                    <div class="history-revision-note">${escapeHtml(item.revision_note || '')}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function requestRevisions() {
+    if (!activeOrderDetails) {
+        return;
+    }
+
+    document.getElementById('revisionsNotesInput').value = '';
+    document.getElementById('revisionsNotesError').style.display = 'none';
+    document.getElementById('revisionsItemsPreviewBody').innerHTML = renderRevisionItemsPreview(activeOrderDetails.items || []);
+    updateRevisionItemCount();
+    orderModal.hide();
+    revisionsModal.show();
+}
+
+async function submitRevisions() {
+    const notes = document.getElementById('revisionsNotesInput').value.trim();
+    const revision_items = collectRevisionItems();
+
+    if (!notes && !revision_items.length) {
+        document.getElementById('revisionsNotesError').style.display = 'block';
+        return;
+    }
+
+    document.getElementById('revisionsNotesError').style.display = 'none';
+    await postOrderAction(`/api/order/${activeOrderId}/approval/revisions`, { notes, revision_items }, revisionsModal);
+}
+
+function renderRevisionItemsPreview(items) {
+    if (!items.length) {
+        return '<tr><td colspan="4" class="text-center text-muted">No items found for this purchase order.</td></tr>';
+    }
+
+    return items.map(item => `
+        <tr>
+            <td>${escapeHtml(item.name || '-')}</td>
+            <td class="text-center">${escapeHtml(String(item.quantity_ordered ?? 0))}</td>
+            <td class="text-center">${escapeHtml(String(item.quantity_received ?? 0))}</td>
+            <td>
+                <textarea
+                    class="form-control revision-item-note"
+                    data-revision-item-id="${escapeHtml(String(item.item_id ?? ''))}"
+                    data-revision-item-name="${escapeHtml(item.name || '-')}"
+                    placeholder="Describe what needs to change for this item"
+                    oninput="updateRevisionItemCount()"
+                ></textarea>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderApprovalHistory(actions) {
+    if (!actions.length) {
+        return '<li><div class="history-meta">No approval history yet.</div></li>';
+    }
+
+    return actions.map(action => `
+        <li>
+            <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
+            <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
+            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+            ${renderHistoryRevisionItems(action.revision_items || [])}
+            ${renderHistoryChangeEntries(action.change_entries || [])}
+        </li>
+    `).join('');
+}
+
+function renderHistoryRevisionItems(items) {
+    if (!items.length) {
+        return '';
+    }
+
+    return `
+        <div class="history-revision-items">
+            ${items.map(item => `
+                <div class="history-revision-item">
+                    <div class="history-revision-name">${escapeHtml(item.item_name || 'Unknown Item')}</div>
+                    <div class="history-revision-note">${escapeHtml(item.revision_note || '')}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function renderHistoryChangeEntries(entries) {
+    if (!entries.length) {
+        return '';
+    }
+
+    return `
+        <div class="history-revision-items">
+            ${entries.map(entry => `
+                <div class="history-revision-item">
+                    <div class="history-revision-name">${escapeHtml(entry.change_label || entry.field_name || 'Change')}</div>
+                    <div class="history-revision-note">${entry.item_name ? `${escapeHtml(entry.item_name)}: ` : ''}${escapeHtml(formatChangeValues(entry.before_value, entry.after_value))}</div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function formatChangeValues(beforeValue, afterValue) {
+    const beforeText = beforeValue == null || beforeValue === '' ? 'empty' : String(beforeValue);
+    const afterText = afterValue == null || afterValue === '' ? 'empty' : String(afterValue);
+    return `${beforeText} -> ${afterText}`;
+}
+
+function collectRevisionItems() {
+    return Array.from(document.querySelectorAll('.revision-item-note'))
+        .map(input => ({
+            item_id: Number(input.dataset.revisionItemId),
+            item_name: input.dataset.revisionItemName || '',
+            revision_note: input.value.trim()
+        }))
+        .filter(item => item.revision_note);
+}
+
+function updateRevisionItemCount() {
+    const count = collectRevisionItems().length;
+    document.getElementById('revisionItemCount').innerText = count === 1 ? '1 item marked' : `${count} items marked`;
+}
+
+function handleActionModalHidden() {
+    if (activeOrderId && activeOrderDetails && !document.querySelector('.modal.show')) {
+        orderModal.show();
+    }
+}
+
+async function postOrderAction(url, payload, sourceModal) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {})
+    });
+    const result = await response.json();
+    if (!response.ok || result.status !== 'success') {
+        alert(result.message || result.error || 'Action failed.');
+        if (sourceModal) {
+            sourceModal.show();
+        }
+        return;
+    }
+
+    if (sourceModal) {
+        sourceModal.hide();
+    }
+    activeOrderDetails = null;
+    window.location.reload();
 }
 </script>
 {% endblock %}

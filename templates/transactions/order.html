@@ -3,6 +3,38 @@
 {% block styles %}
 <style>
     .order-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; }
+    .revision-card { border-color: rgba(234, 88, 12, 0.45); box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.12) inset; }
+    .revision-summary {
+        color: #d1d5db;
+        background: rgba(234, 88, 12, 0.08);
+        border: 1px solid rgba(234, 88, 12, 0.18);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        white-space: pre-wrap;
+    }
+    .revision-list { display: grid; gap: 10px; }
+    .revision-item {
+        border: 1px solid #3a3a3a;
+        border-radius: 8px;
+        padding: 12px;
+        background: #151515;
+    }
+    .revision-item-name {
+        font-weight: 700;
+        color: #f3f4f6;
+        margin-bottom: 4px;
+    }
+    .revision-item-meta {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        margin-bottom: 6px;
+    }
+    .revision-item-note {
+        color: #f3f4f6;
+        white-space: pre-wrap;
+        font-size: 0.92rem;
+    }
     .search-results { 
         position: absolute; width: 100%; z-index: 1000; 
         background: #252525; border: 1px solid #444; display: none;
@@ -24,7 +56,7 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-danger"><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
-        <span class="badge bg-secondary">Status: DRAFT</span>
+        <span id="poStatusBadge" class="badge bg-secondary">Status: DRAFT</span>
     </div>
 
     <div class="row">
@@ -39,6 +71,12 @@
                     <label class="form-label text">Notes</label>
                     <textarea id="po_notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
                 </div>
+            </div>
+
+            <div class="order-card revision-card mb-3" id="revisionTrackerCard" style="display:none;">
+                <h5 class="text-warning mb-3">Revision Checklist</h5>
+                <div id="revisionSummary" class="revision-summary" style="display:none;"></div>
+                <div id="revisionList" class="revision-list"></div>
             </div>
         </div>
 
@@ -68,7 +106,7 @@
                 </table>
 
                 <div class="d-grid mt-4">
-                    <button type="button" onclick="submitOrder()" class="btn btn-danger btn-lg">
+                    <button type="button" id="submitOrderBtn" onclick="submitOrder()" class="btn btn-danger btn-lg">
                         <i class="fas fa-save"></i> Save Purchase Order
                     </button>
                 </div>
@@ -93,15 +131,26 @@
 
 const DRAFT_KEY = 'po_draft_items';
 let orderItems = [];
+let editingPoId = null;
 
 const itemSearch = document.getElementById('itemSearch');
 const searchResults = document.getElementById('searchResults');
 const orderTableBody = document.getElementById('orderTableBody');
+const vendorInput = document.getElementById('vendor_name');
+const notesInput = document.getElementById('po_notes');
+const statusBadge = document.getElementById('poStatusBadge');
+const submitOrderBtn = document.getElementById('submitOrderBtn');
 
 // ── On Load: Restore draft + auto-select new item if returning from items page ──
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     const prefilledId = params.get('prefilled_id');
+    editingPoId = params.get('po_id');
+
+    if (editingPoId) {
+        await loadExistingOrder(editingPoId);
+        return;
+    }
 
     // Restore saved draft if it exists
     const savedDraft = sessionStorage.getItem(DRAFT_KEY);
@@ -133,6 +182,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+function formatStatusLabel(status) {
+    return String(status || 'DRAFT').replaceAll('_', ' ');
+}
+
+async function loadExistingOrder(poId) {
+    try {
+        const response = await fetch(`/api/order/${poId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load purchase order.');
+        }
+        if (!data.permissions || !data.permissions.can_edit) {
+            throw new Error('This purchase order is not editable anymore.');
+        }
+
+        document.querySelector('h2.text-danger').innerHTML = '<i class="fas fa-file-invoice"></i> Edit Purchase Order';
+        submitOrderBtn.innerHTML = '<i class="fas fa-save"></i> Update Purchase Order';
+        statusBadge.textContent = `Status: ${formatStatusLabel(data.po.status)}`;
+
+        vendorInput.value = data.po.vendor_name || '';
+        notesInput.value = data.po.notes || '';
+        renderRevisionTracker(data.approval);
+        orderItems = (data.items || []).map(item => ({
+            id: item.item_id,
+            name: item.name,
+            qty: item.quantity_ordered,
+            cost: item.unit_cost,
+            current_stock: item.current_stock || 0,
+            pending_stock: item.pending_stock || 0
+        }));
+        renderTable();
+    } catch (error) {
+        showOrderAlert(error.message || 'Failed to load purchase order.', 'danger');
+        setTimeout(() => {
+            window.location.href = '/transaction/orders/list';
+        }, 1200);
+    }
+}
+
 // ── Search ───────────────────────────────────────────────────────
 itemSearch.addEventListener('input', async (e) => {
     const query = e.target.value.trim();
@@ -151,8 +240,8 @@ itemSearch.addEventListener('input', async (e) => {
         items.forEach(item => {
             const div = document.createElement('div');
             div.className = 'result-item';
-            div.innerHTML = `<strong>${item.name}</strong> 
-                            <small class="text-muted">(Stock: ${item.current_stock})</small>`;
+            div.innerHTML = `<strong>${escapeHtml(item.name)}</strong> 
+                            <small class="text-muted">(Stock: ${escapeHtml(String(item.current_stock ?? 0))})</small>`;
             div.onclick = () => addItemToOrder(item);
             searchResults.appendChild(div);
         });
@@ -161,7 +250,7 @@ itemSearch.addEventListener('input', async (e) => {
         const div = document.createElement('div');
         div.className = 'result-item no-results d-flex justify-content-between align-items-center';
         div.innerHTML = `
-            <span class="text-muted">No results for "<strong>${query}</strong>"</span>
+            <span class="text-muted">No results for "<strong>${escapeHtml(query)}</strong>"</span>
             <a href="/transaction/items?return_to=po" 
             class="btn btn-sm btn-outline-success"
             onclick="saveDraftBeforeLeaving()">
@@ -215,17 +304,16 @@ function renderTable() {
         return;
     }
 
-    orderTableBody.innerHTML = '';
-    orderItems.forEach((item, index) => {
+    const rows = orderItems.map((item, index) => {
         const pendingHtml = item.pending_stock > 0
-            ? `<div style="color: #ffc107; font-size: 0.78rem;">+${item.pending_stock} incoming</div>`
+            ? `<div style="color: #ffc107; font-size: 0.78rem;">+${escapeHtml(String(item.pending_stock))} incoming</div>`
             : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`;
 
-        orderTableBody.innerHTML += `
+        return `
             <tr>
-                <td>${item.name}</td>
+                <td>${escapeHtml(item.name)}</td>
                 <td>
-                    <div style="font-size: 0.85rem;">${item.current_stock} on hand</div>
+                    <div style="font-size: 0.85rem;">${escapeHtml(String(item.current_stock ?? 0))} on hand</div>
                     ${pendingHtml}
                 </td>
                 <td>
@@ -242,6 +330,7 @@ function renderTable() {
             </tr>
         `;
     });
+    orderTableBody.innerHTML = rows.join('');
 }
 
 function updateQty(index, val) { orderItems[index].qty = parseInt(val); }
@@ -278,6 +367,49 @@ function showOrderAlert(message, type) {
     }, 4000);
 }
 
+function renderRevisionTracker(approval) {
+    const card = document.getElementById('revisionTrackerCard');
+    const summary = document.getElementById('revisionSummary');
+    const list = document.getElementById('revisionList');
+
+    const approvalStatus = String(approval?.status || '').toUpperCase();
+    const revisionItems = approval?.latest_revision_items || [];
+    const decisionNotes = (approval?.decision_notes || '').trim();
+
+    if (approvalStatus !== 'REVISIONS_NEEDED') {
+        card.style.display = 'none';
+        summary.style.display = 'none';
+        summary.textContent = '';
+        list.innerHTML = '';
+        return;
+    }
+
+    card.style.display = 'block';
+    if (decisionNotes) {
+        summary.style.display = 'block';
+        summary.textContent = decisionNotes;
+    } else {
+        summary.style.display = 'none';
+        summary.textContent = '';
+    }
+
+    if (!revisionItems.length) {
+        list.innerHTML = '<div class="text-muted small">No item-level notes were provided for this revision request.</div>';
+        return;
+    }
+
+    list.innerHTML = revisionItems.map(item => `
+        <div class="revision-item">
+            <div class="revision-item-name">${escapeHtml(item.item_name || 'Unknown Item')}</div>
+            <div class="revision-item-meta">
+                Ordered: ${escapeHtml(String(item.quantity_ordered ?? 0))}
+                ${item.quantity_received ? ` | Received: ${escapeHtml(String(item.quantity_received))}` : ''}
+            </div>
+            <div class="revision-item-note">${escapeHtml(item.revision_note || '')}</div>
+        </div>
+    `).join('');
+}
+
 async function submitOrder() {
     if (orderItems.length === 0) { 
         showOrderAlert("Add at least one item!", "warning"); 
@@ -285,12 +417,13 @@ async function submitOrder() {
     }
     
     const payload = {
-        vendor_name: document.getElementById('vendor_name').value,
-        notes: document.getElementById('po_notes').value,
+        vendor_name: vendorInput.value,
+        notes: notesInput.value,
         items: orderItems
     };
 
-    const response = await fetch('/transaction/order/save', {
+    const endpoint = editingPoId ? `/api/order/${editingPoId}/update` : '/transaction/order/save';
+    const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

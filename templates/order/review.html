@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    :root {
+        --po-amber: #f59e0b;
+        --po-amber-soft: rgba(245, 158, 11, 0.16);
+        --po-amber-border: rgba(245, 158, 11, 0.38);
+        --po-revisions: #ea580c;
+        --po-revisions-soft: rgba(234, 88, 12, 0.16);
+        --po-revisions-border: rgba(234, 88, 12, 0.42);
+        --po-ready: #0d6efd;
+        --po-ready-soft: rgba(13, 110, 253, 0.14);
+        --po-ready-border: rgba(13, 110, 253, 0.38);
+        --po-partial: #ffc107;
+        --po-partial-soft: rgba(255, 193, 7, 0.14);
+        --po-partial-border: rgba(255, 193, 7, 0.38);
+        --po-completed: #198754;
+        --po-completed-soft: rgba(25, 135, 84, 0.14);
+        --po-completed-border: rgba(25, 135, 84, 0.34);
+        --po-cancelled: #dc3545;
+        --po-cancelled-soft: rgba(220, 53, 69, 0.14);
+        --po-cancelled-border: rgba(220, 53, 69, 0.34);
+    }
+
+    .review-shell {
+        display: grid;
+        gap: 20px;
+    }
+
+    .review-header,
+    .review-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        box-shadow: 0 14px 36px rgba(0,0,0,0.35);
+    }
+
+    .review-header {
+        padding: 24px 26px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+    }
+
+    .review-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+    }
+
+    .review-title h1 {
+        margin: 0;
+        font-size: 1.4rem;
+        font-weight: 800;
+    }
+
+    .review-subtitle {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .review-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        width: 100%;
+        margin-top: 16px;
+    }
+
+    .review-meta {
+        padding: 14px 16px;
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: #151922;
+    }
+
+    .review-meta-label {
+        display: block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--accent);
+        margin-bottom: 6px;
+        font-weight: 700;
+    }
+
+    .review-meta-value {
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        font-weight: 600;
+        white-space: pre-wrap;
+    }
+
+    .review-card {
+        padding: 22px 24px;
+    }
+
+    .review-card-title {
+        margin: 0 0 16px;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .review-items-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .review-items-table th,
+    .review-items-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border-soft);
+    }
+
+    .review-items-table th {
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.72rem;
+        color: var(--accent);
+        background: #13161e;
+    }
+
+    .review-items-table td {
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+
+    .review-timeline {
+        display: grid;
+        gap: 16px;
+    }
+
+    .timeline-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: #151922;
+        overflow: hidden;
+    }
+
+    .timeline-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px 10px;
+        flex-wrap: wrap;
+    }
+
+    .timeline-title {
+        font-size: 0.98rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .timeline-meta {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .timeline-body {
+        padding: 0 18px 18px;
+    }
+
+    .timeline-notes {
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+        margin-bottom: 12px;
+    }
+
+    .change-block {
+        margin-top: 12px;
+        border-top: 1px dashed rgba(255,255,255,0.08);
+        padding-top: 12px;
+    }
+
+    .change-block-title {
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+
+    .change-list {
+        display: grid;
+        gap: 8px;
+    }
+
+    .change-item {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .change-item-name {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .change-item-detail {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        white-space: pre-wrap;
+    }
+
+    .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border-soft);
+        background: rgba(255,255,255,0.04);
+        color: var(--text-primary);
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+    }
+
+    .status-for-approval {
+        background: var(--po-amber-soft);
+        color: var(--po-amber);
+        border-color: var(--po-amber-border);
+    }
+
+    .status-revisions {
+        background: var(--po-revisions-soft);
+        color: var(--po-revisions);
+        border-color: var(--po-revisions-border);
+    }
+
+    .status-ready {
+        background: var(--po-ready-soft);
+        color: var(--po-ready);
+        border-color: var(--po-ready-border);
+    }
+
+    .status-partial {
+        background: var(--po-partial-soft);
+        color: var(--po-partial);
+        border-color: var(--po-partial-border);
+    }
+
+    .status-completed {
+        background: var(--po-completed-soft);
+        color: var(--po-completed);
+        border-color: var(--po-completed-border);
+    }
+
+    .status-cancelled {
+        background: var(--po-cancelled-soft);
+        color: var(--po-cancelled);
+        border-color: var(--po-cancelled-border);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="review-shell">
+    <div class="review-header">
+        <div>
+            <div class="review-title">
+                <h1>{{ po.po_number }}</h1>
+                <span class="status-chip
+                    {% set workflow_status = po.status if po.status in ['PARTIAL', 'COMPLETED', 'CANCELLED'] else (approval.status if approval else po.status) %}
+                    {% if workflow_status == 'PENDING' %}status-for-approval{% elif workflow_status == 'REVISIONS_NEEDED' %}status-revisions{% elif workflow_status == 'APPROVED' %}status-ready{% elif workflow_status == 'PARTIAL' %}status-partial{% elif workflow_status == 'COMPLETED' %}status-completed{% elif workflow_status == 'CANCELLED' %}status-cancelled{% elif workflow_status == 'FOR_APPROVAL' %}status-for-approval{% endif %}">
+                    {% if workflow_status == 'PENDING' %}
+                    For Approval
+                    {% elif workflow_status == 'APPROVED' %}
+                    Ready to Receive
+                    {% else %}
+                    {{ workflow_status|replace('_', ' ') }}
+                    {% endif %}
+                </span>
+            </div>
+            <div class="review-subtitle">Dedicated review view for revision requests and resubmission changes.</div>
+
+            <div class="review-meta-grid">
+                <div class="review-meta">
+                    <span class="review-meta-label">Vendor</span>
+                    <span class="review-meta-value">{{ po.vendor_name or '-' }}</span>
+                </div>
+                <div class="review-meta">
+                    <span class="review-meta-label">Created By</span>
+                    <span class="review-meta-value">{{ po.created_by_username or '-' }}</span>
+                </div>
+                <div class="review-meta">
+                    <span class="review-meta-label">Created At</span>
+                    <span class="review-meta-value">{{ po.created_at or '-' }}</span>
+                </div>
+                <div class="review-meta">
+                    <span class="review-meta-label">Current Notes</span>
+                    <span class="review-meta-value">{{ po.notes or '-' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="/transaction/orders/list" class="btn btn-outline-secondary">Back to Orders</a>
+            {% if permissions.can_edit %}
+            <a href="/transaction/order?po_id={{ po.id }}" class="btn btn-outline-warning">Edit PO</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="review-card">
+        <h2 class="review-card-title">Current PO Items</h2>
+        <div class="table-responsive">
+            <table class="review-items-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Ordered</th>
+                        <th>Received</th>
+                        <th>Unit Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.quantity_ordered }}</td>
+                        <td>{{ item.quantity_received }}</td>
+                        <td>{{ "%.2f"|format(item.unit_cost or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="review-card">
+        <h2 class="review-card-title">Approval Timeline</h2>
+        <div class="review-timeline">
+            {% for action in review_timeline %}
+            <div class="timeline-card">
+                <div class="timeline-header">
+                    <div class="timeline-title">{{ action.action_type|replace('_', ' ') }}</div>
+                    <div class="timeline-meta">{{ action.action_by_username or 'System' }} • {{ action.action_at }}</div>
+                </div>
+                <div class="timeline-body">
+                    {% if action.notes %}
+                    <div class="timeline-notes">{{ action.notes }}</div>
+                    {% endif %}
+
+                    {% if action.revision_items %}
+                    <div class="change-block">
+                        <div class="change-block-title">Requested Revisions</div>
+                        <div class="change-list">
+                            {% for item in action.revision_items %}
+                            <div class="change-item">
+                                <div class="change-item-name">{{ item.item_name }}</div>
+                                <div class="change-item-detail">{{ item.revision_note }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if action.header_changes %}
+                    <div class="change-block">
+                        <div class="change-block-title">Header Changes</div>
+                        <div class="change-list">
+                            {% for change in action.header_changes %}
+                            <div class="change-item">
+                                <div class="change-item-name">{{ change.change_label }}</div>
+                                <div class="change-item-detail">{{ change.before_value or 'empty' }} -> {{ change.after_value or 'empty' }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if action.item_change_groups %}
+                    <div class="change-block">
+                        <div class="change-block-title">Resubmission Item Changes</div>
+                        <div class="change-list">
+                            {% for group in action.item_change_groups %}
+                            <div class="change-item">
+                                <div class="change-item-name">{{ group.item_name }}</div>
+                                {% for change in group.entries %}
+                                <div class="change-item-detail">{{ change.change_label }}: {{ change.before_value or 'empty' }} -> {{ change.after_value or 'empty' }}</div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
