@@ -1,10 +1,17 @@
-from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify
+from flask import Blueprint, render_template, request, redirect, session, flash, url_for, jsonify, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date, norm_text
 from services.audit_service import get_audit_trail
 from services.sales_admin_service import get_sales_paginated
+from auth.utils import (
+    clear_failed_login_attempts,
+    ensure_authenticated_user,
+    is_login_rate_limited,
+    login_required,
+    register_failed_login_attempt,
+)
 
 # 1. Initialize the Blueprint
 auth_bp = Blueprint('auth', __name__)
@@ -13,11 +20,31 @@ auth_bp = Blueprint('auth', __name__)
 def _to_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
+
+@auth_bp.before_request
+def protect_admin_routes():
+    if request.endpoint in {"auth.login", "auth.logout"}:
+        return
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    user = ensure_authenticated_user()
+    if not user:
+        return redirect(url_for("auth.login"))
+
+    if user["role"] != "admin":
+        abort(403)
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
+
+        is_limited, retry_after = is_login_rate_limited(username)
+        if is_limited:
+            flash(f"Too many failed login attempts. Try again in about {retry_after // 60 + 1} minute(s).", "danger")
+            return redirect(url_for("auth.login"))
 
         conn = get_db()
         user = conn.execute(
@@ -27,6 +54,7 @@ def login():
         conn.close()
 
         if not user or not check_password_hash(user["password_hash"], password):
+            register_failed_login_attempt(username)
             flash("Invalid username or password", "danger")
             return redirect(url_for("auth.login"))
         
@@ -34,6 +62,9 @@ def login():
             flash("Your account has been disabled. Please contact an administrator.", "warning")
             return redirect(url_for("auth.login"))
 
+        clear_failed_login_attempts(username)
+        session.clear()
+        session.permanent = True
         session["user_id"] = user["id"]
         session["username"] = user["username"]
         session["role"] = user["role"]
@@ -45,7 +76,8 @@ def login():
 
     return render_template("users/login.html")
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
+@login_required
 def logout():
     session.clear()
     return redirect(url_for("auth.login"))

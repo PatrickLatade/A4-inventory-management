@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from db.database import get_db
+from auth.utils import admin_required
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
 @dashboard_api.route("/dashboard/stock-movement")
+@admin_required
 def stock_movement():
     days = request.args.get("days", default=30, type=int)
 
@@ -31,6 +33,7 @@ def stock_movement():
     }
 
 @dashboard_api.route("/dashboard/item-movement")
+@admin_required
 def item_movement():
     item_id = request.args.get("item_id", type=int)
     days = request.args.get("days", default=30, type=int)
@@ -61,6 +64,7 @@ def item_movement():
     }
 
 @dashboard_api.route("/dashboard/top-items")
+@admin_required
 def top_items_chart():
     days = request.args.get("days", default=30, type=int)
     conn = get_db()

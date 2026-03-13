@@ -6,9 +6,12 @@
 # - wiring to services / importers
 # ============================================================
 
-from flask import Flask, render_template, request, redirect, Response
-from flask import session, abort, url_for
-from datetime import date
+import os
+import secrets
+from datetime import date, timedelta
+
+from flask import Flask, Response, g, redirect, render_template, request, session, url_for
+from flask_wtf.csrf import CSRFError, CSRFProtect
 import webbrowser
 import threading
 
@@ -22,6 +25,7 @@ from db.schema import init_db
 # Services (business logic)
 # ------------------------
 from routes.login_route import auth_bp
+from auth.utils import ensure_authenticated_user, admin_required
 from services.inventory_service import get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
@@ -53,39 +57,62 @@ from routes.loyalty_route import loyalty_bp
 # ============================================================
 # App setup
 # ============================================================
+def _env_flag(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = Flask(__name__)
+app.config["SECRET_KEY"] = (
+    os.environ.get("FLASK_SECRET_KEY")
+    or os.environ.get("SECRET_KEY")
+    or secrets.token_hex(32)
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+app.config["SESSION_COOKIE_SECURE"] = _env_flag("SESSION_COOKIE_SECURE", default=False)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
+    hours=int(os.environ.get("SESSION_LIFETIME_HOURS", 12))
+)
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH_MB", 16)) * 1024 * 1024
+
+csrf = CSRFProtect(app)
+
+
 @app.before_request
 def restrict_access():
-    # 1. Define which routes are totally public (Login page, static files)
-    # Everything else will require a login.
-    PUBLIC_ROUTES = ['auth.login', 'static',]
+    public_routes = {"auth.login", "static"}
 
-    # 2. Define which routes are for Admins only
-    ADMIN_ONLY_ROUTES = [
-        'dashboard', 
-        'debug_integrity', 
-        'auth.manage_users',
-        'index2'
-    ]
-
-    # --- THE LOGIC ---
-
-    # A. If it's a public route, let them through immediately
-    if request.endpoint in PUBLIC_ROUTES or not request.endpoint:
+    if not request.endpoint or request.endpoint in public_routes:
         return
 
-    # B. If they aren't logged in, kick them to the login page
     if "user_id" not in session:
         return redirect(url_for("auth.login"))
 
-    # C. If the route is Admin-only, check their role
-    if request.endpoint in ADMIN_ONLY_ROUTES:
-        if session.get("role") != "admin":
-            abort(403)
-app.secret_key = "dev-secret-change-later"
+    user = ensure_authenticated_user()
+    if not user:
+        return redirect(url_for("auth.login"))
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    if request.is_secure:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
 @app.context_processor
 def inject_globals():
-    return {"current_date": date.today().isoformat()}
+    return {
+        "current_date": date.today().isoformat(),
+        "current_user": getattr(g, "current_user", None),
+    }
 init_db()  # Safe to call on startup (creates tables if missing)
 
 # Register API routes (kept separate from UI routes)
@@ -167,6 +194,7 @@ def search_items_api():
 # Analytics / reporting views
 # ============================================================
 @app.route("/dashboard")
+@admin_required
 def dashboard():
     """
     High-level KPIs used for management overview.
@@ -296,6 +324,7 @@ def import_inventory():
 # Experimental / alternate UI
 # ============================================================
 @app.route("/index2", methods=["GET", "POST"])
+@admin_required
 def index2():
     """
     Alternate inventory UI (design experiment).
@@ -336,6 +365,7 @@ def index2():
 # Debug / integrity checks (temporary but intentional)
 # ============================================================
 @app.route("/debug-integrity")
+@admin_required
 def debug_integrity():
     """
     Data sanity checks during historical reconciliation.
@@ -426,6 +456,14 @@ def forbidden(e):
 @app.errorhandler(404)
 def page_not_found(e):
     return render_template('errors/404.html'), 404
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    return render_template('errors/403.html'), 400
+
+@app.errorhandler(400)
+def bad_request(e):
+    return render_template('errors/403.html'), 400
 
 @app.errorhandler(500)
 def server_error(e):

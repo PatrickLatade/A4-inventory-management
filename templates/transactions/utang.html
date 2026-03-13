@@ -458,6 +458,8 @@ function renderDebtModal(data) {
     const items    = data.items;
     const services = data.services;
     const payments = data.payments;
+    const customerName = escapeHtml(sale.customer_name || 'Walk-in');
+    const saleDate = escapeHtml(sale.transaction_date);
 
     const remaining = sale.remaining;
     const pct = sale.total_amount > 0
@@ -474,11 +476,11 @@ function renderDebtModal(data) {
         <div class="row mb-3">
             <div class="col-6">
                 <div style="font-size:0.7rem;color:var(--text-muted);">CUSTOMER</div>
-                <strong>${sale.customer_name || 'Walk-in'}</strong>
+                <strong>${customerName}</strong>
             </div>
             <div class="col-6 text-end">
                 <div style="font-size:0.7rem;color:var(--text-muted);">SALE DATE</div>
-                <strong>${sale.transaction_date}</strong>
+                <strong>${saleDate}</strong>
             </div>
         </div>
         <div class="row mb-3">
@@ -525,8 +527,9 @@ function renderDebtModal(data) {
                 <th>Item</th><th class="text-center">Qty</th><th class="text-end">Price</th><th class="text-end">Total</th>
             </tr></thead><tbody>`;
         items.forEach(item => {
+            const itemName = escapeHtml(item.item_name);
             html += `<tr style="border-color:var(--border-soft);">
-                <td>${item.item_name}</td>
+                <td>${itemName}</td>
                 <td class="text-center">${item.quantity}</td>
                 <td class="text-end">₱${parseFloat(item.final_unit_price).toFixed(2)}</td>
                 <td class="text-end">₱${parseFloat(item.line_total).toFixed(2)}</td>
@@ -539,7 +542,7 @@ function renderDebtModal(data) {
         html += `<div class="detail-section-title"><i class="bi bi-wrench"></i> Services</div>`;
         services.forEach(svc => {
             html += `<div class="payment-history-row">
-                <span>${svc.service_name}</span>
+                <span>${escapeHtml(svc.service_name)}</span>
                 <span class="ph-amount">₱${parseFloat(svc.price).toFixed(2)}</span>
             </div>`;
         });
@@ -553,12 +556,12 @@ function renderDebtModal(data) {
             html += `<div class="payment-history-row">
                 <div>
                     <div class="ph-amount">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
-                    <div class="ph-meta">${p.payment_method || 'Cash'} ${p.reference_no ? '· Ref: '+p.reference_no : ''}</div>
-                    ${p.notes ? `<div class="ph-meta fst-italic">"${p.notes}"</div>` : ''}
+                    <div class="ph-meta">${escapeHtml(p.payment_method || 'Cash')} ${p.reference_no ? '· Ref: ' + escapeHtml(p.reference_no) : ''}</div>
+                    ${p.notes ? `<div class="ph-meta fst-italic">"${escapeHtml(p.notes)}"</div>` : ''}
                 </div>
                 <div class="text-end">
-                    <div style="font-size:0.78rem; color:var(--text-primary);">${p.paid_at}</div>
-                    <div class="ph-meta">by ${p.paid_by || 'Staff'}</div>
+                    <div style="font-size:0.78rem; color:var(--text-primary);">${escapeHtml(p.paid_at)}</div>
+                    <div class="ph-meta">by ${escapeHtml(p.paid_by || 'Staff')}</div>
                 </div>
             </div>`;
         });

@@ -895,6 +895,7 @@ const handleTableSearch = async (input) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
+            const itemName = escapeHtml(item.name);
 
             const itemIdStr = String(item.id);
             const currentRowSelectedId = String(idInput.value || '');
@@ -903,7 +904,7 @@ const handleTableSearch = async (input) => {
 
             btn.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
-                    <strong>${item.name}</strong>
+                    <strong>${itemName}</strong>
                     <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
                 </div>
                 <div class="suggestion-stock">
@@ -962,10 +963,12 @@ const handleServiceSearch = async (input) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
+            const serviceName = escapeHtml(service.name);
+            const serviceCategory = escapeHtml(service.category);
             btn.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
-                    <strong>${service.name}</strong>
-                    <span style="font-size:0.72rem; color:#67c2e4;">${service.category}</span>
+                    <strong>${serviceName}</strong>
+                    <span style="font-size:0.72rem; color:#67c2e4;">${serviceCategory}</span>
                 </div>
             `;
             btn.onclick = () => {
@@ -1113,13 +1116,15 @@ async function fetchLoyaltyEligibility(customerId) {
             const pct  = threshold > 0 ? Math.min(100, Math.round((Math.min(current, threshold) / threshold) * 100)) : 0;
             const card = document.createElement('div');
             card.className = `loyalty-program-card${prog.is_eligible ? ' eligible' : ''}`;
+            const programName = escapeHtml(prog.name);
+            const rewardDescription = prog.reward_description ? escapeHtml(prog.reward_description) : '';
 
             card.innerHTML = `
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:0.83rem; font-weight:600; color:#e0e6f0;
                                     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            ${prog.name}
+                            ${programName}
                         </div>
                         <div style="font-size:0.72rem; color:#aaa; margin-top:2px;">
                             ${current} / ${threshold} ${unit}
@@ -1133,7 +1138,7 @@ async function fetchLoyaltyEligibility(customerId) {
                         </div>
                         ${prog.reward_description
                             ? `<div style="font-size:0.7rem; color:#888; margin-top:5px;">
-                                   Reward: ${prog.reward_description}
+                                   Reward: ${rewardDescription}
                                </div>`
                             : ''}
                     </div>
@@ -1191,6 +1196,7 @@ async function fetchLoyaltyEligibility(customerId) {
             const stampCount = Number(prog.stamp_count || 0);
             const unit = prog.points_enabled ? 'points' : 'stamps';
             const current = prog.points_enabled ? pointsBalance : stampCount;
+            const programName = escapeHtml(prog.name);
 
             const card = document.createElement('div');
             card.className = 'loyalty-program-card';
@@ -1201,7 +1207,7 @@ async function fetchLoyaltyEligibility(customerId) {
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:0.83rem; font-weight:600; color:#e0e6f0;
                                     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            ${prog.name}
+                            ${programName}
                             <span style="font-size:0.68rem; margin-left:6px; color:#9ab7ff;">EARN ONLY</span>
                         </div>
                         <div style="font-size:0.72rem; color:#aaa; margin-top:2px;">
@@ -1368,7 +1374,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                 addBtn.type = 'button';
                 addBtn.className = 'list-group-item list-group-item-action';
                 addBtn.style.cssText = 'color:#67c2e4; font-weight:600;';
-                addBtn.innerHTML = `<i class="bi bi-person-plus me-2"></i>Add new customer: <em>"${q}"</em>`;
+                addBtn.innerHTML = `<i class="bi bi-person-plus me-2"></i>Add new customer: <em>"${escapeHtml(q)}"</em>`;
                 addBtn.onclick = () => openNewCustomerModal(q);
                 suggestions.appendChild(addBtn);
 
@@ -1376,10 +1382,12 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'list-group-item list-group-item-action';
+                    const customerName = escapeHtml(c.customer_name);
+                    const customerNo = escapeHtml(c.customer_no);
                     btn.innerHTML = `
                         <div class="d-flex justify-content-between align-items-center">
-                            <strong>${c.customer_name}</strong>
-                            <span style="font-size:0.72rem; color:#aaa;">${c.customer_no}</span>
+                            <strong>${customerName}</strong>
+                            <span style="font-size:0.72rem; color:#aaa;">${customerNo}</span>
                         </div>`;
                     btn.onclick = () => setCustomer(c.id, c.customer_no, c.customer_name);
                     suggestions.appendChild(btn);

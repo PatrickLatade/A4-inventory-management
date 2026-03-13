@@ -1245,8 +1245,8 @@ function filterServices() {
 
                     tbody.innerHTML += `
                         <tr class="service-row">
-                            <td class="fw-bold service-name">${svc.name}</td>
-                            <td><span class="badge bg-dark border border-secondary text-info">${svc.category}</span></td>
+                            <td class="fw-bold service-name">${escapeHtml(svc.name)}</td>
+                            <td><span class="badge bg-dark border border-secondary text-info">${escapeHtml(svc.category)}</span></td>
                             <td class="text-center">
                                 <form action="/services/toggle/${svc.id}" method="POST">
                                     ${statusHtml}
@@ -1274,7 +1274,7 @@ function viewSaleDetails(saleID, displayNum) {
             // 1. Show Physical Items
             data.items.forEach(item => {
                 let hasDisc = item.discount_amount && item.discount_amount > 0;
-                let itemLabel = `<div>${item.name}</div>`;
+                let itemLabel = `<div>${escapeHtml(item.name)}</div>`;
                 if(hasDisc) {
                     itemLabel += `<small class="text-success">Disc: -₱${item.discount_amount.toFixed(2)}</small>`;
                 }
@@ -1294,12 +1294,12 @@ function viewSaleDetails(saleID, displayNum) {
 
             // 2. Show Services/Labor
             if(data.services && data.services.length > 0) {
-                let mechanicLabel = data.mechanic ? ` (by ${data.mechanic})` : '';
+                let mechanicLabel = data.mechanic ? ` (by ${escapeHtml(data.mechanic)})` : '';
                 list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services${mechanicLabel}</td></tr>`;
                 data.services.forEach(svc => {
                     list.innerHTML += `
                         <tr>
-                            <td>${svc.name}</td>
+                            <td>${escapeHtml(svc.name)}</td>
                             <td class="text-center">₱${parseFloat(svc.price).toFixed(2)}</td>
                             <td class="text-center text-muted">1</td>
                         </tr>`;
@@ -1318,7 +1318,7 @@ function viewSaleDetails(saleID, displayNum) {
                     <td class="fw-bold pt-3 text-danger">
                         GRAND TOTAL 
                         <span class="badge ${badgeClass} ms-2" style="font-size: 0.65rem; vertical-align: middle;">
-                            ${data.payment_method}
+                            ${escapeHtml(data.payment_method)}
                         </span>
                     </td>
                     <td class="pt-3 fw-bold fs-5 text-danger text-center">
@@ -1358,7 +1358,7 @@ function viewOrder(poId) {
             const list = document.getElementById('po-items-list');
             list.innerHTML = data.items.map(item => `
                 <tr>
-                    <td>${item.name}</td>
+                    <td>${escapeHtml(item.name)}</td>
                     <td class="text-center">${item.quantity_ordered}</td>
                     <td class="text-end">₱${parseFloat(item.unit_price).toFixed(2)}</td>
                     <td class="text-end text-info">₱${parseFloat(item.subtotal).toFixed(2)}</td>
@@ -1542,7 +1542,7 @@ function loadAuditTrail() {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${data.error}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${escapeHtml(data.error)}</td></tr>`;
                 return;
             }
             renderAuditTrail(data);
@@ -1723,7 +1723,7 @@ function loadSalesAdmin() {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">${data.error}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">${escapeHtml(data.error)}</td></tr>`;
                 return;
             }
             renderSalesAdmin(data);
@@ -1769,11 +1769,11 @@ function renderSalesAdmin(data) {
     tbody.innerHTML = data.rows.map(sale => `
         <tr>
             <td class="text-white-50 small">${sale.transaction_date}</td>
-            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sale.sales_number || '—'}</td>
-            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sale.customer_name || 'Walk-in'}</td>
+            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.sales_number || '—')}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.customer_name || 'Walk-in')}</td>
             <td>
                 <span class="badge bg-dark border border-secondary text-info">
-                    ${sale.payment_method_name || '—'}
+                    ${escapeHtml(sale.payment_method_name || '—')}
                 </span>
             </td>
             <td>${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}</td>
@@ -1802,7 +1802,7 @@ function viewItemCreated(itemId) {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                body.innerHTML = `<div class="text-danger text-center py-2">${data.error}</div>`;
+                body.innerHTML = `<div class="text-danger text-center py-2">${escapeHtml(data.error)}</div>`;
                 return;
             }
 
@@ -1824,7 +1824,7 @@ function viewItemCreated(itemId) {
                 </tr>`).join('');
 
             body.innerHTML = `
-                <h6 class="text-success mb-3"><i class="bi bi-box me-2"></i>${data.name}</h6>
+                <h6 class="text-success mb-3"><i class="bi bi-box me-2"></i>${escapeHtml(data.name)}</h6>
                 <table class="table table-dark table-sm mb-0">${rows}</table>`;
         })
         .catch(() => {
@@ -1868,8 +1868,8 @@ function renderDebtTable() {
         tbody.innerHTML += `
             <tr class="debt-parent-row ${sale.status === 'paid' ? 'opacity-75' : ''}">
                 <td class="fw-bold">${customerName}</td>
-                <td class="text-warning">${displaySalesNo}</td>
-                <td class="text-white-50 small">${sale.date}</td>
+                <td class="text-warning">${escapeHtml(displaySalesNo)}</td>
+                <td class="text-white-50 small">${escapeHtml(sale.date)}</td>
                 <td class="text-end">₱${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 <td class="text-end text-success">₱${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 <td class="text-end ${sale.remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">
@@ -1916,7 +1916,7 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                body.innerHTML = `<div class="text-danger text-center py-2">${data.error}</div>`;
+                body.innerHTML = `<div class="text-danger text-center py-2">${escapeHtml(data.error)}</div>`;
                 return;
             }
 
@@ -1924,7 +1924,7 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
             const receiptNo = data.sales_number || saleReceipt || '—';
             const header = `
                 <div class="mb-3">
-                    <div>Receipt # <span class="fw-semibold text-warning">${receiptNo}</span></div>
+                    <div>Receipt # <span class="fw-semibold text-warning">${escapeHtml(receiptNo)}</span></div>
                 </div>`;
 
             if (!payments.length) {
@@ -1934,12 +1934,12 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
 
             const rows = payments.map(p => `
                 <tr style="font-size:0.83rem;">
-                    <td class="text-white-50">${p.paid_at}</td>
+                    <td class="text-white-50">${escapeHtml(p.paid_at)}</td>
                     <td class="fw-bold text-info">₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                    <td><span class="badge bg-dark border border-secondary text-info me-2">${p.payment_method || '—'}</span></td>
-                    <td class="text-white-50">${p.reference_no || '—'}</td>
-                    <td class="text-white-50"><i class="bi bi-person me-1"></i>${p.paid_by || 'Staff'}</td>
-                    <td class="text-white-50 small fst-italic">${p.notes || ''}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '—')}</span></td>
+                    <td class="text-white-50">${escapeHtml(p.reference_no || '—')}</td>
+                    <td class="text-white-50"><i class="bi bi-person me-1"></i>${escapeHtml(p.paid_by || 'Staff')}</td>
+                    <td class="text-white-50 small fst-italic">${escapeHtml(p.notes || '')}</td>
                 </tr>`).join('');
 
             body.innerHTML = `

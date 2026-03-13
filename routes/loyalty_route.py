@@ -31,6 +31,8 @@ def list_programs():
     user_id, role = _require_login()
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
+    if role != "admin":
+        return jsonify({"error": "Admin only."}), 403
 
     programs = get_all_programs(include_rules=True)
     return jsonify({"programs": programs})

@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from datetime import date as date_today, timedelta
 from utils.formatters import format_date
+from auth.utils import admin_required
 from services.cash_service import (
     get_cash_summary,
     get_cash_entries,
@@ -258,10 +259,8 @@ def cash_add_api():
 
 
 @cash_bp.route("/api/cash/delete/<int:entry_id>", methods=["DELETE"])
+@admin_required
 def cash_delete_api(entry_id):
-    if session.get("role") != "admin":
-        return jsonify({"status": "error", "message": "Admin access required."}), 403
-
     try:
         delete_cash_entry(entry_id=entry_id, branch_id=_get_branch_id())
         return jsonify({"status": "success"}), 200
