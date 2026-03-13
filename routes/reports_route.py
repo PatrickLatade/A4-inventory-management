@@ -29,7 +29,7 @@ def purchase_order_report(po_id):
         "id": po_data.get("id"),
         "po_number": po_data.get("po_number") or "-",
         "vendor_name": po_data.get("vendor_name") or "-",
-        "status": (po_data.get("status") or "PENDING").title(),
+        "status": po_data.get("display_status") or (po_data.get("status") or "PENDING"),
         "created_at": format_date(po_data.get("created_at"), show_time=True),
         "received_at": format_date(po_data.get("received_at"), show_time=True),
         "total_amount": float(po_data.get("total_amount") or 0),

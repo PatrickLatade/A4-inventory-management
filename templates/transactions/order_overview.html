@@ -961,7 +961,6 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title d-flex align-items-center gap-2 mb-0">
-                    <span>PO</span>
                     <span id="modalPONumber">-</span>
                     <span id="modalStatusBadge"></span>
                     <a id="exportPoCsvBtn" href="#" class="btn btn-sm btn-outline-success py-0 px-2" target="_blank" title="Download CSV">
@@ -1041,7 +1040,7 @@
             <div class="modal-footer">
                 <div class="modal-action-bar">
                     <div class="modal-action-slot" id="workflowActionGroup">
-                        <div class="modal-action-slot">
+                        <div class="modal-action-slot" id="primaryWorkflowActions">
                             <div id="adminPrimaryActionGroup" class="modal-action-slot"></div>
                             <button id="cancelBtn" type="button" class="btn btn-danger btn-modal-cancel" style="display:none;">
                                 <i class="bi bi-x-circle me-1"></i> Cancel PO
@@ -1058,7 +1057,7 @@
                             </a>
                         </div>
                     </div>
-                    <div class="modal-action-slot modal-action-slot-right">
+                    <div class="modal-action-slot modal-action-slot-right" id="reviewActionGroup">
                         <div id="actionSeparatorTwo" class="modal-action-separator" style="display:none;"></div>
                         <a id="reviewPageBtn" href="#" class="btn btn-outline-light btn-modal-secondary">
                             <i class="bi bi-layout-text-window-reverse me-1"></i> Full Review
@@ -1235,6 +1234,15 @@ async function openOrderDetails(poId) {
         cancelBtn.onclick = () => cancelOrder(Boolean(data.permissions?.can_admin_cancel));
 
         const receiveBtn = document.getElementById('receiveBtn');
+        const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
+        const reviewActionGroup = document.getElementById('reviewActionGroup');
+        const shouldPlaceReceiveRight = currentPoStatus === 'PARTIAL';
+        if (shouldPlaceReceiveRight) {
+            reviewActionGroup.insertBefore(receiveBtn, reviewPageBtn);
+        } else {
+            secondaryGroup.after(receiveBtn);
+        }
+
         if (data.permissions?.can_receive) {
             receiveBtn.style.display = 'inline-flex';
             receiveBtn.href = `/transaction/receive/${poId}`;
@@ -1243,14 +1251,13 @@ async function openOrderDetails(poId) {
         }
 
         const primaryGroup = document.getElementById('adminPrimaryActionGroup');
-        const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
         const hasLeadingActions = primaryGroup.childElementCount > 0 || cancelBtn.style.display !== 'none' || editBtn.style.display !== 'none';
-        const hasMiddleActions = primaryGroup.childElementCount > 0 || secondaryGroup.childElementCount > 0 || receiveBtn.style.display !== 'none';
+        const hasMiddleActions = secondaryGroup.childElementCount > 0 || (!shouldPlaceReceiveRight && receiveBtn.style.display !== 'none');
         const usesSingleRowWorkflow = ['PARTIAL', 'PENDING'].includes(currentPoStatus);
 
         workflowActionGroup.style.display = isReviewOnlyState ? 'none' : 'flex';
         actionSeparatorOne.style.display = !isReviewOnlyState && usesSingleRowWorkflow && hasLeadingActions && hasMiddleActions ? 'block' : 'none';
-        actionSeparatorTwo.style.display = !isReviewOnlyState && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
+        actionSeparatorTwo.style.display = !isReviewOnlyState && currentPoStatus !== 'PARTIAL' && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
 
         document.getElementById('modalItemsBody').innerHTML = (data.items || []).map(item => {
             const isFullyReceived = Number(item.quantity_received || 0) >= Number(item.quantity_ordered || 0);
@@ -1324,6 +1331,7 @@ function formatHistoryCount(count) {
 function renderAdminActions(permissions) {
     const primaryGroup = document.getElementById('adminPrimaryActionGroup');
     const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
+    const revisionsTargetGroup = permissions?.can_receive ? secondaryGroup : primaryGroup;
     primaryGroup.innerHTML = '';
     secondaryGroup.innerHTML = '';
 
@@ -1340,7 +1348,7 @@ function renderAdminActions(permissions) {
     }
 
     if (permissions?.can_admin_request_revisions) {
-        secondaryGroup.innerHTML += `
+        revisionsTargetGroup.innerHTML += `
             <button type="button" class="btn btn-warning btn-modal-revisions" onclick="requestRevisions()">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Revise
             </button>

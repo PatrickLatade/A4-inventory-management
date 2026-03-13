@@ -570,7 +570,29 @@ def _get_po_row(conn, po_id):
 def _get_po_items(conn, po_id):
     return conn.execute(
         """
-        SELECT pi.*, i.name, i.pack_size
+        SELECT
+            pi.*,
+            i.name,
+            i.pack_size,
+            COALESCE((
+                SELECT SUM(
+                    CASE
+                        WHEN t.transaction_type = 'IN' THEN t.quantity
+                        WHEN t.transaction_type = 'OUT' THEN -t.quantity
+                        ELSE 0
+                    END
+                )
+                FROM inventory_transactions t
+                WHERE t.item_id = pi.item_id
+            ), 0) AS current_stock,
+            COALESCE((
+                SELECT SUM(other_pi.quantity_ordered - other_pi.quantity_received)
+                FROM po_items other_pi
+                JOIN purchase_orders other_po ON other_po.id = other_pi.po_id
+                WHERE other_pi.item_id = pi.item_id
+                  AND other_po.status IN ('PENDING', 'PARTIAL')
+                  AND other_pi.quantity_ordered > other_pi.quantity_received
+            ), 0) AS pending_stock
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
@@ -846,7 +868,7 @@ def create_purchase_order(data, user_id, username, user_role):
     conn = get_db()
     now_obj = datetime.now()
     clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
-    today_str = now_obj.strftime("%Y%m%d")
+    month_str = now_obj.strftime("%Y%m")
     normalized = _normalize_po_payload(data)
 
     try:
@@ -854,10 +876,10 @@ def create_purchase_order(data, user_id, username, user_role):
 
         count = conn.execute(
             "SELECT COUNT(*) FROM purchase_orders WHERE po_number ILIKE %s",
-            (f"PO-{today_str}%",)
+            (f"PO-{month_str}%",)
         ).fetchone()[0]
 
-        po_number = f"PO-{today_str}-{str(count + 1).zfill(3)}"
+        po_number = f"PO-{month_str}-{str(count + 1).zfill(3)}"
         initial_status = 'PENDING' if str(user_role or '').strip().lower() == 'admin' else 'FOR_APPROVAL'
 
         po_row = conn.execute("""
@@ -965,7 +987,11 @@ def get_purchase_order_export_data(po_id):
     """, (po_id,)).fetchall()
 
     conn.close()
-    return po, items
+    approval = get_approval_request_by_entity(PO_APPROVAL_TYPE, PO_ENTITY_TYPE, po_id)
+    po_data = dict(po)
+    po_data["approval_status"] = approval["status"] if approval else None
+    po_data["display_status"] = get_po_display_status(po_data.get("status"), po_data.get("approval_status"))
+    return po_data, items
 
 
 def get_po_for_receive_page(po_id):
@@ -1434,6 +1460,19 @@ def get_po_details_for_api(po_id):
             for item in items
         ]
     }
+
+
+def get_po_display_status(po_status, approval_status=None):
+    po_status_normalized = str(po_status or "PENDING").strip().upper()
+    approval_status_normalized = str(approval_status or "").strip().upper()
+
+    if po_status_normalized == "FOR_APPROVAL":
+        if approval_status_normalized == "REVISIONS_NEEDED":
+            return "FOR_REVISIONS"
+        return "FOR_APPROVAL"
+    if po_status_normalized == "PENDING":
+        return "READY_TO_RECEIVE"
+    return po_status_normalized
 
 
 # ─────────────────────────────────────────────
