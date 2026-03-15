@@ -73,17 +73,33 @@ def add_item_to_db(data, user_id=None, username=None):
     conn = get_db()
     try:
         conn.execute("BEGIN")
+        vendor_id = data.get("vendor_id")
+        if vendor_id in ("", None):
+            raise ValueError("Vendor is required.")
+
+        try:
+            vendor_id = int(vendor_id)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid vendor selected.")
+
+        vendor_exists = conn.execute(
+            "SELECT id FROM vendors WHERE id = %s AND is_active = 1",
+            (vendor_id,),
+        ).fetchone()
+        if not vendor_exists:
+            raise ValueError("Selected vendor was not found or is inactive.")
+
         row = conn.execute("""
             INSERT INTO items (
                 name, category, description, pack_size, 
                 vendor_price, cost_per_piece, a4s_selling_price, 
-                markup, reorder_level, vendor, mechanic
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                markup, reorder_level, vendor, vendor_id, mechanic
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
         """, (
             data['name'], data['category'], data['description'], data['pack_size'],
             data['vendor_price'], data['cost_per_piece'], data['selling_price'],
-            data['markup'], data['reorder_level'], data['vendor'], data['mechanic']
+            data['markup'], data['reorder_level'], None, vendor_id, data['mechanic']
         )).fetchone()
 
         new_id = row["id"]
@@ -593,12 +609,17 @@ def _coerce_nonnegative_float(value, field_name):
 
 def _normalize_po_payload(data):
     payload = data or {}
-    vendor_name = str(payload.get("vendor_name") or "").strip()
+    raw_vendor_id = payload.get("vendor_id")
     notes = str(payload.get("notes") or "").strip() or None
     raw_items = payload.get("items") or []
 
-    if not vendor_name:
-        raise ValueError("Vendor / supplier is required.")
+    try:
+        vendor_id = int(raw_vendor_id)
+    except (TypeError, ValueError):
+        vendor_id = 0
+
+    if vendor_id <= 0:
+        raise ValueError("Please select a vendor / supplier from the list.")
     if not raw_items:
         raise ValueError("Add at least one item to the purchase order.")
 
@@ -624,15 +645,38 @@ def _normalize_po_payload(data):
         )
 
     return {
-        "vendor_name": vendor_name,
+        "vendor_id": vendor_id,
         "notes": notes,
         "items": normalized_items,
+    }
+
+
+def _get_active_vendor_by_id(conn, vendor_id):
+    return conn.execute(
+        """
+        SELECT id, vendor_name, address, contact_person, contact_no, email
+        FROM vendors
+        WHERE id = %s AND is_active = 1
+        """,
+        (vendor_id,),
+    ).fetchone()
+
+
+def _vendor_snapshot_from_row(vendor_row):
+    return {
+        "vendor_id": int(vendor_row["id"]),
+        "vendor_name": str(vendor_row["vendor_name"] or "").strip(),
+        "vendor_address": str(vendor_row["address"] or "").strip() or None,
+        "vendor_contact_person": str(vendor_row["contact_person"] or "").strip() or None,
+        "vendor_contact_no": str(vendor_row["contact_no"] or "").strip() or None,
+        "vendor_email": str(vendor_row["email"] or "").strip() or None,
     }
 
 
 def _build_po_approval_metadata(po_row, items):
     return {
         "po_number": po_row["po_number"],
+        "vendor_id": po_row["vendor_id"],
         "vendor_name": po_row["vendor_name"] or "",
         "total_amount": float(po_row["total_amount"] or 0),
         "item_count": len(items),
@@ -971,15 +1015,43 @@ def create_purchase_order(data, user_id, username, user_role):
             "SELECT COUNT(*) FROM purchase_orders WHERE po_number ILIKE %s",
             (f"PO-{month_str}%",)
         ).fetchone()[0]
+        vendor_row = _get_active_vendor_by_id(conn, normalized["vendor_id"])
+        if not vendor_row:
+            raise ValueError("Selected vendor was not found or is inactive.")
+        normalized.update(_vendor_snapshot_from_row(vendor_row))
 
         po_number = f"PO-{month_str}-{str(count + 1).zfill(3)}"
         initial_status = 'PENDING' if str(user_role or '').strip().lower() == 'admin' else 'FOR_APPROVAL'
 
         po_row = conn.execute("""
-            INSERT INTO purchase_orders (po_number, vendor_name, notes, status, created_by, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, po_number, vendor_name, notes, status, total_amount, created_by
-        """, (po_number, normalized['vendor_name'], normalized['notes'], initial_status, user_id, clean_time)).fetchone()
+            INSERT INTO purchase_orders (
+                po_number,
+                vendor_id,
+                vendor_name,
+                vendor_address,
+                vendor_contact_person,
+                vendor_contact_no,
+                vendor_email,
+                notes,
+                status,
+                created_by,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, po_number, vendor_id, vendor_name, notes, status, total_amount, created_by
+        """, (
+            po_number,
+            normalized["vendor_id"],
+            normalized["vendor_name"],
+            normalized["vendor_address"],
+            normalized["vendor_contact_person"],
+            normalized["vendor_contact_no"],
+            normalized["vendor_email"],
+            normalized["notes"],
+            initial_status,
+            user_id,
+            clean_time,
+        )).fetchone()
 
         new_po_id = po_row["id"]
         total_order_amount = _replace_po_items_and_order_transactions(
@@ -997,7 +1069,7 @@ def create_purchase_order(data, user_id, username, user_role):
         )
         po_row = conn.execute(
             """
-            SELECT id, po_number, vendor_name, notes, status, total_amount, created_by
+            SELECT id, po_number, vendor_id, vendor_name, notes, status, total_amount, created_by
             FROM purchase_orders
             WHERE id = %s
             """,
@@ -1213,6 +1285,11 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
         if approval["status"] not in PO_EDITABLE_APPROVAL_STATUSES:
             raise ValueError("This purchase order is not currently editable.")
 
+        vendor_row = _get_active_vendor_by_id(conn, normalized["vendor_id"])
+        if not vendor_row:
+            raise ValueError("Selected vendor was not found or is inactive.")
+        normalized.update(_vendor_snapshot_from_row(vendor_row))
+
         change_entries = _build_po_change_entries(po, current_items, normalized)
 
         total_order_amount = _replace_po_items_and_order_transactions(
@@ -1227,14 +1304,24 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
         conn.execute(
             """
             UPDATE purchase_orders
-            SET vendor_name = %s,
+            SET vendor_id = %s,
+                vendor_name = %s,
+                vendor_address = %s,
+                vendor_contact_person = %s,
+                vendor_contact_no = %s,
+                vendor_email = %s,
                 notes = %s,
                 total_amount = %s,
                 status = %s
             WHERE id = %s
             """,
             (
+                normalized["vendor_id"],
                 normalized["vendor_name"],
+                normalized["vendor_address"],
+                normalized["vendor_contact_person"],
+                normalized["vendor_contact_no"],
+                normalized["vendor_email"],
                 normalized["notes"],
                 total_order_amount,
                 "FOR_APPROVAL",
@@ -1244,7 +1331,7 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
 
         refreshed_po = conn.execute(
             """
-            SELECT id, po_number, vendor_name, notes, status, total_amount, created_by
+            SELECT id, po_number, vendor_id, vendor_name, notes, status, total_amount, created_by
             FROM purchase_orders
             WHERE id = %s
             """,

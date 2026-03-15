@@ -80,11 +80,18 @@ def add_item():
         'selling_price': selling_price or 0,
         'markup': request.form.get("markup") or 0,
         'reorder_level': request.form.get("reorder_level") or 0,
-        'vendor': request.form.get("vendor"),
+        'vendor_id': request.form.get("vendor_id") or None,
         'mechanic': request.form.get("mechanic")
     }
 
-    new_item_id = add_item_to_db(form_data, user_id=session.get('user_id'), username=session.get('username'))
+    try:
+        new_item_id = add_item_to_db(form_data, user_id=session.get('user_id'), username=session.get('username'))
+    except ValueError as e:
+        return redirect(url_for(
+            'transaction.manage_items',
+            return_to=return_to,
+            prefill_name=name,
+        ))
 
     # Redirect back to wherever the user came from
     if return_to == 'po':

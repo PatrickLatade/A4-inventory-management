@@ -28,7 +28,24 @@ def init_db():
     )
     """)
 
-    # 3. ITEMS TABLE
+    # 3. VENDORS TABLE
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS vendors (
+        id                  SERIAL PRIMARY KEY,
+        vendor_name         TEXT NOT NULL,
+        address             TEXT,
+        contact_person      TEXT,
+        contact_no          TEXT,
+        email               TEXT,
+        is_active           INTEGER DEFAULT 1,
+        created_at          TIMESTAMP DEFAULT NOW(),
+        updated_at          TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_vendors_name_unique ON vendors ((LOWER(TRIM(vendor_name))))")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_vendors_active_name ON vendors (is_active, vendor_name)")
+
+    # 4. ITEMS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id                  SERIAL PRIMARY KEY,
@@ -45,8 +62,9 @@ def init_db():
         mechanic            TEXT
     )
     """)
+    cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES vendors(id)")
 
-    # 4. PAYMENT METHODS TABLE
+    # 5. PAYMENT METHODS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payment_methods (
         id          SERIAL PRIMARY KEY,
@@ -56,7 +74,7 @@ def init_db():
     )
     """)
 
-    # 5. CUSTOMERS TABLE
+    # 6. CUSTOMERS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS customers (
         id              SERIAL PRIMARY KEY,
@@ -67,7 +85,7 @@ def init_db():
     )
     """)
 
-    # 6. VEHICLES TABLE
+    # 7. VEHICLES TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS vehicles (
         id          SERIAL PRIMARY KEY,
@@ -79,7 +97,7 @@ def init_db():
     )
     """)
 
-    # 7. SALES TABLE
+    # 8. SALES TABLE
     # customer_id, vehicle_id, mechanic_id, service_fee, paid_at
     # are included directly here — no migrations needed on fresh DB
     cur.execute("""
@@ -102,7 +120,7 @@ def init_db():
     )
     """)
 
-    # 8. INVENTORY TRANSACTIONS
+    # 9. INVENTORY TRANSACTIONS
     # reference_id replaces sale_id (The "Universal Key")
     # reference_type tells us if reference_id points to a Sale, PO, or Swap
     # change_reason is machine-readable code (BONUS_STOCK, PO_ARRIVAL, etc.)
@@ -124,7 +142,7 @@ def init_db():
     )
     """)
 
-    # 9. SERVICES TABLE (The Master List of Labor Types)
+    # 10. SERVICES TABLE (The Master List of Labor Types)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS services (
         id          SERIAL PRIMARY KEY,
@@ -134,7 +152,7 @@ def init_db():
     )
     """)
 
-    # 10. SALES SERVICES TABLE (The "Labor" Ledger)
+    # 11. SALES SERVICES TABLE (The "Labor" Ledger)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sales_services (
         id          SERIAL PRIMARY KEY,
@@ -144,7 +162,7 @@ def init_db():
     )
     """)
 
-    # 11. SALES ITEMS TABLE (Item-level sales & discounts)
+    # 12. SALES ITEMS TABLE (Item-level sales & discounts)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sales_items (
         id                  SERIAL PRIMARY KEY,
@@ -160,7 +178,7 @@ def init_db():
     )
     """)
 
-    # 12. PURCHASE ORDERS (The Header)
+    # 13. PURCHASE ORDERS (The Header)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS purchase_orders (
         id              SERIAL PRIMARY KEY,
@@ -174,6 +192,12 @@ def init_db():
         notes           TEXT
     )
     """)
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES vendors(id)")
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_address TEXT")
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_contact_person TEXT")
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_contact_no TEXT")
+    cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_email TEXT")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_purchase_orders_vendor_id ON purchase_orders(vendor_id)")
     cur.execute("""
     DO $$
     BEGIN
@@ -193,7 +217,7 @@ def init_db():
     END $$;
     """)
 
-    # 13. PURCHASE ORDER ITEMS (The Details)
+    # 14. PURCHASE ORDER ITEMS (The Details)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS po_items (
         id                  SERIAL PRIMARY KEY,
@@ -205,7 +229,36 @@ def init_db():
     )
     """)
 
-    # 14. LOYALTY PROGRAMS TABLE
+    # Backfill vendor master data from legacy free-text fields.
+    cur.execute("""
+        INSERT INTO vendors (vendor_name)
+        SELECT DISTINCT TRIM(src.vendor_name)
+        FROM (
+            SELECT vendor AS vendor_name FROM items
+            UNION ALL
+            SELECT vendor_name FROM purchase_orders
+        ) src
+        WHERE COALESCE(TRIM(src.vendor_name), '') <> ''
+        ON CONFLICT ((LOWER(TRIM(vendor_name)))) DO NOTHING
+    """)
+    cur.execute("""
+        UPDATE items i
+        SET vendor_id = v.id
+        FROM vendors v
+        WHERE i.vendor_id IS NULL
+          AND COALESCE(TRIM(i.vendor), '') <> ''
+          AND LOWER(TRIM(i.vendor)) = LOWER(TRIM(v.vendor_name))
+    """)
+    cur.execute("""
+        UPDATE purchase_orders po
+        SET vendor_id = v.id
+        FROM vendors v
+        WHERE po.vendor_id IS NULL
+          AND COALESCE(TRIM(po.vendor_name), '') <> ''
+          AND LOWER(TRIM(po.vendor_name)) = LOWER(TRIM(v.vendor_name))
+    """)
+
+    # 15. LOYALTY PROGRAMS TABLE
     # program_type: 'SERVICE' = stamps earned per qualifying service visit
     #               'ITEM'    = stamps earned per qualifying item purchase
     #
@@ -328,7 +381,7 @@ def init_db():
     END $$;
     """)
 
-    # 15. LOYALTY STAMPS TABLE
+    # 16. LOYALTY STAMPS TABLE
     # One row = one qualifying transaction earned toward a program.
     # redemption_id = NULL means the stamp is unconsumed / still active.
     # redemption_id = set  means the stamp was consumed in that redemption.
@@ -349,7 +402,7 @@ def init_db():
     )
     """)
 
-    # 16. LOYALTY REDEMPTIONS TABLE
+    # 17. LOYALTY REDEMPTIONS TABLE
     # One row = one reward granted to a customer.
     # reward_snapshot: frozen JSON of the reward at time of redemption.
     #   Critical for history accuracy — program config can change later.
@@ -368,7 +421,7 @@ def init_db():
     )
     """)
 
-    # 17. LOYALTY POINT RULES TABLE
+    # 18. LOYALTY POINT RULES TABLE
     # Rules are evaluated in priority order for each sale.
     # stop_on_match = 1 means stop evaluating next rules in that program after a match.
     cur.execute("""
@@ -388,7 +441,7 @@ def init_db():
     )
     """)
 
-    # 18. LOYALTY POINT LEDGER TABLE
+    # 19. LOYALTY POINT LEDGER TABLE
     # Immutable earning ledger for auditability and future recalculation.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS loyalty_point_ledger (
@@ -410,7 +463,7 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_lpl_sale ON loyalty_point_ledger(sale_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_lpr_program_active ON loyalty_point_rules(program_id, is_active, priority)")
 
-    # 19. DEBT PAYMENTS TABLE
+    # 20. DEBT PAYMENTS TABLE
     # service_portion tracks how much of a payment went toward services vs items
     cur.execute("""
     CREATE TABLE IF NOT EXISTS debt_payments (
@@ -426,7 +479,7 @@ def init_db():
     )
     """)
 
-    # 20. CASH ENTRIES (Petty Cash Ledger)
+    # 21. CASH ENTRIES (Petty Cash Ledger)
     # branch_id: DEFAULT 1 = main branch. When Branch 2 opens, entries will use that branch's ID.
     # reference_type: 'MANUAL' for staff entries, 'MECHANIC_PAYOUT' for auto-generated payouts
     # payout_for_date: the date the payout is for (used for mechanic payout reconciliation)
@@ -446,7 +499,7 @@ def init_db():
     )
     """)
 
-    # 21. NOTIFICATIONS TABLE
+    # 22. NOTIFICATIONS TABLE
     # One row per recipient user. This keeps unread/read state independent
     # even when the same business event is visible to multiple admins.
     cur.execute("""
@@ -473,7 +526,7 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_entity ON notifications(entity_type, entity_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_type)")
 
-    # 22. APPROVAL REQUESTS TABLE
+    # 23. APPROVAL REQUESTS TABLE
     # Generic approval workflow table reusable by multiple business modules.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_requests (
@@ -503,7 +556,7 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_type ON approval_requests(approval_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_requester ON approval_requests(requested_by)")
 
-    # 23. APPROVAL ACTIONS TABLE
+    # 24. APPROVAL ACTIONS TABLE
     # Immutable history of workflow actions for auditability.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_actions (
@@ -557,7 +610,7 @@ def init_db():
     END $$;
     """)
 
-    # 24. APPROVAL REVISION ITEMS
+    # 25. APPROVAL REVISION ITEMS
     # Structured per-item revision requests tied to a specific approval action.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_revision_items (
@@ -574,7 +627,7 @@ def init_db():
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_revision_items_request ON approval_revision_items(approval_request_id, approval_action_id)")
 
-    # 25. APPROVAL RESUBMISSION CHANGES
+    # 26. APPROVAL RESUBMISSION CHANGES
     # Structured before/after diff captured whenever a requester resubmits.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_resubmission_changes (

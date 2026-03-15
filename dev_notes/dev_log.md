@@ -40,6 +40,26 @@ base.html is the central design template
 
 Database migrated from SQLite → PostgreSQL
 
+## Vendor Centralization
+
+Implemented 2026-03-15
+
+Vendor data now lives in a dedicated vendors table.
+
+Current behavior
+- Items store `vendor_id` as the default / usual vendor.
+- Purchase orders store `vendor_id` plus frozen vendor snapshot fields for reporting and analytics.
+- Vendor add/select flow is shared across `items.html` and `order.html`.
+- New vendors can be created inline from the item and PO forms.
+
+Validation / UX
+- Item creation now requires vendor selection in both frontend and backend.
+- PO creation now requires vendor selection in both frontend and backend.
+- Missing-item add flow from loyalty, Stock IN, and PO now pre-fills the item name in `items.html`.
+
+Audit / Admin
+- Audit trail item detail modal now resolves vendor name from `vendor_id` via the vendor master table.
+
 ## Debt Feature
 
 Relevant files

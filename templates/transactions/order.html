@@ -35,20 +35,108 @@
         white-space: pre-wrap;
         font-size: 0.92rem;
     }
-    .search-results { 
-        position: absolute; width: 100%; z-index: 1000; 
-        background: #252525; border: 1px solid #444; display: none;
+    .search-results {
+        position: absolute;
+        width: 100%;
+        z-index: 1000;
+        background: #2b2f36;
+        border: 1px solid #505661;
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+        display: none;
     }
-    .result-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #333; }
-    .result-item:hover { background: #e63946; color: white; }
-    .result-item.no-results:hover { 
-    background: #252525; 
-    color: inherit; 
+    .result-item {
+        padding: 12px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        color: #f3f4f6;
+        background: transparent;
     }
-    .result-item.no-results .btn {
-    border-width: 2px;
+    .result-item:hover { background: rgba(230, 57, 70, 0.16); color: white; }
+    .result-item.no-results:hover {
+        background: #2b2f36;
+        color: inherit;
     }
+    .result-item.no-results .btn { border-width: 2px; }
     .table-order thead { background-color: #e63946; color: white; }
+    .vendor-selection-card {
+        border: 1px solid #2e5b43;
+        background: rgba(46, 91, 67, 0.18);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+    }
+    .vendor-selection-card .vendor-name {
+        color: #d1fae5;
+        font-weight: 700;
+    }
+    .vendor-selection-card .vendor-meta {
+        color: #b8c2cc;
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+    .vendor-search-results {
+        max-height: 260px;
+        overflow-y: auto;
+    }
+    .vendor-search-results .small.text-muted {
+        color: #c7ced8 !important;
+    }
+    .vendor-search-results .result-item:first-child {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+    #newVendorModal .modal-dialog {
+        margin-top: 7.5rem;
+    }
+    #newVendorModal .modal-content {
+        background: #1a1a1a;
+        border: 1px solid #4a4a4a;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    }
+    #newVendorModal .modal-header,
+    #newVendorModal .modal-footer {
+        background: #1a1a1a;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    #newVendorModal .modal-body {
+        background: #1a1a1a;
+    }
+    #newVendorModal .form-control {
+        background: #23272e;
+        border-color: #5e6572;
+        color: #f3f4f6;
+        border-radius: 10px;
+    }
+    #newVendorModal .form-control:focus {
+        background: #2a2f36;
+        border-color: #e63946;
+        box-shadow: 0 0 0 0.2rem rgba(230, 57, 70, 0.18);
+        color: #fff;
+    }
+    #newVendorModal textarea.form-control {
+        min-height: 92px;
+    }
+    #newVendorModal .form-label {
+        color: #e5e7eb;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    .vendor-modal-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .vendor-modal-title i {
+        color: #67c2e4;
+        font-size: 1.05rem;
+    }
+    @media (max-width: 768px) {
+        #newVendorModal .modal-dialog {
+            margin-top: 4rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -63,9 +151,20 @@
         <div class="col-md-4">
             <div class="order-card mb-3">
                 <h5>Order Header</h5>
-                <div class="mb-3">
+                <div class="mb-3 position-relative">
                     <label class="form-label text">Vendor / Supplier</label>
-                    <input type="text" id="vendor_name" class="form-control bg-dark text-white border-secondary" placeholder="e.g. Parts Master Inc.">
+                    <input type="text" id="vendor_search" class="form-control bg-dark text-white border-secondary" placeholder="Search vendor name, contact person, phone, or email" autocomplete="off">
+                    <input type="hidden" id="vendor_id">
+                    <div id="vendorSearchResults" class="search-results vendor-search-results"></div>
+                    <div id="vendorSelectedCard" class="vendor-selection-card" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div id="vendorSelectedName" class="vendor-name"></div>
+                                <div id="vendorSelectedMeta" class="vendor-meta"></div>
+                            </div>
+                            <button type="button" id="clearVendorBtn" class="btn btn-sm btn-outline-light">&times;</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label text">Notes</label>
@@ -115,33 +214,67 @@
     </div>
 </div>
 
-<script>
-/*
- * DRAFT STATE: Uses sessionStorage to preserve order items when navigating
- * away to add a new item. This is a per-tab, per-session solution.
- *
- * TODO (Option 3 migration): If the business needs cross-session draft POs
- * (e.g. start on one device, finish on another), staff collaboration on POs,
- * or manager visibility into draft POs across branches — replace this with a
- * draft_purchase_orders table in the DB. The sessionStorage key is
- * 'po_draft_items'. The DB equivalent would be a draft PO with status='DRAFT'
- * tied to the user_id. On migration, remove the sessionStorage logic below
- * and replace DOMContentLoaded restore with a fetch to load the draft from DB.
- */
+<div class="modal fade" id="newVendorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title vendor-modal-title">
+                    <i class="bi bi-truck"></i>
+                    <span>Add Vendor</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Vendor Name</label>
+                    <input type="text" id="new-vendor-name" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Address</label>
+                    <textarea id="new-vendor-address" class="form-control text-white border-secondary" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact Person</label>
+                    <input type="text" id="new-vendor-contact-person" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact No</label>
+                    <input type="text" id="new-vendor-contact-no" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="new-vendor-email" class="form-control text-white border-secondary">
+                </div>
+                <div id="new-vendor-error" class="text-danger small"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="saveNewVendorBtn">Save Vendor</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-const DRAFT_KEY = 'po_draft_items';
+<script>
+const DRAFT_KEY = 'po_draft_v2';
 let orderItems = [];
 let editingPoId = null;
+let vendorSearchTimer = null;
 
 const itemSearch = document.getElementById('itemSearch');
 const searchResults = document.getElementById('searchResults');
 const orderTableBody = document.getElementById('orderTableBody');
-const vendorInput = document.getElementById('vendor_name');
+const vendorSearchInput = document.getElementById('vendor_search');
+const vendorIdInput = document.getElementById('vendor_id');
+const vendorSearchResults = document.getElementById('vendorSearchResults');
+const vendorSelectedCard = document.getElementById('vendorSelectedCard');
+const vendorSelectedName = document.getElementById('vendorSelectedName');
+const vendorSelectedMeta = document.getElementById('vendorSelectedMeta');
+const clearVendorBtn = document.getElementById('clearVendorBtn');
 const notesInput = document.getElementById('po_notes');
 const statusBadge = document.getElementById('poStatusBadge');
 const submitOrderBtn = document.getElementById('submitOrderBtn');
 
-// ── On Load: Restore draft + auto-select new item if returning from items page ──
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     const prefilledId = params.get('prefilled_id');
@@ -152,20 +285,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Restore saved draft if it exists
     const savedDraft = sessionStorage.getItem(DRAFT_KEY);
     if (savedDraft) {
         try {
-            orderItems = JSON.parse(savedDraft);
+            const parsedDraft = JSON.parse(savedDraft);
+            if (Array.isArray(parsedDraft)) {
+                orderItems = parsedDraft;
+            } else {
+                orderItems = parsedDraft.orderItems || [];
+                notesInput.value = parsedDraft.notes || '';
+                if (parsedDraft.vendor) {
+                    selectVendor(parsedDraft.vendor);
+                }
+            }
             renderTable();
-        } catch (e) {
-            console.error("Failed to restore draft:", e);
+        } catch (error) {
+            console.error('Failed to restore draft:', error);
             orderItems = [];
         }
         sessionStorage.removeItem(DRAFT_KEY);
     }
 
-    // Auto-select the newly created item
     if (prefilledId) {
         try {
             const response = await fetch(`/api/search?id=${prefilledId}`);
@@ -173,17 +313,76 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (data.items && data.items.length > 0) {
                 addItemToOrder(data.items[0]);
             }
-        } catch (err) {
-            console.error("Error fetching prefilled item:", err);
+        } catch (error) {
+            console.error('Error fetching prefilled item:', error);
         }
 
-        // Clean the URL so a refresh doesn't re-add the item
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
 
 function formatStatusLabel(status) {
     return String(status || 'DRAFT').replaceAll('_', ' ');
+}
+
+function getSelectedVendorDraft() {
+    const vendorId = parseInt(vendorIdInput.value, 10);
+    if (!vendorId) return null;
+
+    return {
+        id: vendorId,
+        vendor_name: vendorSelectedName.textContent.trim(),
+        address: vendorSelectedCard.dataset.address || '',
+        contact_person: vendorSelectedCard.dataset.contactPerson || '',
+        contact_no: vendorSelectedCard.dataset.contactNo || '',
+        email: vendorSelectedCard.dataset.email || '',
+    };
+}
+
+function renderVendorMeta(vendor) {
+    const parts = [];
+    if (vendor.address) parts.push(`Address: ${escapeHtml(vendor.address)}`);
+    if (vendor.contact_person) parts.push(`Contact: ${escapeHtml(vendor.contact_person)}`);
+    if (vendor.contact_no) parts.push(`No: ${escapeHtml(vendor.contact_no)}`);
+    if (vendor.email) parts.push(`Email: ${escapeHtml(vendor.email)}`);
+    return parts.join('<br>');
+}
+
+function selectVendor(vendor) {
+    vendorIdInput.value = vendor.id || '';
+    vendorSearchInput.value = vendor.vendor_name || '';
+    vendorSelectedName.textContent = vendor.vendor_name || '';
+    vendorSelectedMeta.innerHTML = renderVendorMeta(vendor);
+    vendorSelectedCard.dataset.address = vendor.address || '';
+    vendorSelectedCard.dataset.contactPerson = vendor.contact_person || '';
+    vendorSelectedCard.dataset.contactNo = vendor.contact_no || '';
+    vendorSelectedCard.dataset.email = vendor.email || '';
+    vendorSelectedCard.style.display = 'block';
+    vendorSearchResults.style.display = 'none';
+    vendorSearchInput.classList.remove('border-danger');
+}
+
+function clearVendorSelection() {
+    vendorIdInput.value = '';
+    vendorSearchInput.value = '';
+    vendorSelectedName.textContent = '';
+    vendorSelectedMeta.innerHTML = '';
+    vendorSelectedCard.dataset.address = '';
+    vendorSelectedCard.dataset.contactPerson = '';
+    vendorSelectedCard.dataset.contactNo = '';
+    vendorSelectedCard.dataset.email = '';
+    vendorSelectedCard.style.display = 'none';
+}
+
+function openNewVendorModal(prefill = '') {
+    vendorSearchResults.style.display = 'none';
+    document.getElementById('new-vendor-name').value = prefill;
+    document.getElementById('new-vendor-address').value = '';
+    document.getElementById('new-vendor-contact-person').value = '';
+    document.getElementById('new-vendor-contact-no').value = '';
+    document.getElementById('new-vendor-email').value = '';
+    document.getElementById('new-vendor-error').textContent = '';
+    new bootstrap.Modal(document.getElementById('newVendorModal')).show();
 }
 
 async function loadExistingOrder(poId) {
@@ -202,7 +401,19 @@ async function loadExistingOrder(poId) {
         submitOrderBtn.innerHTML = '<i class="fas fa-save"></i> Update Purchase Order';
         statusBadge.textContent = `Status: ${formatStatusLabel(data.po.status)}`;
 
-        vendorInput.value = data.po.vendor_name || '';
+        if (data.po.vendor_id) {
+            selectVendor({
+                id: data.po.vendor_id,
+                vendor_name: data.po.vendor_name || '',
+                address: data.po.vendor_address || '',
+                contact_person: data.po.vendor_contact_person || '',
+                contact_no: data.po.vendor_contact_no || '',
+                email: data.po.vendor_email || '',
+            });
+        } else if (data.po.vendor_name) {
+            vendorSearchInput.value = data.po.vendor_name || '';
+        }
+
         notesInput.value = data.po.notes || '';
         renderRevisionTracker(data.approval);
         orderItems = (data.items || []).map(item => ({
@@ -222,7 +433,92 @@ async function loadExistingOrder(poId) {
     }
 }
 
-// ── Search ───────────────────────────────────────────────────────
+vendorSearchInput.addEventListener('input', () => {
+    clearTimeout(vendorSearchTimer);
+    vendorIdInput.value = '';
+    vendorSelectedCard.style.display = 'none';
+
+    const query = vendorSearchInput.value.trim();
+    if (query.length < 2) {
+        vendorSearchResults.style.display = 'none';
+        return;
+    }
+
+    vendorSearchTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/search/vendors?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            const vendors = data.vendors || [];
+
+            vendorSearchResults.innerHTML = '';
+
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'result-item no-results w-100 text-start bg-transparent border-0';
+            addBtn.innerHTML = `<i class="bi bi-building-add me-2"></i>Add new vendor: <strong>${escapeHtml(query)}</strong>`;
+            addBtn.onclick = () => openNewVendorModal(query);
+            vendorSearchResults.appendChild(addBtn);
+
+            vendors.forEach(vendor => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'result-item w-100 text-start bg-transparent border-0';
+                btn.innerHTML = `
+                    <div><strong>${escapeHtml(vendor.vendor_name || '')}</strong></div>
+                    <div class="small text-muted">
+                        ${escapeHtml(vendor.contact_person || 'No contact person')}
+                        ${vendor.contact_no ? ` - ${escapeHtml(vendor.contact_no)}` : ''}
+                    </div>
+                `;
+                btn.onclick = () => selectVendor(vendor);
+                vendorSearchResults.appendChild(btn);
+            });
+
+            vendorSearchResults.style.display = 'block';
+        } catch (error) {
+            console.error('Vendor search failed:', error);
+        }
+    }, 250);
+});
+
+clearVendorBtn.addEventListener('click', clearVendorSelection);
+
+document.getElementById('saveNewVendorBtn').addEventListener('click', async () => {
+    const vendor = {
+        vendor_name: document.getElementById('new-vendor-name').value.trim(),
+        address: document.getElementById('new-vendor-address').value.trim(),
+        contact_person: document.getElementById('new-vendor-contact-person').value.trim(),
+        contact_no: document.getElementById('new-vendor-contact-no').value.trim(),
+        email: document.getElementById('new-vendor-email').value.trim(),
+    };
+    const errorEl = document.getElementById('new-vendor-error');
+    errorEl.textContent = '';
+
+    if (!vendor.vendor_name || !vendor.address || !vendor.contact_person || !vendor.contact_no || !vendor.email) {
+        errorEl.textContent = 'All vendor fields are required.';
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/vendors/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vendor),
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            bootstrap.Modal.getInstance(document.getElementById('newVendorModal')).hide();
+            selectVendor(data.vendor);
+            return;
+        }
+
+        errorEl.textContent = data.message || 'Could not save vendor.';
+    } catch (error) {
+        errorEl.textContent = 'Network error. Try again.';
+    }
+});
+
 itemSearch.addEventListener('input', async (e) => {
     const query = e.target.value.trim();
     if (query.length < 2) {
@@ -240,18 +536,17 @@ itemSearch.addEventListener('input', async (e) => {
         items.forEach(item => {
             const div = document.createElement('div');
             div.className = 'result-item';
-            div.innerHTML = `<strong>${escapeHtml(item.name)}</strong> 
+            div.innerHTML = `<strong>${escapeHtml(item.name)}</strong>
                             <small class="text-muted">(Stock: ${escapeHtml(String(item.current_stock ?? 0))})</small>`;
             div.onclick = () => addItemToOrder(item);
             searchResults.appendChild(div);
         });
     } else {
-        // Empty state — save draft before leaving
         const div = document.createElement('div');
         div.className = 'result-item no-results d-flex justify-content-between align-items-center';
         div.innerHTML = `
             <span class="text-muted">No results for "<strong>${escapeHtml(query)}</strong>"</span>
-            <a href="/transaction/items?return_to=po" 
+            <a href="/transaction/items?return_to=po&prefill_name=${encodeURIComponent(query)}"
             class="btn btn-sm btn-outline-success"
             onclick="saveDraftBeforeLeaving()">
                 <i class="bi bi-plus-circle"></i> Add New Item
@@ -263,37 +558,41 @@ itemSearch.addEventListener('input', async (e) => {
     searchResults.style.display = 'block';
 });
 
-// Close dropdown on outside click
 document.addEventListener('click', (e) => {
     if (!itemSearch.contains(e.target) && !searchResults.contains(e.target)) {
         searchResults.style.display = 'none';
     }
+    if (!vendorSearchInput.contains(e.target) && !vendorSearchResults.contains(e.target)) {
+        vendorSearchResults.style.display = 'none';
+    }
 });
 
-// ── Draft save — called before navigating away ───────────────────
 function saveDraftBeforeLeaving() {
-    if (orderItems.length > 0) {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(orderItems));
+    if (orderItems.length > 0 || vendorIdInput.value || notesInput.value.trim()) {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+            orderItems,
+            vendor: getSelectedVendorDraft(),
+            notes: notesInput.value,
+        }));
     }
 }
 
-// ── Order table logic ────────────────────────────────────────────
 function addItemToOrder(item) {
     if (orderItems.some(i => i.id === item.id)) {
-        showOrderAlert("Item already in the list!", "warning");
+        showOrderAlert('Item already in the list!', 'warning');
         return;
     }
 
-    orderItems.push({ 
-        id: item.id, 
-        name: item.name, 
-        qty: 1, 
+    orderItems.push({
+        id: item.id,
+        name: item.name,
+        qty: 1,
         cost: item.cost_per_piece || 0,
         current_stock: item.current_stock || 0,
         pending_stock: item.pending_stock || 0
     });
     renderTable();
-    
+
     itemSearch.value = '';
     searchResults.style.display = 'none';
 }
@@ -317,11 +616,11 @@ function renderTable() {
                     ${pendingHtml}
                 </td>
                 <td>
-                    <input type="number" class="form-control form-control-sm bg-dark text-white" 
+                    <input type="number" class="form-control form-control-sm bg-dark text-white"
                         value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
                 </td>
                 <td>
-                    <input type="number" class="form-control form-control-sm bg-dark text-white" 
+                    <input type="number" class="form-control form-control-sm bg-dark text-white"
                         value="${item.cost}" step="0.01" onchange="updateCost(${index}, this.value)">
                 </td>
                 <td>
@@ -333,16 +632,16 @@ function renderTable() {
     orderTableBody.innerHTML = rows.join('');
 }
 
-function updateQty(index, val) { orderItems[index].qty = parseInt(val); }
+function updateQty(index, val) { orderItems[index].qty = parseInt(val, 10); }
 function updateCost(index, val) { orderItems[index].cost = parseFloat(val); }
 function removeItem(index) { orderItems.splice(index, 1); renderTable(); }
 
 function showOrderAlert(message, type) {
     const icons = {
         warning: 'bi-exclamation-triangle-fill',
-        danger:  'bi-x-circle-fill',
+        danger: 'bi-x-circle-fill',
         success: 'bi-check-circle-fill',
-        info:    'bi-info-circle-fill'
+        info: 'bi-info-circle-fill'
     };
 
     const container = document.getElementById('flash-container');
@@ -411,13 +710,18 @@ function renderRevisionTracker(approval) {
 }
 
 async function submitOrder() {
-    if (orderItems.length === 0) { 
-        showOrderAlert("Add at least one item!", "warning"); 
-        return; 
+    if (!vendorIdInput.value) {
+        vendorSearchInput.classList.add('border-danger');
+        showOrderAlert('Select a vendor or add a new one first.', 'warning');
+        return;
     }
-    
+    if (orderItems.length === 0) {
+        showOrderAlert('Add at least one item!', 'warning');
+        return;
+    }
+
     const payload = {
-        vendor_name: vendorInput.value,
+        vendor_id: parseInt(vendorIdInput.value, 10),
         notes: notesInput.value,
         items: orderItems
     };
@@ -431,11 +735,10 @@ async function submitOrder() {
 
     const result = await response.json();
     if (result.status === 'success') {
-        // Clear draft on successful save — no ghost data on next PO
         sessionStorage.removeItem(DRAFT_KEY);
         window.location.href = '/transaction/orders/list';
     } else {
-        showOrderAlert("Error saving order: " + result.message, "danger");
+        showOrderAlert('Error saving order: ' + result.message, 'danger');
     }
 }
 </script>

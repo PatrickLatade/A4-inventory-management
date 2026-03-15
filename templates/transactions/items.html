@@ -22,6 +22,131 @@
         font-size: 0.75rem;
         color: #888;
     }
+
+    .req {
+        color: #e63946;
+        margin-left: 2px;
+        font-weight: 700;
+    }
+
+    .search-results {
+        position: absolute;
+        width: 100%;
+        z-index: 1000;
+        background: #2b2f36;
+        border: 1px solid #505661;
+        border-radius: 0 0 12px 12px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+        display: none;
+    }
+
+    .result-item {
+        padding: 12px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        color: #f3f4f6;
+        background: transparent;
+    }
+
+    .result-item:hover {
+        background: rgba(230, 57, 70, 0.16);
+        color: white;
+    }
+
+    .result-item.no-results:hover {
+        background: #2b2f36;
+        color: inherit;
+    }
+
+    .vendor-selection-card {
+        border: 1px solid #2e5b43;
+        background: rgba(46, 91, 67, 0.18);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+    }
+
+    .vendor-selection-card .vendor-name {
+        color: #d1fae5;
+        font-weight: 700;
+    }
+
+    .vendor-selection-card .vendor-meta {
+        color: #c7ced8;
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    .vendor-search-results {
+        max-height: 260px;
+        overflow-y: auto;
+    }
+
+    .vendor-search-results .small.text-muted {
+        color: #c7ced8 !important;
+    }
+
+    #newVendorModal .modal-dialog {
+        margin-top: 7.5rem;
+    }
+
+    #newVendorModal .modal-content {
+        background: #1a1a1a;
+        border: 1px solid #4a4a4a;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    }
+
+    #newVendorModal .modal-header,
+    #newVendorModal .modal-footer {
+        background: #1a1a1a;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    #newVendorModal .modal-body {
+        background: #1a1a1a;
+    }
+
+    #newVendorModal .form-control {
+        background: #23272e;
+        border-color: #5e6572;
+        color: #f3f4f6;
+        border-radius: 10px;
+    }
+
+    #newVendorModal .form-control:focus {
+        background: #2a2f36;
+        border-color: #e63946;
+        box-shadow: 0 0 0 0.2rem rgba(230, 57, 70, 0.18);
+        color: #fff;
+    }
+
+    #newVendorModal textarea.form-control {
+        min-height: 92px;
+    }
+
+    #newVendorModal .form-label {
+        color: #e5e7eb;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .vendor-modal-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .vendor-modal-title i {
+        color: #67c2e4;
+        font-size: 1.05rem;
+    }
+
+    @media (max-width: 768px) {
+        #newVendorModal .modal-dialog {
+            margin-top: 4rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -37,19 +162,18 @@
 
         <form method="POST" action="/items/add">
 
-            <!-- ================= CORE INFO ================= -->
             <div class="section-title">Item Information</div>
 
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label small text-white-50">Item name *</label>
+                    <label class="form-label small text-white-50">Item name <span class="req">*</span></label>
                     <input type="text" id="item-name-input" name="name" value="{{ prefill_name or '' }}" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
                 <input type="hidden" name="return_to" value="{{ return_to }}">
 
                 <div class="col-md-3">
-                    <label class="form-label small text-white-50">Category</label>
+                    <label class="form-label small text-white-50">Category <span class="req">*</span></label>
                     <select name="existing_category" id="categorySelect" class="form-control bg-dark text-white border-secondary" required>
                         <option value="">-- Select Category --</option>
                         {% for cat in categories %}
@@ -61,7 +185,7 @@
 
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">New Category Name</label>
-                    <input name="new_category" id="newCategoryInput" 
+                    <input name="new_category" id="newCategoryInput"
                         class="form-control bg-dark text-white border-secondary"
                         placeholder="Select '-- New Category --' to type" disabled>
                 </div>
@@ -77,34 +201,32 @@
                 </div>
             </div>
 
-            <!-- ================= PRICING ================= -->
             <div class="section-title">Pricing & Cost</div>
 
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label class="form-label small text-white-50">Vendor price</label>
+                    <label class="form-label small text-white-50">Vendor price <span class="req">*</span></label>
                     <input type="number" step="0.01" name="vendor_price" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label small text-white-50">Cost per piece</label>
+                    <label class="form-label small text-white-50">Cost per piece <span class="req">*</span></label>
                     <input type="number" step="0.01" name="cost_per_piece" id="cost_input" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label small text-white-50">Selling price</label>
+                    <label class="form-label small text-white-50">Selling price <span class="req">*</span></label>
                     <input type="number" step="0.01" name="a4s_selling_price" id="selling_input" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">Markup (%)</label>
                     <input type="text" id="markup_display" class="form-control bg-dark text-white border-secondary" readonly>
-                    
+
                     <input type="hidden" name="markup" id="markup_input">
                 </div>
             </div>
 
-            <!-- ================= OPERATIONS ================= -->
             <div class="section-title">Operations</div>
 
             <div class="row g-3">
@@ -115,13 +237,24 @@
                 </div>
             </div>
 
-            <!-- ================= META ================= -->
-            <div class="section-title">Additional Info (Optional)</div>
+            <div class="section-title">Additional Info</div>
 
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label small text-white-50">Vendor</label>
-                    <input type="text" name="vendor" class="form-control bg-dark text-white border-secondary">
+                <div class="col-md-6 position-relative">
+                    <label class="form-label small text-white-50">Default Vendor <span class="req">*</span></label>
+                    <input type="text" id="vendor_search" class="form-control bg-dark text-white border-secondary" placeholder="Search vendor name, contact person, phone, or email" autocomplete="off" required>
+                    <input type="hidden" name="vendor_id" id="vendor_id">
+                    <div id="vendorSearchResults" class="search-results vendor-search-results"></div>
+                    <div id="vendorSelectedCard" class="vendor-selection-card" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div id="vendorSelectedName" class="vendor-name"></div>
+                                <div id="vendorSelectedMeta" class="vendor-meta"></div>
+                            </div>
+                            <button type="button" id="clearVendorBtn" class="btn btn-sm btn-outline-light">&times;</button>
+                        </div>
+                    </div>
+                    <div class="hint">Required: choose the usual supplier for this item</div>
                 </div>
 
                 <div class="col-md-6">
@@ -131,12 +264,11 @@
                 </div>
             </div>
 
-            <!-- ================= ACTIONS ================= -->
             <div class="d-flex justify-content-end mt-4 gap-2">
                 <a href="{{ url_for('transaction.create_order_page') if return_to == 'po' else url_for('transaction.list_orders') }}" class="btn btn-outline-secondary">
                     Cancel
                 </a>
-                <button type="submit" class="btn btn-danger">
+                <button type="submit" id="save-item-btn" class="btn btn-danger">
                     <i class="bi bi-check-circle"></i> Save Item
                 </button>
             </div>
@@ -145,6 +277,47 @@
 
     </div>
 
+</div>
+
+<div class="modal fade" id="newVendorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title vendor-modal-title">
+                    <i class="bi bi-truck"></i>
+                    <span>Add Vendor</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Vendor Name</label>
+                    <input type="text" id="new-vendor-name" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Address</label>
+                    <textarea id="new-vendor-address" class="form-control text-white border-secondary" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact Person</label>
+                    <input type="text" id="new-vendor-contact-person" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact No</label>
+                    <input type="text" id="new-vendor-contact-no" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="new-vendor-email" class="form-control text-white border-secondary">
+                </div>
+                <div id="new-vendor-error" class="text-danger small"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="saveNewVendorBtn">Save Vendor</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
@@ -157,8 +330,16 @@
     const markupHidden = document.getElementById('markup_input');
     const categorySelect = document.getElementById('categorySelect');
     const newCategoryInput = document.getElementById('newCategoryInput');
+    const vendorSearchInput = document.getElementById('vendor_search');
+    const vendorIdInput = document.getElementById('vendor_id');
+    const vendorSearchResults = document.getElementById('vendorSearchResults');
+    const vendorSelectedCard = document.getElementById('vendorSelectedCard');
+    const vendorSelectedName = document.getElementById('vendorSelectedName');
+    const vendorSelectedMeta = document.getElementById('vendorSelectedMeta');
+    const clearVendorBtn = document.getElementById('clearVendorBtn');
 
-    // ── Category toggle ──────────────────────────────────────────
+    let vendorSearchTimer = null;
+
     function syncCategoryFields() {
         if (categorySelect.value === "__OTHER__") {
             newCategoryInput.disabled = false;
@@ -175,7 +356,6 @@
 
     categorySelect.addEventListener('change', syncCategoryFields);
 
-    // Focus prefilled name when redirected from other pages.
     const itemNameInput = document.getElementById('item-name-input');
     if (itemNameInput && itemNameInput.value.trim()) {
         window.setTimeout(() => {
@@ -184,7 +364,6 @@
         }, 80);
     }
 
-    // ── Markup calculator ────────────────────────────────────────
     function calculateMarkup() {
         const cost = parseFloat(costInput.value);
         const selling = parseFloat(sellingInput.value);
@@ -203,98 +382,174 @@
     costInput.addEventListener('input', calculateMarkup);
     sellingInput.addEventListener('input', calculateMarkup);
 
-    // ── Form validation with scroll-to-error ─────────────────────
+    function renderVendorMeta(vendor) {
+        const parts = [];
+        if (vendor.address) parts.push(`Address: ${escapeHtml(vendor.address)}`);
+        if (vendor.contact_person) parts.push(`Contact: ${escapeHtml(vendor.contact_person)}`);
+        if (vendor.contact_no) parts.push(`No: ${escapeHtml(vendor.contact_no)}`);
+        if (vendor.email) parts.push(`Email: ${escapeHtml(vendor.email)}`);
+        return parts.join('<br>');
+    }
+
+    function selectVendor(vendor) {
+        vendorIdInput.value = vendor.id || '';
+        vendorSearchInput.value = vendor.vendor_name || '';
+        vendorSelectedName.textContent = vendor.vendor_name || '';
+        vendorSelectedMeta.innerHTML = renderVendorMeta(vendor);
+        vendorSelectedCard.style.display = 'block';
+        vendorSearchResults.style.display = 'none';
+        vendorSelectedCard.dataset.address = vendor.address || '';
+        vendorSelectedCard.dataset.contactPerson = vendor.contact_person || '';
+        vendorSelectedCard.dataset.contactNo = vendor.contact_no || '';
+        vendorSelectedCard.dataset.email = vendor.email || '';
+    }
+
+    function clearVendorSelection() {
+        vendorIdInput.value = '';
+        vendorSearchInput.value = '';
+        vendorSelectedName.textContent = '';
+        vendorSelectedMeta.innerHTML = '';
+        vendorSelectedCard.style.display = 'none';
+        vendorSelectedCard.dataset.address = '';
+        vendorSelectedCard.dataset.contactPerson = '';
+        vendorSelectedCard.dataset.contactNo = '';
+        vendorSelectedCard.dataset.email = '';
+    }
+
+    function openNewVendorModal(prefill = '') {
+        vendorSearchResults.style.display = 'none';
+        document.getElementById('new-vendor-name').value = prefill;
+        document.getElementById('new-vendor-address').value = '';
+        document.getElementById('new-vendor-contact-person').value = '';
+        document.getElementById('new-vendor-contact-no').value = '';
+        document.getElementById('new-vendor-email').value = '';
+        document.getElementById('new-vendor-error').textContent = '';
+        new bootstrap.Modal(document.getElementById('newVendorModal')).show();
+    }
+
+    vendorSearchInput.addEventListener('input', () => {
+        clearTimeout(vendorSearchTimer);
+        vendorIdInput.value = '';
+        vendorSelectedCard.style.display = 'none';
+
+        const query = vendorSearchInput.value.trim();
+        if (query.length < 2) {
+            vendorSearchResults.style.display = 'none';
+            return;
+        }
+
+        vendorSearchTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/search/vendors?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                const vendors = data.vendors || [];
+
+                vendorSearchResults.innerHTML = '';
+
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'result-item no-results w-100 text-start bg-transparent border-0';
+                addBtn.innerHTML = `<i class="bi bi-truck me-2" style="color:#67c2e4;"></i>Add new vendor: <strong>${escapeHtml(query)}</strong>`;
+                addBtn.onclick = () => openNewVendorModal(query);
+                vendorSearchResults.appendChild(addBtn);
+
+                vendors.forEach(vendor => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'result-item w-100 text-start bg-transparent border-0';
+                    btn.innerHTML = `
+                        <div><strong>${escapeHtml(vendor.vendor_name || '')}</strong></div>
+                        <div class="small text-muted">
+                            ${escapeHtml(vendor.contact_person || 'No contact person')}
+                            ${vendor.contact_no ? ` - ${escapeHtml(vendor.contact_no)}` : ''}
+                        </div>
+                    `;
+                    btn.onclick = () => selectVendor(vendor);
+                    vendorSearchResults.appendChild(btn);
+                });
+
+                vendorSearchResults.style.display = 'block';
+            } catch (error) {
+                console.error('Vendor search failed:', error);
+            }
+        }, 250);
+    });
+
+    clearVendorBtn.addEventListener('click', clearVendorSelection);
+
+    document.getElementById('saveNewVendorBtn').addEventListener('click', async () => {
+        const vendor = {
+            vendor_name: document.getElementById('new-vendor-name').value.trim(),
+            address: document.getElementById('new-vendor-address').value.trim(),
+            contact_person: document.getElementById('new-vendor-contact-person').value.trim(),
+            contact_no: document.getElementById('new-vendor-contact-no').value.trim(),
+            email: document.getElementById('new-vendor-email').value.trim(),
+        };
+        const errorEl = document.getElementById('new-vendor-error');
+        errorEl.textContent = '';
+
+        if (!vendor.vendor_name || !vendor.address || !vendor.contact_person || !vendor.contact_no || !vendor.email) {
+            errorEl.textContent = 'All vendor fields are required.';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/vendors/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(vendor),
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                bootstrap.Modal.getInstance(document.getElementById('newVendorModal')).hide();
+                selectVendor(data.vendor);
+                return;
+            }
+
+            errorEl.textContent = data.message || 'Could not save vendor.';
+        } catch (error) {
+            errorEl.textContent = 'Network error. Try again.';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!vendorSearchInput.contains(e.target) && !vendorSearchResults.contains(e.target)) {
+            vendorSearchResults.style.display = 'none';
+        }
+    });
+
     const form = document.querySelector('form');
 
-    // Map: field name → section title text to scroll to
-    const fieldSectionMap = {
-        'name':              'Item Information',
-        'existing_category': 'Item Information',
-        'new_category':      'Item Information',
-        'vendor_price':      'Pricing & Cost',
-        'cost_per_piece':    'Pricing & Cost',
-        'a4s_selling_price': 'Pricing & Cost',
+    function syncVendorValidity() {
+        if (vendorIdInput.value.trim()) {
+            vendorSearchInput.setCustomValidity('');
+        } else {
+            vendorSearchInput.setCustomValidity('Please select a vendor from the list.');
+        }
+    }
+
+    const originalClearVendorSelection = clearVendorSelection;
+    clearVendorSelection = function () {
+        originalClearVendorSelection();
+        syncVendorValidity();
     };
 
-    function getSectionTitle(labelText) {
-        return [...document.querySelectorAll('.section-title')]
-            .find(el => el.textContent.trim().toUpperCase() === labelText.toUpperCase());
-    }
+    const originalSelectVendor = selectVendor;
+    selectVendor = function (vendor) {
+        originalSelectVendor(vendor);
+        syncVendorValidity();
+    };
 
-    function showInlineError(input, message) {
-        // Remove any existing error for this field
-        const existing = input.parentElement.querySelector('.field-error');
-        if (existing) existing.remove();
+    vendorSearchInput.addEventListener('input', syncVendorValidity);
+    vendorSearchInput.addEventListener('change', syncVendorValidity);
+    vendorSearchInput.addEventListener('invalid', syncVendorValidity);
+    clearVendorBtn.addEventListener('click', syncVendorValidity);
 
-        const err = document.createElement('div');
-        err.className = 'field-error';
-        err.style.cssText = 'color: #e63946; font-size: 0.75rem; margin-top: 4px;';
-        err.textContent = message;
-        input.parentElement.appendChild(err);
-        input.classList.add('border-danger');
-    }
-
-    function clearErrors() {
-        document.querySelectorAll('.field-error').forEach(el => el.remove());
-        document.querySelectorAll('.border-danger').forEach(el => {
-            el.classList.remove('border-danger');
-        });
-    }
-
-    form.addEventListener('submit', function (e) {
-        clearErrors();
-
-        const checks = [
-            { el: form.querySelector('[name="name"]'),              label: 'Item name is required.' },
-            { el: categorySelect,                                    label: 'Please select a category.' },
-            { el: form.querySelector('[name="new_category"]'),       label: 'Please type a new category name.', onlyIfEnabled: true },
-            { el: form.querySelector('[name="vendor_price"]'),       label: 'Vendor price is required.' },
-            { el: form.querySelector('[name="cost_per_piece"]'),     label: 'Cost per piece is required.' },
-            { el: form.querySelector('[name="a4s_selling_price"]'),  label: 'Selling price is required.' },
-        ];
-
-        let firstErrorSection = null;
-        let firstErrorEl = null;
-
-        for (const check of checks) {
-            if (!check.el) continue;
-            if (check.onlyIfEnabled && check.el.disabled) continue;
-
-            const isEmpty = check.el.value.trim() === '' || check.el.value === '';
-
-            // Special case: select with placeholder value
-            const isSelectEmpty = check.el.tagName === 'SELECT' && check.el.value === '';
-
-            if (isEmpty || isSelectEmpty) {
-                showInlineError(check.el, check.label);
-
-                if (!firstErrorEl) {
-                    firstErrorEl = check.el;
-                    const sectionLabel = fieldSectionMap[check.el.name];
-                    firstErrorSection = sectionLabel ? getSectionTitle(sectionLabel) : null;
-                }
-            }
-        }
-
-        if (firstErrorEl) {
-            e.preventDefault();
-            const target = firstErrorSection || firstErrorEl;
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+    form.addEventListener('submit', function () {
+        syncVendorValidity();
     });
 
-    // Clear error styling when user interacts with the field
-    form.querySelectorAll('input, select').forEach(el => {
-        el.addEventListener('input', () => {
-            el.classList.remove('border-danger');
-            const err = el.parentElement.querySelector('.field-error');
-            if (err) err.remove();
-        });
-        el.addEventListener('change', () => {
-            el.classList.remove('border-danger');
-            const err = el.parentElement.querySelector('.field-error');
-            if (err) err.remove();
-        });
-    });
+    syncVendorValidity();
 </script>
 {% endblock %}

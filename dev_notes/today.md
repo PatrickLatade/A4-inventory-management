@@ -3,7 +3,7 @@
 ## Tasks
 - [ ] Fix admin sales filter
 - [ ] Investigate mechanic quota report
-- [ ] Implement vendor centralization
+- [X] ~~*Implement vendor centralization*~~ [2026-03-15]
 
 ## Notes
 Owner wants vendors unified across item and PO tables.

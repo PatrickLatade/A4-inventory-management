@@ -474,10 +474,14 @@ def get_item_details(item_id):
     conn = get_db()
     try:
         item = conn.execute("""
-            SELECT name, category, description, pack_size,
+            SELECT i.name, i.category, i.description, i.pack_size,
                 vendor_price, cost_per_piece, a4s_selling_price,
-                markup, reorder_level, vendor
-            FROM items WHERE id = %s
+                markup, reorder_level,
+                COALESCE(v.vendor_name, i.vendor) AS vendor,
+                i.vendor_id
+            FROM items i
+            LEFT JOIN vendors v ON v.id = i.vendor_id
+            WHERE i.id = %s
         """, (item_id,)).fetchone()
 
         if not item:

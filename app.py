@@ -54,6 +54,7 @@ from routes.cash_route import cash_bp
 from routes.customer_route import customer_bp
 from routes.loyalty_route import loyalty_bp
 from routes.notification_route import notification_bp
+from routes.vendor_route import vendor_bp
 
 
 # ============================================================
@@ -128,6 +129,7 @@ app.register_blueprint(cash_bp)
 app.register_blueprint(customer_bp)
 app.register_blueprint(loyalty_bp)
 app.register_blueprint(notification_bp)
+app.register_blueprint(vendor_bp)
 
 
 # ============================================================

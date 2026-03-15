@@ -6,21 +6,21 @@
 - [ ] Admin page Sales tab: print formatting (view + print)
 - [ ] System tracking for all actions (audit improvements)
 - [ ] Database enforcement to prevent duplicate records
-- [ ] Centralize vendor data (currently in item table and purchase_orders)
+- [X] ~~*Centralize vendor data (currently in item table and purchase_orders)*~~ [2026-03-15]
 
 ## Inventory / Transaction Improvements
 
-- [ ] Transaction order page: make Order header required after vendor system finalized
+- [X] ~~*Transaction order page: make Order header required after vendor system finalized*~~ [2026-03-15]
 - [ ] Stock IN page: add date dropdown for filtering completed orders
 - [ ] Stock IN page: show only latest orders within one month
-- [ ] Add status **Manual Orders** (gray color)
+- [X] ~~*Add status **Manual Orders** (gray color)*~~ [2026-03-15]
 
 ## Debt System
 
 - [ ] Add payment history tracking
-- [ ] If payment made same day, show in Sales Details table
+- [X] ~~*If payment made same day, show in Sales Details table*~~ [2026-03-15]
 - [ ] For ranged reports, exclude detailed entries but include totals
-- [ ] Consolidate debt form to one statement per customer
+- [X] ~~*Consolidate debt form to one statement per customer*~~ [2026-03-15]
 
 ## Reports / Export
 

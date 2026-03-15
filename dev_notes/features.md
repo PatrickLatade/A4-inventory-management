@@ -52,3 +52,7 @@ Possible **Mobile Lite App** for power outages with admin login approval
 
 - Brand usage analytics
 - Promotion tracking
+
+## Debt System
+
+- Possible only one debt statement per customer. make it running balance of all debts instead of having multiple debt account statements

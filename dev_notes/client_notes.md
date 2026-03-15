@@ -2,11 +2,21 @@
 
 ## Vendor Data
 
-Currently stored in two places:
-- item table
-- purchase_orders
+Centralized vendor structure implemented on 2026-03-15
 
-Need to centralize vendor structure
+Current source of truth:
+- vendors table
+
+Linked usage:
+- items.vendor_id for default / usual vendor
+- purchase_orders.vendor_id for actual PO vendor
+
+PO snapshot fields for analytics stability:
+- vendor_name
+- vendor_address
+- vendor_contact_person
+- vendor_contact_no
+- vendor_email
 
 vendor fields:
 - vendor_name
@@ -14,6 +24,11 @@ vendor fields:
 - contact_person
 - contact_no
 - email
+
+UI workflow implemented:
+- item creation uses vendor search / select / add modal
+- purchase order creation uses vendor search / select / add modal
+- missing vendor can be created inline from the modal
 
 ## Sales Rules
 
